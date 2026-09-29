@@ -46,6 +46,8 @@ spec:
               value: {{ .Chart.Version | quote }}
             - name: INFRARED_IMAGE_PULL_SECRET
               value: {{ include "infrared.firstPullSecret" . | quote }}
+            - name: INFRARED_BUILD_REGISTRY
+              value: {{ .Values.builds.registry | quote }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

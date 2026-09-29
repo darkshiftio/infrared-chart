@@ -333,6 +333,17 @@
         "resources",
         "service"
       ]
+    },
+    "builds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Product builds with kpack.",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "description": "Registry prefix product images are built into; empty disables the builds component."
+        }
+      }
     }
   },
   "required": [

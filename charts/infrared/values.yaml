@@ -1,0 +1,174 @@
+# Default values for the infrared chart.
+# Every key here is described in values.schema.json and in the README values table.
+
+# -- Overrides the chart name used in resource names.
+nameOverride: ""
+# -- Overrides the full resource name prefix. With a release named `infrared`
+# the prefix is `infrared`, so the UI Service is `svc/infrared`.
+fullnameOverride: ""
+
+managementCluster:
+  # -- Name of the management cluster this installation runs on (INFRARED_CLUSTER_NAME).
+  name: infrared-mgmt
+
+# -- Public URL of the UI/API, if it is exposed (INFRARED_EXTERNAL_URL). Optional.
+externalURL: ""
+
+gitops:
+  # -- Version (git tag) of infrared-gitops-template the API asks the operator to render.
+  templateVersion: v0.1.0
+
+image:
+  # -- Registry prefix shared by every component image.
+  registry: ghcr.io/darkshiftio
+  # -- Pull policy for every component image.
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for every pod, e.g. `[{name: ghcr-pull}]`. The first
+# name is also handed to the operator (INFRARED_IMAGE_PULL_SECRET) for the
+# clusters it bootstraps.
+imagePullSecrets: []
+
+# Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is
+# generated once and kept across upgrades (looked up with `lookup`). Under
+# Argo CD `lookup` returns nothing, so once Argo CD adopts the release the
+# gitops values must set every `existingSecret` below, or the Secrets would be
+# regenerated on every render. The names the API reads are fixed.
+setup:
+  # -- One-time setup token (Secret `infrared-setup`, key `token`). Empty generates 32 random characters.
+  token: ""
+  # -- Name of an existing Secret with key `token`; when set, the chart renders no setup Secret.
+  existingSecret: ""
+session:
+  # -- Session signing key (Secret `infrared-session`, key `key`). Empty generates 64 random characters.
+  key: ""
+  # -- Name of an existing Secret with key `key`; when set, the chart renders no session Secret.
+  existingSecret: ""
+
+# Pod-level defaults shared by every component; each component may override.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Extra labels on every resource.
+commonLabels: {}
+
+operator:
+  image:
+    # -- Repository under image.registry.
+    repository: infrared-operator
+    # -- Tag; empty means the chart appVersion.
+    tag: ""
+    # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
+    digest: ""
+  replicas: 1
+  # -- Extra container args, appended after --leader-elect and the probe address.
+  extraArgs: []
+  # -- Extra environment variables.
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  rbac:
+    # -- Rules appended to the generated operator ClusterRole.
+    extraRules: []
+  serviceAccount:
+    annotations: {}
+  service:
+    port: 8081
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+api:
+  image:
+    repository: infrared-api
+    tag: ""
+    digest: ""
+  replicas: 1
+  extraArgs: []
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  serviceAccount:
+    annotations: {}
+  service:
+    port: 8080
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+ui:
+  image:
+    repository: infrared-ui
+    tag: ""
+    digest: ""
+  replicas: 1
+  extraArgs: []
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  serviceAccount:
+    annotations: {}
+  service:
+    # -- Port of the primary Service (named after the release fullname).
+    port: 80
+    type: ClusterIP
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+mcp:
+  # -- Token the MCP server presents to the API (Secret `<fullname>-mcp-token`, key `token`). Empty generates one.
+  token: ""
+  # -- Name of an existing Secret with key `token`; when set, the chart renders neither
+  # the MCP token Secret nor `infrared-api-tokens` (both must already exist).
+  existingSecret: ""
+  image:
+    repository: infrared-mcp
+    tag: ""
+    digest: ""
+  replicas: 1
+  extraArgs: []
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  serviceAccount:
+    annotations: {}
+  service:
+    port: 8080
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []

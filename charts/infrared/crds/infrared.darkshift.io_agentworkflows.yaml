@@ -1,0 +1,259 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: agentworkflows.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: AgentWorkflow
+    listKind: AgentWorkflowList
+    plural: agentworkflows
+    shortNames:
+    - aw
+    singular: agentworkflow
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display name
+      type: string
+    - jsonPath: .spec.enabled
+      name: Enabled
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AgentWorkflow orders AgentRoles and gates into a repeatable workflow.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AgentWorkflowSpec is the ordered steps a Change (or a scheduled
+              job) moves through.
+            properties:
+              deadLetter:
+                description: DeadLetterPolicy routes work an agent can't finish to
+                  a human.
+                properties:
+                  notify:
+                    description: Notify lists channels, e.g. slack:#checkout-changes.
+                    items:
+                      type: string
+                    type: array
+                  to:
+                    description: To is the default human reviewer, a team or user
+                      handle.
+                    type: string
+                type: object
+              description:
+                type: string
+              displayName:
+                minLength: 1
+                type: string
+              enabled:
+                default: true
+                type: boolean
+              maxConcurrency:
+                default: 3
+                format: int32
+                minimum: 1
+                type: integer
+              origin:
+                description: AgentOrigin records where an AgentRole's definition came
+                  from.
+                properties:
+                  catalog:
+                    description: Catalog version the role was seeded from.
+                    type: string
+                  tailored:
+                    description: Tailored is True once repo analysis rewrote the role
+                      for this org.
+                    type: boolean
+                  tailoredFrom:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              steps:
+                items:
+                  description: WorkflowStep is one step of an AgentWorkflow.
+                  properties:
+                    agentRole:
+                      description: AgentRole to run, for type agentRole.
+                      type: string
+                    description:
+                      type: string
+                    maxAttempts:
+                      default: 1
+                      format: int32
+                      minimum: 1
+                      type: integer
+                    name:
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    needs:
+                      description: Needs lists steps that must finish first. Empty
+                        means the previous step.
+                      items:
+                        type: string
+                      type: array
+                    onFailure:
+                      default: deadLetter
+                      enum:
+                      - deadLetter
+                      - fail
+                      - continue
+                      type: string
+                    required:
+                      description: Required steps can't be disabled per release.
+                      type: boolean
+                    type:
+                      description: 'Type of step: an AgentRole, a human gate, an automatic
+                        action, a CI gate, or a promotion.'
+                      enum:
+                      - agentRole
+                      - human
+                      - auto
+                      - ci
+                      - promote
+                      type: string
+                    zone:
+                      description: Zone to promote to, for type promote.
+                      type: string
+                  required:
+                  - name
+                  - type
+                  type: object
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              triggers:
+                items:
+                  description: AgentTrigger says when an AgentRole or AgentWorkflow
+                    runs.
+                  properties:
+                    description:
+                      description: Description of the trigger in plain words, shown
+                        in the UI.
+                      type: string
+                    event:
+                      description: Event names the event, for type event (e.g. release.cut,
+                        issue.opened, conflict.detected).
+                      type: string
+                    schedule:
+                      description: Schedule is a cron expression, for type cron.
+                      type: string
+                    type:
+                      enum:
+                      - adhoc
+                      - onChange
+                      - cron
+                      - event
+                      type: string
+                  required:
+                  - type
+                  type: object
+                minItems: 1
+                type: array
+            required:
+            - displayName
+            - enabled
+            - steps
+            - triggers
+            type: object
+          status:
+            description: AgentWorkflowStatus is the observed state of an AgentWorkflow.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1,0 +1,49 @@
+{{- $c := .Values.mcp }}
+{{- $ctx := dict "root" . "c" $c "component" "mcp" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "infrared.componentName" $ctx }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $c.replicas }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "infrared.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "infrared.componentLabels" $ctx | nindent 8 }}
+      {{- with $c.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "infrared.podCommon" $ctx | nindent 6 }}
+      containers:
+        - name: mcp
+          {{- include "infrared.containerCommon" $ctx | nindent 10 }}
+          args:
+            - serve
+            {{- with $c.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: INFRARED_API_URL
+              value: {{ include "infrared.apiURL" . | quote }}
+            - name: INFRARED_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "infrared.mcpTokenSecret" . }}
+                  key: token
+            {{- with $c.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          {{- include "infrared.probes" (dict "port" "http") | nindent 10 }}

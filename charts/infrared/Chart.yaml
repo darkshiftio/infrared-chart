@@ -1,0 +1,18 @@
+apiVersion: v2
+name: infrared
+description: Infrared, an operator/CRD-driven gitops control plane for agentic change management.
+type: application
+version: 0.1.0
+appVersion: v0.1.0
+kubeVersion: ">=1.30.0-0"
+home: https://github.com/darkshiftio/infrared-chart
+sources:
+  - https://github.com/darkshiftio/infrared-chart
+  - https://github.com/darkshiftio/infrared-operator
+keywords:
+  - gitops
+  - argocd
+  - operator
+maintainers:
+  - name: darkshift
+    url: https://github.com/darkshiftio

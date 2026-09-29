@@ -1,0 +1,15 @@
+Infrared {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installed in namespace {{ .Release.Namespace }}
+on management cluster "{{ .Values.managementCluster.name }}".
+
+1. Read the one-time setup token:
+
+   kubectl -n {{ .Release.Namespace }} get secret {{ .Values.setup.existingSecret | default "infrared-setup" }} -o jsonpath='{.data.token}' | base64 -d; echo
+
+2. Reach the UI:
+
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "infrared.fullname" . }} 8080:{{ .Values.ui.service.port }}
+
+3. Open http://localhost:8080 and paste the setup token.
+
+Once Argo CD manages this installation (the gitops repo's `infrared` Application),
+upgrade Infrared with a pin PR in the gitops repo, not with `helm upgrade`.

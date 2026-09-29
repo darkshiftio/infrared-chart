@@ -1,0 +1,10 @@
+# CI: the values the gitops repo's `infrared` Application passes after Argo CD
+# adopts a helm-installed release: no Secret is rendered.
+managementCluster:
+  name: demo
+setup:
+  existingSecret: infrared-setup
+session:
+  existingSecret: infrared-session
+mcp:
+  existingSecret: infrared-mcp-token

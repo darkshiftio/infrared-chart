@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "infrared.componentName" (dict "root" . "component" "mcp") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "mcp") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "infrared.selectorLabels" (dict "root" . "component" "mcp") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.mcp.service.port }}
+      targetPort: http
+      protocol: TCP

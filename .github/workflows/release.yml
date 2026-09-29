@@ -1,0 +1,42 @@
+# Publishes the chart to oci://ghcr.io/darkshiftio/charts/infrared on a v* tag.
+# Only the chart is published here; component images are built by kpack on
+# darkshift-build (darkshiftio/gitops), never on GitHub runners.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+  packages: write
+env:
+  HELM_VERSION: v4.3.0
+  KUBECONFORM_VERSION: v0.8.0
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - name: Install kubeconform
+        run: |
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+      - run: make verify
+      - name: Tag must match Chart.yaml version
+        run: |
+          chart_version="$(awk '/^version:/{print $2}' charts/infrared/Chart.yaml)"
+          if [ "v${chart_version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match chart version ${chart_version}" >&2
+            exit 1
+          fi
+      - name: Package
+        run: helm package charts/infrared -d dist
+      - name: Push
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${GH_TOKEN}" | helm registry login ghcr.io -u "${GH_ACTOR}" --password-stdin
+          helm push dist/infrared-*.tgz oci://ghcr.io/darkshiftio/charts

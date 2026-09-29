@@ -1,0 +1,39 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "infrared.componentName" (dict "root" . "component" "api") }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+rules:
+  # Every Infrared resource (Organization, Cluster, GitopsRepo, AgentRole,
+  # AgentWorkflow, AgentWorkflowRun, ...) and its status.
+  - apiGroups: ["infrared.darkshift.io"]
+    resources: ["*", "*/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Organizations live in ir-org-* namespaces, which the API creates.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "create"]
+  # Skeleton: the API reads/writes Secrets in the release namespace
+  # (infrared-setup, infrared-session, infrared-api-tokens) and in ir-org-*
+  # namespaces. RBAC cannot match a namespace prefix, so this is cluster-wide
+  # for now; P2 narrows it to Roles in the release namespace and in each
+  # ir-org-* namespace as the operator creates them.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "infrared.componentName" (dict "root" . "component" "api") }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "infrared.componentName" (dict "root" . "component" "api") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "infrared.componentName" (dict "root" . "component" "api") }}
+    namespace: {{ .Release.Namespace }}

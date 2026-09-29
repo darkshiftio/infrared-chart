@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "infrared.componentName" (dict "root" . "component" "operator") }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "infrared.componentName" (dict "root" . "component" "operator") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "infrared.componentName" (dict "root" . "component" "operator") }}
+    namespace: {{ .Release.Namespace }}

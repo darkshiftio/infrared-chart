@@ -1,0 +1,402 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: agentroles.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: AgentRole
+    listKind: AgentRoleList
+    plural: agentroles
+    shortNames:
+    - ar
+    singular: agentrole
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.category
+      name: Category
+      type: string
+    - jsonPath: .spec.enabled
+      name: Enabled
+      type: boolean
+    - jsonPath: .spec.origin.catalog
+      name: Catalog
+      type: string
+    - jsonPath: .spec.origin.tailored
+      name: Tailored
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AgentRole is a defined job an agent performs: its mission, triggers,
+          evidence, guardrails and the org's opinions about how to do it.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AgentRoleSpec is everything an agent needs to do one job
+              well.
+            properties:
+              category:
+                description: AgentRoleCategory groups AgentRoles in the catalog.
+                enum:
+                - architect
+                - change-review
+                - scheduled
+                - builder
+                type: string
+              displayName:
+                minLength: 1
+                type: string
+              enabled:
+                default: true
+                type: boolean
+              escalation:
+                description: AgentEscalation says when an AgentRole dead-letters work
+                  to a human.
+                properties:
+                  after:
+                    description: After is how long the role may try before escalating,
+                      e.g. 30m.
+                    type: string
+                  to:
+                    description: To is a team or user handle, e.g. @darkshift-demo/security.
+                    type: string
+                  when:
+                    description: When lists the conditions that hand work to a human.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              evidence:
+                items:
+                  description: EvidenceSpec is a proof an AgentRole must produce.
+                  properties:
+                    description:
+                      minLength: 1
+                      type: string
+                    kind:
+                      enum:
+                      - screenshot
+                      - video
+                      - report
+                      - log
+                      - comment
+                      - diff
+                      - sarif
+                      - metric
+                      - document
+                      type: string
+                    required:
+                      type: boolean
+                  required:
+                  - description
+                  - kind
+                  type: object
+                type: array
+              guardrails:
+                items:
+                  type: string
+                type: array
+              inputs:
+                items:
+                  description: AgentInput is a context source an AgentRole reads.
+                  properties:
+                    description:
+                      type: string
+                    source:
+                      description: 'Source is a short identifier: diff, repo, issue,
+                        product-docs, logs, metrics, traces, release-notes, social.'
+                      type: string
+                  required:
+                  - source
+                  type: object
+                type: array
+              mission:
+                description: Mission is the outcome the role is accountable for.
+                minLength: 1
+                type: string
+              model:
+                description: AgentModel selects the model and budget for a run.
+                properties:
+                  maxBudgetUSD:
+                    description: MaxBudgetUSD caps one run's spend, as a decimal string.
+                    pattern: ^[0-9]+(\.[0-9]{1,2})?$
+                    type: string
+                  maxTurns:
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  model:
+                    type: string
+                  providerRef:
+                    description: ProviderRef names a model provider configured for
+                      the org.
+                    type: string
+                type: object
+              opinions:
+                items:
+                  description: AgentOpinion is named, editable guidance an org can
+                    tailor.
+                  properties:
+                    guidance:
+                      minLength: 1
+                      type: string
+                    name:
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    origin:
+                      default: catalog
+                      enum:
+                      - catalog
+                      - org
+                      - tailored
+                      type: string
+                    title:
+                      minLength: 1
+                      type: string
+                  required:
+                  - guidance
+                  - name
+                  - title
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              origin:
+                description: AgentOrigin records where an AgentRole's definition came
+                  from.
+                properties:
+                  catalog:
+                    description: Catalog version the role was seeded from.
+                    type: string
+                  tailored:
+                    description: Tailored is True once repo analysis rewrote the role
+                      for this org.
+                    type: boolean
+                  tailoredFrom:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              outputs:
+                items:
+                  type: string
+                type: array
+              permissions:
+                description: AgentPermissions bounds what an AgentRole may do. Deny
+                  wins over allow.
+                properties:
+                  allowedTools:
+                    description: Tools the agent may use (e.g. Read, Edit, Bash(go
+                      test:*)).
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  cluster:
+                    description: Kubernetes verbs on the Product's zones, e.g. get,
+                      list, logs.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  deniedTools:
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  egressAllowlist:
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  git:
+                    description: 'Git scopes: contents:read, contents:write, pull_requests:write,
+                      issues:write.'
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  mayMerge:
+                    description: MayMerge lets the role merge its own pull requests
+                      once required checks pass.
+                    type: boolean
+                  network:
+                    default: allowlist
+                    enum:
+                    - none
+                    - allowlist
+                    - open
+                    type: string
+                type: object
+              responsibilities:
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              successCriteria:
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              summary:
+                description: 'Summary is one sentence: what the role does.'
+                maxLength: 280
+                minLength: 1
+                type: string
+              triggers:
+                items:
+                  description: AgentTrigger says when an AgentRole or AgentWorkflow
+                    runs.
+                  properties:
+                    description:
+                      description: Description of the trigger in plain words, shown
+                        in the UI.
+                      type: string
+                    event:
+                      description: Event names the event, for type event (e.g. release.cut,
+                        issue.opened, conflict.detected).
+                      type: string
+                    schedule:
+                      description: Schedule is a cron expression, for type cron.
+                      type: string
+                    type:
+                      enum:
+                      - adhoc
+                      - onChange
+                      - cron
+                      - event
+                      type: string
+                  required:
+                  - type
+                  type: object
+                minItems: 1
+                type: array
+            required:
+            - category
+            - displayName
+            - enabled
+            - mission
+            - responsibilities
+            - successCriteria
+            - summary
+            - triggers
+            type: object
+          status:
+            description: AgentRoleStatus is the observed state of an AgentRole.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              differsFromCatalog:
+                description: DiffersFromCatalog is True when the org edited the role
+                  after seeding.
+                type: boolean
+              observedGeneration:
+                format: int64
+                type: integer
+              stats:
+                description: AgentRoleStats summarizes the role's recent AgentWorkflowRuns.
+                properties:
+                  lastRunTime:
+                    format: date-time
+                    type: string
+                  medianTokens:
+                    format: int64
+                    type: integer
+                  runs7d:
+                    format: int32
+                    type: integer
+                  succeeded7d:
+                    format: int32
+                    type: integer
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

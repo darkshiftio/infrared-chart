@@ -1,0 +1,28 @@
+# CI: pinned images (tag@digest) and a pull secret, as a gitops pin PR sets them.
+managementCluster:
+  name: ci-mgmt
+externalURL: https://infrared.example.com
+imagePullSecrets:
+  - name: ghcr-pull
+  - name: other-pull
+operator:
+  image:
+    tag: v0.1.0
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+  rbac:
+    extraRules:
+      - apiGroups: ["ci.example.com"]
+        resources: ["widgets"]
+        verbs: ["get", "list", "watch"]
+api:
+  image:
+    tag: v0.1.0
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+ui:
+  image:
+    tag: v0.1.0
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000003
+mcp:
+  image:
+    tag: v0.1.0
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000004

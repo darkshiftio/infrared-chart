@@ -38,6 +38,26 @@ namespace and pass `--set 'imagePullSecrets[0].name=ghcr-pull'`. The first name
 is also handed to the operator (`INFRARED_IMAGE_PULL_SECRET`) for the clusters
 it bootstraps.
 
+**darkshift's own builds are in ECR.** kpack on darkshift-build pushes every
+component to `977456087177.dkr.ecr.us-east-1.amazonaws.com/infrared-<component>`
+(darkshift preprod; darkshiftio/gitops). On a cluster whose nodes run the kubelet
+ECR credential provider with an instance role allowed to pull (infrared-iac-modules
+`aws/k3s-node`, `ecr_access = "pull"`, e.g. infrared-mgmt), point the chart at it
+and set **no** pull secret:
+
+```yaml
+image:
+  registry: 977456087177.dkr.ecr.us-east-1.amazonaws.com
+operator:
+  image:
+    tag: v0.1.0
+    digest: sha256:...     # from gitops scripts/release-tag.sh
+```
+
+(`ci/ecr-values.yaml` renders exactly this in `make verify`.) Nodes without the
+credential provider need a dockerconfigjson Secret holding an ECR token, which
+expires after 12 hours; use the credential provider instead.
+
 Pinned images, as a pin PR sets them (`repo:tag@sha256:...`):
 
 ```yaml
@@ -149,7 +169,7 @@ change it came from.
 ## Development
 
 ```bash
-make verify     # shell checks, helm lint, helm template (4 value sets), assertions, kubeconform
+make verify     # shell checks, helm lint, helm template (5 value sets), assertions, kubeconform
 make template   # render with defaults
 ```
 

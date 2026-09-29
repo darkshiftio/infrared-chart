@@ -24,7 +24,7 @@ if command -v shellcheck >/dev/null; then
 fi
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -37,7 +37,8 @@ helm template infrared "$chart" -n infrared --include-crds >"$out/defaults.yaml"
 helm template infrared "$chart" -n infrared --include-crds -f "$chart/ci/digests-values.yaml" >"$out/digests.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/adopted-values.yaml" >"$out/adopted.yaml"
 helm template other "$chart" -n ir-test >"$out/other.yaml"
-ok "rendered defaults, digests, adopted, other-release"
+helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
+ok "rendered defaults, digests, adopted, other-release, ecr"
 
 step "assertions"
 check() { # check <file> <description> <grep -E pattern> [count]
@@ -66,6 +67,9 @@ check digests.yaml "extra operator rule appended" '^  - ci.example.com$' 1
 check digests.yaml "external URL passed to the api" 'value: "https://infrared.example.com"' 1
 check adopted.yaml "adoption renders no Secrets" '^kind: Secret$' 0
 check adopted.yaml "mcp reads the existing token Secret" '^                  name: infrared-mcp-token$' 1
+check ecr.yaml "ECR registry prefixes every image" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):' 4
+check ecr.yaml "ECR pinned operator renders tag@digest" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-operator:v0\.1\.0@sha256:[0-9a-f]{64}$' 1
+check ecr.yaml "ECR values need no pull secret" 'imagePullSecrets:' 0
 check other.yaml "other release names its UI Service <release>-infrared" '^  name: other-infrared$'
 check other.yaml "other release proxies to its own api" 'value: "http://other-infrared-api:8080"'
 
@@ -76,7 +80,7 @@ if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
 else bad "operator ClusterRole has no generated rules (run hack/sync-operator.sh)"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other; do
+for f in defaults digests adopted other ecr; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

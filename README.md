@@ -75,6 +75,7 @@ api:
 | `infrared-session` | `key` | 64 random characters | `session.key` | `session.existingSecret` |
 | `<fullname>-mcp-token` | `token` | 48 random characters | `mcp.token` | `mcp.existingSecret` |
 | `infrared-api-tokens` | `mcp` | hex sha256 of the MCP token | (derived) | `mcp.existingSecret` |
+| `<fullname>-mcp-access` | `token` | 48 random characters | `mcp.access.token` | `mcp.access.existingSecret` |
 
 The names `infrared-setup`, `infrared-session` and `infrared-api-tokens` are
 fixed: the API reads them by name from the release namespace. On `helm install`
@@ -90,10 +91,13 @@ on every sync. Once Argo CD adopts the release, the gitops values must carry:
 ```yaml
 setup:   { existingSecret: infrared-setup }
 session: { existingSecret: infrared-session }
-mcp:     { existingSecret: infrared-mcp-token }
+mcp:     { existingSecret: infrared-mcp-token, access: { existingSecret: infrared-mcp-access } }
 ```
 
-The gitops template's `infrared` Application (sync wave 40) already sets these.
+The gitops template's `infrared` Application (sync wave 40) already sets these
+(`mcp.access` from template v0.1.7). An install adopted before 0.1.0-alpha.6 has
+no `infrared-mcp-access` Secret yet: create it once (key `token`, 48 random
+characters) before the pin PR that moves to alpha.6 and adds the value.
 With them set, the chart renders no Secret at all and the ones from the first
 `helm install` stay in place.
 
@@ -119,7 +123,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `fullnameOverride` | `""` | Overrides the resource name prefix (`infrared` for a release named infrared) |
 | `managementCluster.name` | `infrared-mgmt` | Management cluster name (`INFRARED_CLUSTER_NAME`) |
 | `externalURL` | `""` | Public URL, if exposed (`INFRARED_EXTERNAL_URL`, api) |
-| `gitops.templateVersion` | `v0.1.6` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
+| `gitops.templateVersion` | `v0.1.7` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
@@ -127,6 +131,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |
+| `mcp.access.token` / `mcp.access.existingSecret` | `""` | Bearer token MCP clients must send to `/mcp` / existing Secret |
 | `podSecurityContext` | runAsNonRoot, seccomp RuntimeDefault | Pod security for every component |
 | `containerSecurityContext` | read-only root fs, drop ALL, no privilege escalation, seccomp RuntimeDefault | Container security for every component |
 | `commonLabels` | `{}` | Extra labels on every resource |

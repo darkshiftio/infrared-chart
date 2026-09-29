@@ -8,3 +8,5 @@ session:
   existingSecret: infrared-session
 mcp:
   existingSecret: infrared-mcp-token
+  access:
+    existingSecret: infrared-mcp-access

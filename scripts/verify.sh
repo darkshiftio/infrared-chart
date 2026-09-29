@@ -67,6 +67,9 @@ check digests.yaml "extra operator rule appended" '^  - ci.example.com$' 1
 check digests.yaml "external URL passed to the api" 'value: "https://infrared.example.com"' 1
 check adopted.yaml "adoption renders no Secrets" '^kind: Secret$' 0
 check adopted.yaml "mcp reads the existing token Secret" '^                  name: infrared-mcp-token$' 1
+check adopted.yaml "mcp enforces the existing access Secret" '^                  name: infrared-mcp-access$' 1
+check defaults.yaml "mcp access Secret generated" '^  name: infrared-mcp-access$' 1
+check defaults.yaml "mcp enforces a bearer token" '^            - name: INFRARED_MCP_TOKEN$' 1
 check ecr.yaml "ECR registry prefixes every image" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):' 4
 check ecr.yaml "ECR pinned operator renders tag@digest" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-operator:v0\.1\.0@sha256:[0-9a-f]{64}$' 1
 check ecr.yaml "ECR values need no pull secret" 'imagePullSecrets:' 0

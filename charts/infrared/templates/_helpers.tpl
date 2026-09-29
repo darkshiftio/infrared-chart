@@ -76,6 +76,10 @@ digest is set (a pin).
 {{- end }}
 
 {{/* Name of the MCP token Secret. */}}
+{{- define "infrared.mcpAccessSecret" -}}
+{{- default (printf "%s-mcp-access" (include "infrared.fullname" .)) .Values.mcp.access.existingSecret }}
+{{- end }}
+
 {{- define "infrared.mcpTokenSecret" -}}
 {{- default (printf "%s-mcp-token" (include "infrared.fullname" .)) .Values.mcp.existingSecret }}
 {{- end }}

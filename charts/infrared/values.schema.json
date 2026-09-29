@@ -325,6 +325,18 @@
         },
         "existingSecret": {
           "type": "string"
+        },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "token": {
+              "type": "string"
+            },
+            "existingSecret": {
+              "type": "string"
+            }
+          }
         }
       },
       "required": [

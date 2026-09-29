@@ -16,7 +16,7 @@ externalURL: ""
 
 gitops:
   # -- Version (git tag) of infrared-gitops-template the API asks the operator to render.
-  templateVersion: v0.1.6
+  templateVersion: v0.1.7
 
 builds:
   # -- Registry prefix product images are built into by kpack, e.g.
@@ -156,6 +156,12 @@ mcp:
   # -- Name of an existing Secret with key `token`; when set, the chart renders neither
   # the MCP token Secret nor `infrared-api-tokens` (both must already exist).
   existingSecret: ""
+  access:
+    # -- Bearer token clients must send to /mcp (Secret `<fullname>-mcp-access`, key `token`). Empty generates one.
+    # Without it the MCP endpoint would answer anyone who can reach the UI.
+    token: ""
+    # -- Name of an existing Secret with key `token`; when set, the chart renders no access Secret.
+    existingSecret: ""
   image:
     repository: infrared-mcp
     tag: v0.1.0-alpha.5

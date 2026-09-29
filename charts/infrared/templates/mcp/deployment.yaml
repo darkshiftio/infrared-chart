@@ -39,6 +39,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "infrared.mcpTokenSecret" . }}
                   key: token
+            # Clients must send this as a bearer token to /mcp.
+            - name: INFRARED_MCP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "infrared.mcpAccessSecret" . }}
+                  key: token
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

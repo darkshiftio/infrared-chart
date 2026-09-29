@@ -16,7 +16,7 @@ externalURL: ""
 
 gitops:
   # -- Version (git tag) of infrared-gitops-template the API asks the operator to render.
-  templateVersion: v0.1.0
+  templateVersion: v0.1.2
 
 image:
   # -- Registry prefix shared by every component image.
@@ -67,9 +67,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: main
+    tag: v0.1.0-alpha.2
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:7fcb2317e6fd0625068c04c7a162d85592f310c82d73bf7890f92e73961192e6"
+    digest: "sha256:f33c8ff0fc354aa31fcea7a10131b021c3ad9aada0c669db5f0c769bda81ee9c"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -97,8 +97,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: main
-    digest: "sha256:2eb936490eceb7e66cccfb2ec53f6060a2223cf806ff05cc5656c7989c47b32a"
+    tag: v0.1.0-alpha.2
+    digest: "sha256:eea89a70f602e74e5f6bd1df45bde6b946216e9f6bdde1861cc03b48aa2a7f50"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -121,8 +121,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: main
-    digest: "sha256:f790ca16c623a93b46fd879823c96619da0f66aaae973eb1cf30082954b7d1a1"
+    tag: v0.1.0-alpha.2
+    digest: "sha256:109b483ab14fc89c1d5a1d2796760ee874f609aa98773a7d5b02e23a9d9cb99e"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -152,8 +152,8 @@ mcp:
   existingSecret: ""
   image:
     repository: infrared-mcp
-    tag: main
-    digest: "sha256:8337c727d1c26bf9c73ca52c48d654a33264574711136ffc7e0c310a499a3415"
+    tag: v0.1.0-alpha.2
+    digest: "sha256:879f27f5453cf757e30e927291b944edec4a527d268b45c6ec8b80cc3f7faffa"
   replicas: 1
   extraArgs: []
   extraEnv: []

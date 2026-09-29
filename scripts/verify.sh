@@ -49,7 +49,7 @@ check() { # check <file> <description> <grep -E pattern> [count]
   else bad "$2"; fi
 }
 check defaults.yaml "UI Service is named exactly 'infrared', port 80 -> http" '^  name: infrared$'
-check defaults.yaml "default images are the pinned preprod builds" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):main@sha256:[0-9a-f]{64}$' 4
+check defaults.yaml "default images are the pinned preprod builds" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):v0\.1\.0-alpha\.2@sha256:[0-9a-f]{64}$' 4
 check defaults.yaml "four Deployments" '^kind: Deployment$' 4
 check defaults.yaml "generated Secrets: setup, session, mcp token, api tokens" '^  name: infrared-(setup|session|mcp-token|api-tokens)$' 4
 check defaults.yaml "CRDs included" '^kind: CustomResourceDefinition$'

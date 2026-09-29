@@ -26,6 +26,13 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .status.pullRequest
+      name: PR
+      type: integer
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -33,8 +40,9 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          AgentWorkflowRun is one run of an AgentWorkflow. Execution arrives in phase 5;
-          in v1alpha1 the schema is fixed so the API, UI and CLI can build against it.
+          AgentWorkflowRun is one run of an AgentWorkflow. The operator executes it
+          step by step: it runs each agentRole step as a Job, waits at human gates for
+          the approve annotation, and merges the pull request at the end.
         properties:
           apiVersion:
             description: |-
@@ -60,11 +68,19 @@ spec:
                 description: ChangeRef identifies the Change a run works on.
                 properties:
                   issue:
-                    description: Issue reference, e.g. checkout-web#212.
+                    description: |-
+                      Issue is the issue the Change implements: its number (212) or
+                      <repo>#<number> (checkout-web#212).
                     type: string
                   pullRequest:
+                    description: |-
+                      PullRequest is the number of an existing pull request to review instead
+                      of opening one.
                     type: string
                   repo:
+                    description: |-
+                      Repo is the Product repo the Change is made in; empty means the repo
+                      named in issue, else the Product's first repo.
                     type: string
                 type: object
               productRef:
@@ -97,6 +113,9 @@ spec:
           status:
             description: AgentWorkflowRunStatus is the observed state of a run.
             properties:
+              branch:
+                description: Branch is the branch the run's agents commit to, infrared/<run>.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -159,6 +178,11 @@ spec:
               finishedAt:
                 format: date-time
                 type: string
+              message:
+                description: |-
+                  Message says in plain words what the run is doing or waiting for, e.g.
+                  which step needs a human and why.
+                type: string
               observedGeneration:
                 format: int64
                 type: integer
@@ -175,6 +199,12 @@ spec:
                 - Cancelled
                 - Skipped
                 type: string
+              pullRequest:
+                description: |-
+                  PullRequest is the number of the pull request the run's build step
+                  opened on the Product repo.
+                format: int32
+                type: integer
               startedAt:
                 format: date-time
                 type: string
@@ -182,6 +212,10 @@ spec:
                 items:
                   description: StepStatus is the observed state of one workflow step.
                   properties:
+                    agentRole:
+                      description: AgentRole is the AgentRole the step runs, for agentRole
+                        steps.
+                      type: string
                     attempts:
                       format: int32
                       type: integer
@@ -244,6 +278,10 @@ spec:
                     startedAt:
                       format: date-time
                       type: string
+                    type:
+                      description: 'Type is the workflow step''s type: agentRole,
+                        human, auto, ci or promote.'
+                      type: string
                     usage:
                       description: Usage is token and cost accounting for a step or
                         a run.
@@ -254,6 +292,10 @@ spec:
                         costUSD:
                           description: CostUSD as a decimal string.
                           type: string
+                        durationMs:
+                          description: DurationMs is how long the agent ran, in milliseconds.
+                          format: int64
+                          type: integer
                         inputTokens:
                           format: int64
                           type: integer
@@ -285,6 +327,10 @@ spec:
                   costUSD:
                     description: CostUSD as a decimal string.
                     type: string
+                  durationMs:
+                    description: DurationMs is how long the agent ran, in milliseconds.
+                    format: int64
+                    type: integer
                   inputTokens:
                     format: int64
                     type: integer

@@ -356,6 +356,19 @@
           "description": "Registry prefix product images are built into; empty disables the builds component."
         }
       }
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/image"
+        },
+        "goToolchainImage": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   },
   "required": [

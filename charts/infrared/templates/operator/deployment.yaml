@@ -48,6 +48,10 @@ spec:
               value: {{ include "infrared.firstPullSecret" . | quote }}
             - name: INFRARED_BUILD_REGISTRY
               value: {{ .Values.builds.registry | quote }}
+            - name: INFRARED_RUNNER_IMAGE
+              value: {{ include "infrared.image" (dict "root" . "image" .Values.runner.image) | quote }}
+            - name: INFRARED_GO_TOOLCHAIN_IMAGE
+              value: {{ .Values.runner.goToolchainImage | quote }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

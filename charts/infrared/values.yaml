@@ -68,14 +68,29 @@ containerSecurityContext:
 # -- Extra labels on every resource.
 commonLabels: {}
 
+# -- The image the operator runs each AgentWorkflowRun agent step in (infrared-runner,
+# the Claude Agent SDK). Steps run as Jobs in the org namespace and need the org's
+# Secret model-provider-anthropic (key api-key).
+runner:
+  image:
+    # -- Repository under image.registry.
+    repository: infrared-runner
+    # -- Tag; empty means the chart appVersion.
+    tag: v0.1.0-alpha.7
+    # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
+    digest: "sha256:a8a16a3c54c076ad17213ef6eb041c3fd101c087a5c2c1d06193187c61cce308"
+  # -- Image an init container copies a Go toolchain from, so agents can build and
+  # test Go repos. Pinned by digest.
+  goToolchainImage: "golang:1.26@sha256:6c2a5538f964f1c82f97ad14988bf05de100d922d159d0e398b54c7b0ca0c6c9"
+
 operator:
   image:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.5
+    tag: v0.1.0-alpha.7
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:88460a6a41eb28017997449f7e7772594ec9b7cde635f13e7e20b9f15f7a3ff0"
+    digest: "sha256:52aa0a6a41a7ed90fce0d85d88b53d8310dd5fa17cbc6e33016693e25b6e62be"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -103,8 +118,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.5
-    digest: "sha256:ac0c8b0f96c5a0eae0e271b519e9b7afec5c51652d0ee61da9363254e43ef2f9"
+    tag: v0.1.0-alpha.7
+    digest: "sha256:96a345f76d2b3d5c645005269af26ce93da7dd115575419ec1da94048d5dd34b"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -127,8 +142,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.5
-    digest: "sha256:1626a4585ab20266f8d0733441d42ea1b6149530a5df98312967283698949616"
+    tag: v0.1.0-alpha.7
+    digest: "sha256:92cdbbf43c390631bf666d1a166bbdbfbef723a9832939d02aa4ded8f640e500"
   replicas: 1
   extraArgs: []
   extraEnv: []

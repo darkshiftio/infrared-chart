@@ -13,6 +13,7 @@ rules:
   - ""
   resources:
   - configmaps
+  - secrets
   verbs:
   - create
   - delete
@@ -25,7 +26,6 @@ rules:
   - ""
   resources:
   - namespaces
-  - secrets
   verbs:
   - create
   - get
@@ -37,10 +37,17 @@ rules:
   - ""
   resources:
   - nodes
+  - pods
   verbs:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
 - apiGroups:
   - ""
   - events.k8s.io
@@ -77,6 +84,16 @@ rules:
   - list
   - watch
 - apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
   - infrared.darkshift.io
   resources:
   - agentroles
@@ -106,6 +123,7 @@ rules:
   - infrared.darkshift.io
   resources:
   - agentroles/status
+  - agentworkflowruns/status
   - agentworkflows/status
   - clusters/status
   - gitopsrepos/status
@@ -117,6 +135,18 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - infrared.darkshift.io
+  resources:
+  - agentworkflowruns
+  - organizations
+  - products
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - infrared.darkshift.io
   resources:
@@ -132,17 +162,6 @@ rules:
   - clusters
   verbs:
   - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - infrared.darkshift.io
-  resources:
-  - organizations
-  - products
-  verbs:
   - get
   - list
   - patch

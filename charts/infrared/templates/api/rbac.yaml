@@ -10,6 +10,11 @@ rules:
   - apiGroups: ["infrared.darkshift.io"]
     resources: ["*", "*/status"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Product logos: the API serves the operator's cache (<product>-logo) and
+  # stages uploads (<product>-logo-upload) in ir-org-* namespaces.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   # Organizations live in ir-org-* namespaces, which the API creates.
   - apiGroups: [""]
     resources: ["namespaces"]

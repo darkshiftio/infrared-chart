@@ -12,6 +12,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - namespaces
   - secrets
   verbs:
@@ -87,6 +99,7 @@ rules:
   - gitproviders/finalizers
   - installations/finalizers
   - organizations/finalizers
+  - products/finalizers
   verbs:
   - update
 - apiGroups:
@@ -99,6 +112,7 @@ rules:
   - gitproviders/status
   - installations/status
   - organizations/status
+  - products/status
   verbs:
   - get
   - patch
@@ -127,6 +141,7 @@ rules:
   - infrared.darkshift.io
   resources:
   - organizations
+  - products
   verbs:
   - get
   - list

@@ -61,6 +61,22 @@ spec:
               displayName:
                 minLength: 1
                 type: string
+              logo:
+                description: |-
+                  Logo says where the Product's logo lives. Omit it to detect the logo in
+                  the first repo.
+                properties:
+                  path:
+                    description: |-
+                      Path pins the logo to one file in the repo, e.g. "docs/brand/logo.svg".
+                      Empty means detect it from the usual places (logo.svg, .github/logo.png, ...).
+                    type: string
+                  repo:
+                    description: |-
+                      Repo is the name of one of spec.repos that holds the logo; empty means
+                      the first entry of spec.repos.
+                    type: string
+                type: object
               repos:
                 items:
                   description: ProductRepo is one git repo that makes up a Product.
@@ -156,6 +172,53 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              logo:
+                description: Logo is the Product's logo; absent when none was found.
+                properties:
+                  bytes:
+                    description: Bytes is the logo's size.
+                    format: int64
+                    type: integer
+                  contentType:
+                    description: ContentType is the logo's media type, e.g. image/svg+xml.
+                    type: string
+                  message:
+                    description: Message is the last logo error in plain words; empty
+                      when the last sync worked.
+                    type: string
+                  path:
+                    description: Path of the logo in the repo.
+                    type: string
+                  pending:
+                    description: Pending is true while an upload is staged and not
+                      yet committed to the repo.
+                    type: boolean
+                  repo:
+                    description: Repo the logo was read from.
+                    type: string
+                  sha:
+                    description: SHA is the git blob sha of the logo.
+                    type: string
+                  source:
+                    description: Source says whether the logo was detected in the
+                      repo or uploaded through Infrared.
+                    enum:
+                    - detected
+                    - uploaded
+                    type: string
+                  syncedAt:
+                    description: SyncedAt is when the cached logo was last written
+                      from git.
+                    format: date-time
+                    type: string
+                required:
+                - bytes
+                - contentType
+                - path
+                - repo
+                - sha
+                - source
+                type: object
               observedGeneration:
                 format: int64
                 type: integer

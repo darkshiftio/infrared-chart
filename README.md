@@ -120,7 +120,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `managementCluster.name` | `infrared-mgmt` | Management cluster name (`INFRARED_CLUSTER_NAME`) |
 | `externalURL` | `""` | Public URL, if exposed (`INFRARED_EXTERNAL_URL`, api) |
 | `gitops.templateVersion` | `v0.1.0` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
-| `image.registry` | `ghcr.io/darkshiftio` | Registry prefix for every component |
+| `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
 | `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET` |
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |

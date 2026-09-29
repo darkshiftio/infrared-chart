@@ -49,7 +49,7 @@ check() { # check <file> <description> <grep -E pattern> [count]
   else bad "$2"; fi
 }
 check defaults.yaml "UI Service is named exactly 'infrared', port 80 -> http" '^  name: infrared$'
-check defaults.yaml "default images use appVersion tag" 'image: ghcr.io/darkshiftio/infrared-(operator|api|ui|mcp):v0.1.0$' 4
+check defaults.yaml "default images are the pinned preprod builds" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):main@sha256:[0-9a-f]{64}$' 4
 check defaults.yaml "four Deployments" '^kind: Deployment$' 4
 check defaults.yaml "generated Secrets: setup, session, mcp token, api tokens" '^  name: infrared-(setup|session|mcp-token|api-tokens)$' 4
 check defaults.yaml "CRDs included" '^kind: CustomResourceDefinition$'
@@ -60,7 +60,7 @@ check defaults.yaml "UI proxies to infrared-mcp" 'value: "http://infrared-mcp:80
 check defaults.yaml "every container read-only root fs" 'readOnlyRootFilesystem: true' 4
 check defaults.yaml "every container drops ALL" 'drop:$' 4
 check defaults.yaml "cluster name default" 'value: "infrared-mgmt"'
-check digests.yaml "pinned images render tag@digest" 'image: ghcr.io/darkshiftio/infrared-(operator|api|ui|mcp):v0.1.0@sha256:[0-9a-f]{64}$' 4
+check digests.yaml "pinned images render tag@digest" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):v0.1.0@sha256:[0-9a-f]{64}$' 4
 check digests.yaml "pull secret on every pod" '^        - name: ghcr-pull$' 4
 check digests.yaml "first pull secret handed to the operator" 'value: "ghcr-pull"' 1
 check digests.yaml "extra operator rule appended" '^  - ci.example.com$' 1

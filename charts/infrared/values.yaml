@@ -20,7 +20,7 @@ gitops:
 
 image:
   # -- Registry prefix shared by every component image.
-  registry: ghcr.io/darkshiftio
+  registry: 977456087177.dkr.ecr.us-east-1.amazonaws.com
   # -- Pull policy for every component image.
   pullPolicy: IfNotPresent
 
@@ -67,9 +67,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: ""
+    tag: main
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: ""
+    digest: "sha256:7fcb2317e6fd0625068c04c7a162d85592f310c82d73bf7890f92e73961192e6"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -97,8 +97,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: ""
-    digest: ""
+    tag: main
+    digest: "sha256:2eb936490eceb7e66cccfb2ec53f6060a2223cf806ff05cc5656c7989c47b32a"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -121,8 +121,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: ""
-    digest: ""
+    tag: main
+    digest: "sha256:f790ca16c623a93b46fd879823c96619da0f66aaae973eb1cf30082954b7d1a1"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -152,8 +152,8 @@ mcp:
   existingSecret: ""
   image:
     repository: infrared-mcp
-    tag: ""
-    digest: ""
+    tag: main
+    digest: "sha256:8337c727d1c26bf9c73ca52c48d654a33264574711136ffc7e0c310a499a3415"
   replicas: 1
   extraArgs: []
   extraEnv: []

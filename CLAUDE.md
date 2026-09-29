@@ -19,5 +19,5 @@ The Helm chart for Infrared (`charts/infrared`), published to
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - `make verify` must pass before a PR. Pin every upstream version.
 - Never apply from CI; CI only verifies and publishes the chart. AWS work uses
-  the `darkshift` profile only, never the default profile.
+  the `darkshift-preprod` profile only, never the default profile.
 - Commits: conventional commits. No AI attribution lines in commits or PRs.

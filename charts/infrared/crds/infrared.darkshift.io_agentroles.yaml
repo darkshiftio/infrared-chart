@@ -73,6 +73,10 @@ spec:
                 type: string
               enabled:
                 default: true
+                description: |-
+                  Enabled lets the role run. A disabled role keeps its definition; an
+                  AgentWorkflow step that uses it is Skipped, and the steps that need it
+                  continue as if it had succeeded.
                 type: boolean
               escalation:
                 description: AgentEscalation says when an AgentRole dead-letters work
@@ -99,6 +103,9 @@ spec:
                       minLength: 1
                       type: string
                     kind:
+                      description: |-
+                        Kind of proof. trace is a distributed or test-runner trace (OpenTelemetry,
+                        Playwright); sbom is a software bill of materials (SPDX or CycloneDX).
                       enum:
                       - screenshot
                       - video
@@ -109,6 +116,8 @@ spec:
                       - sarif
                       - metric
                       - document
+                      - trace
+                      - sbom
                       type: string
                     required:
                       type: boolean
@@ -135,6 +144,19 @@ spec:
                   - source
                   type: object
                 type: array
+              instructions:
+                description: |-
+                  Instructions is free-form Markdown appended to the agent's prompt after
+                  the role's generated brief. Use it for org context that fits no other field.
+                type: string
+              mcpServers:
+                description: |-
+                  MCPServers names MCP servers the org configured that the agent may use,
+                  e.g. linear or sentry.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               mission:
                 description: Mission is the outcome the role is accountable for.
                 minLength: 1
@@ -162,6 +184,12 @@ spec:
                   description: AgentOpinion is named, editable guidance an org can
                     tailor.
                   properties:
+                    enabled:
+                      description: |-
+                        Enabled switches the opinion off for this org without deleting it. A
+                        disabled opinion is kept in the spec but left out of the agent's prompt.
+                        Omitted means enabled.
+                      type: boolean
                     guidance:
                       minLength: 1
                       type: string
@@ -231,6 +259,12 @@ spec:
                     type: array
                     x-kubernetes-list-type: set
                   egressAllowlist:
+                    description: |-
+                      EgressAllowlist lists the hosts the agent may reach when network is
+                      allowlist, e.g. api.github.com or *.example.com. The literal entry
+                      $(ZONE_HOSTS) stands for the hostnames of the Product's zones and is
+                      expanded by the runner when the agent starts, so one role works for every
+                      Product and org.
                     items:
                       type: string
                     type: array
@@ -259,6 +293,14 @@ spec:
                   type: string
                 minItems: 1
                 type: array
+              skills:
+                description: |-
+                  Skills names the agent skills loaded for the role, e.g. playwright or
+                  go-testing.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               successCriteria:
                 items:
                   type: string
@@ -274,6 +316,14 @@ spec:
                   description: AgentTrigger says when an AgentRole or AgentWorkflow
                     runs.
                   properties:
+                    branches:
+                      description: |-
+                        Branches narrows the trigger to Changes whose base branch matches one of
+                        these globs, e.g. main or release/*. Empty matches any branch.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
                     description:
                       description: Description of the trigger in plain words, shown
                         in the UI.
@@ -282,6 +332,23 @@ spec:
                       description: Event names the event, for type event (e.g. release.cut,
                         issue.opened, conflict.detected).
                       type: string
+                    labels:
+                      description: |-
+                        Labels narrows the trigger to issues or pull requests that carry at least
+                        one of these labels, e.g. needs-hydration. Empty matches any labels.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
+                    paths:
+                      description: |-
+                        Paths narrows the trigger to Changes that touch at least one file matching
+                        one of these globs, relative to the repo root, e.g. docs/** or *.go.
+                        ** matches any number of directories. Empty matches any path.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
                     schedule:
                       description: Schedule is a cron expression, for type cron.
                       type: string
@@ -297,6 +364,16 @@ spec:
                   type: object
                 minItems: 1
                 type: array
+              verdicts:
+                description: |-
+                  Verdicts lists the final verdicts the role may record on its step, e.g.
+                  VERIFIED, MERGE WITH FOLLOW-UPS, BLOCK. A run's verdict must be one of them.
+                items:
+                  maxLength: 64
+                  minLength: 1
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
             required:
             - category
             - displayName

@@ -23,6 +23,9 @@ spec:
     - jsonPath: .spec.enabled
       name: Enabled
       type: boolean
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -97,15 +100,41 @@ spec:
                 type: object
               steps:
                 items:
-                  description: WorkflowStep is one step of an AgentWorkflow.
+                  description: |-
+                    WorkflowStep is one step of an AgentWorkflow. A step starts when the steps
+                    it needs have finished (by default the previous step), or with the workflow
+                    when it is independent. It is Skipped when its when condition is false or its
+                    AgentRole is disabled.
                   properties:
                     agentRole:
                       description: AgentRole to run, for type agentRole.
                       type: string
+                    approvers:
+                      description: |-
+                        Approvers lists the team or user handles who may approve a human step,
+                        e.g. @acme/reviewers. Human steps only. Empty means the dead-letter
+                        reviewer.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
                     description:
                       type: string
+                    independent:
+                      description: |-
+                        Independent starts the step as soon as the workflow starts, with no
+                        dependency on any other step, so independent steps run in parallel.
+                        It can't be combined with needs.
+                      type: boolean
                     maxAttempts:
                       default: 1
+                      format: int32
+                      minimum: 1
+                      type: integer
+                    minApprovals:
+                      description: |-
+                        MinApprovals is how many approvals from approvers a human step needs.
+                        Human steps only. Omitted means 1.
                       format: int32
                       minimum: 1
                       type: integer
@@ -113,8 +142,9 @@ spec:
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string
                     needs:
-                      description: Needs lists steps that must finish first. Empty
-                        means the previous step.
+                      description: |-
+                        Needs lists steps that must finish first. Empty means the previous step,
+                        unless independent is true. A Skipped step counts as finished.
                       items:
                         type: string
                       type: array
@@ -128,6 +158,12 @@ spec:
                     required:
                       description: Required steps can't be disabled per release.
                       type: boolean
+                    timeout:
+                      description: |-
+                        Timeout bounds how long the step may take before onFailure applies, e.g.
+                        30m. For a human step it is how long approval may wait before the step
+                        escalates to the dead-letter reviewer. Omitted means no timeout.
+                      type: string
                     type:
                       description: 'Type of step: an AgentRole, a human gate, an automatic
                         action, a CI gate, or a promotion.'
@@ -137,6 +173,18 @@ spec:
                       - auto
                       - ci
                       - promote
+                      type: string
+                    when:
+                      description: |-
+                        When is a condition that must hold for the step to run; otherwise the
+                        step is Skipped. Clauses are joined with && and each may start with !.
+                        A clause is one of: change.author in [human, agent] (who opened the
+                        Change; runs started from an issue count as agent); agentRole.enabled
+                        (the step's AgentRole is enabled; agentRole steps only); label:<name>
+                        (the issue or pull request carries the label). Empty means always.
+                        Whatever when says, an agentRole step whose AgentRole is disabled is
+                        Skipped.
+                      maxLength: 512
                       type: string
                     zone:
                       description: Zone to promote to, for type promote.
@@ -155,6 +203,14 @@ spec:
                   description: AgentTrigger says when an AgentRole or AgentWorkflow
                     runs.
                   properties:
+                    branches:
+                      description: |-
+                        Branches narrows the trigger to Changes whose base branch matches one of
+                        these globs, e.g. main or release/*. Empty matches any branch.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
                     description:
                       description: Description of the trigger in plain words, shown
                         in the UI.
@@ -163,6 +219,23 @@ spec:
                       description: Event names the event, for type event (e.g. release.cut,
                         issue.opened, conflict.detected).
                       type: string
+                    labels:
+                      description: |-
+                        Labels narrows the trigger to issues or pull requests that carry at least
+                        one of these labels, e.g. needs-hydration. Empty matches any labels.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
+                    paths:
+                      description: |-
+                        Paths narrows the trigger to Changes that touch at least one file matching
+                        one of these globs, relative to the repo root, e.g. docs/** or *.go.
+                        ** matches any number of directories. Empty matches any path.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
                     schedule:
                       description: Schedule is a cron expression, for type cron.
                       type: string

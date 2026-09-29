@@ -93,6 +93,7 @@ rules:
   - infrared.darkshift.io
   resources:
   - agentroles/status
+  - agentworkflows/status
   - clusters/status
   - gitopsrepos/status
   - gitproviders/status

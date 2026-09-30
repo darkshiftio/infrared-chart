@@ -82,6 +82,7 @@ rules:
   verbs:
   - get
   - list
+  - patch
   - watch
 - apiGroups:
   - batch
@@ -100,6 +101,7 @@ rules:
   - gitopsrepos
   - gitproviders
   - installations
+  - releases
   verbs:
   - create
   - delete
@@ -131,6 +133,7 @@ rules:
   - installations/status
   - organizations/status
   - products/status
+  - releases/status
   verbs:
   - get
   - patch
@@ -166,6 +169,14 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - kpack.io
+  resources:
+  - builds
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - rbac.authorization.k8s.io

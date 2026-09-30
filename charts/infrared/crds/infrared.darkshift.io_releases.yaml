@@ -1,0 +1,272 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: releases.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: Release
+    listKind: ReleaseList
+    plural: releases
+    shortNames:
+    - irrel
+    singular: release
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.productRef.name
+      name: Product
+      type: string
+    - jsonPath: .status.version
+      name: Version
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Release ships one commit of a Product: Infrared waits for its build, tags
+          the repo and the image vX.Y.Z, and promotes the pin through the Product's
+          delivery zones with a pull request to the gitops repo per zone.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ReleaseSpec asks Infrared to release one commit of a Product.
+            properties:
+              commit:
+                description: |-
+                  Commit to release, a full SHA on the delivery repo's default branch.
+                  Empty means the branch's head when the Release starts.
+                pattern: ^([0-9a-f]{40})?$
+                type: string
+              notes:
+                description: |-
+                  Notes for the GitHub release; empty means the commits since the
+                  previous release.
+                type: string
+              productRef:
+                description: LocalRef names another Infrared resource in the same
+                  namespace.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              runRef:
+                description: RunRef is the AgentWorkflowRun whose Change this Release
+                  ships.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              version:
+                description: |-
+                  Version to release, vX.Y.Z. Empty means the next version after the
+                  repo's newest vX.Y.Z tag: minor for a feat commit or a breaking change,
+                  patch otherwise.
+                pattern: ^(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)?$
+                type: string
+            required:
+            - productRef
+            type: object
+          status:
+            description: ReleaseStatus is the observed state of a Release.
+            properties:
+              build:
+                description: Build is the kpack Build that produced the image.
+                type: string
+              commit:
+                description: Commit is the commit this Release tags, resolved from
+                  spec.commit.
+                type: string
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              finishedAt:
+                format: date-time
+                type: string
+              image:
+                description: Image is the released image, repository:version@sha256:...
+                type: string
+              message:
+                description: Message says in plain words what the Release is doing
+                  or waiting for.
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                description: ReleasePhase is where a Release is on its way to every
+                  zone.
+                enum:
+                - Pending
+                - Building
+                - Tagged
+                - Promoting
+                - AwaitingApproval
+                - Released
+                - Failed
+                type: string
+              previousVersion:
+                description: PreviousVersion is the newest release tag before this
+                  one.
+                type: string
+              releaseURL:
+                description: ReleaseURL is the GitHub release.
+                type: string
+              repo:
+                description: Repo is owner/name of the delivery repo.
+                type: string
+              startedAt:
+                format: date-time
+                type: string
+              version:
+                description: Version is the version this Release tags, resolved from
+                  spec.version.
+                type: string
+              zones:
+                items:
+                  description: ZoneRelease is the Release's progress in one zone.
+                  properties:
+                    approval:
+                      type: string
+                    approvedBy:
+                      description: ApprovedBy is who approved a human promotion.
+                      type: string
+                    environment:
+                      type: string
+                    healthyAt:
+                      description: |-
+                        HealthyAt is when Argo CD reported the zone Synced and Healthy on the
+                        release's image.
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    name:
+                      type: string
+                    phase:
+                      description: ZonePhase is where a Release is in one zone.
+                      enum:
+                      - Pending
+                      - AwaitingApproval
+                      - Promoting
+                      - Syncing
+                      - Healthy
+                      - Failed
+                      type: string
+                    pullRequest:
+                      description: PullRequest is the pin PR on the gitops repo that
+                        promoted to the zone.
+                      format: int32
+                      type: integer
+                    pullRequestURL:
+                      type: string
+                    startedAt:
+                      format: date-time
+                      type: string
+                  required:
+                  - name
+                  - phase
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

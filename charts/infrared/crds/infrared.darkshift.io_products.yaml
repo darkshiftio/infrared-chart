@@ -56,6 +56,69 @@ spec:
               currentRelease:
                 description: CurrentRelease is the release in progress, e.g. "2.4".
                 type: string
+              delivery:
+                description: |-
+                  Delivery is how the Product's releases ship: which build they come from
+                  and the zones they are promoted through, in order. Without it Infrared
+                  cuts no releases for the Product.
+                properties:
+                  buildImage:
+                    description: |-
+                      BuildImage is the kpack Image in namespace builds that builds Repo;
+                      empty means the Product's name.
+                    type: string
+                  repo:
+                    description: |-
+                      Repo is the Product repo whose commits are released; empty means the
+                      first repo. Releases tag this repo vX.Y.Z.
+                    type: string
+                  zones:
+                    description: |-
+                      Zones in promotion order. A release reaches a zone only after every
+                      zone before it runs it Healthy.
+                    items:
+                      description: DeliveryZone is one zone a release is promoted
+                        to.
+                      properties:
+                        applicationPath:
+                          description: |-
+                            ApplicationPath is the zone's Argo CD Application in the gitops repo,
+                            whose chart source is pinned to the release tag; empty means
+                            registry/clusters/<cluster>/components/product-<zone>.yaml.
+                          type: string
+                        approval:
+                          description: |-
+                            Approval is auto (promote as soon as the zones before it are Healthy)
+                            or human (wait for someone to approve the promotion). Empty means auto
+                            for pre-release and human for release.
+                          enum:
+                          - auto
+                          - human
+                          type: string
+                        environment:
+                          default: pre-release
+                          description: Environment is pre-release or release.
+                          enum:
+                          - pre-release
+                          - release
+                          type: string
+                        name:
+                          description: 'Name of the zone: its namespace, e.g. checkout-rc.'
+                          minLength: 1
+                          type: string
+                        valuesPath:
+                          description: |-
+                            ValuesPath is the zone's values file in the gitops repo, holding the
+                            image pin; empty means products/<product>/zones/<zone>/values.yaml.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    minItems: 1
+                    type: array
+                required:
+                - zones
+                type: object
               description:
                 type: string
               displayName:
@@ -222,6 +285,37 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              zones:
+                description: |-
+                  Zones is what each delivery zone runs, as recorded by the Releases
+                  that promoted to it.
+                items:
+                  description: ZoneState is what a zone runs now.
+                  properties:
+                    image:
+                      description: Image is the pin the zone runs, repository:tag@sha256:...
+                      type: string
+                    name:
+                      type: string
+                    promotedAt:
+                      description: PromotedAt is when that release became Healthy
+                        in the zone.
+                      format: date-time
+                      type: string
+                    release:
+                      description: Release is the Release that last promoted to the
+                        zone.
+                      type: string
+                    version:
+                      description: Version is the release the zone runs, e.g. v0.1.1.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec

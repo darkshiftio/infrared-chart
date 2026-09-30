@@ -178,6 +178,10 @@ spec:
               finishedAt:
                 format: date-time
                 type: string
+              mergeCommit:
+                description: MergeCommit is the commit the merge step created on the
+                  default branch.
+                type: string
               message:
                 description: |-
                   Message says in plain words what the run is doing or waiting for, e.g.
@@ -205,6 +209,10 @@ spec:
                   opened on the Product repo.
                 format: int32
                 type: integer
+              release:
+                description: Release is the Release the run's promote steps created
+                  for the merge.
+                type: string
               startedAt:
                 format: date-time
                 type: string

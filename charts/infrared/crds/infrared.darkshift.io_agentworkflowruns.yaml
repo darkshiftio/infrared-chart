@@ -83,6 +83,31 @@ spec:
                       named in issue, else the Product's first repo.
                     type: string
                 type: object
+              guidance:
+                description: |-
+                  Guidance is what people told steps when they retried them, oldest
+                  first. Each agentRole step sees its own entries in its prompt.
+                items:
+                  description: StepGuidance is a person's answer to a step that handed
+                    work back to them.
+                  properties:
+                    at:
+                      format: date-time
+                      type: string
+                    by:
+                      description: 'By is who gave it: an email or GitHub login.'
+                      type: string
+                    step:
+                      type: string
+                    text:
+                      type: string
+                  required:
+                  - at
+                  - by
+                  - step
+                  - text
+                  type: object
+                type: array
               productRef:
                 description: LocalRef names another Infrared resource in the same
                   namespace.
@@ -289,6 +314,23 @@ spec:
                       - Cancelled
                       - Skipped
                       type: string
+                    questions:
+                      description: |-
+                        Questions are what the agent needs a person to answer before the step
+                        can finish, each with its suggested answer. Set when the step hands the
+                        work back; retry the step with guidance to answer them.
+                      items:
+                        description: StepQuestion is a question an agent asked a person,
+                          with its best-guess answer.
+                        properties:
+                          question:
+                            type: string
+                          suggestion:
+                            type: string
+                        required:
+                        - question
+                        type: object
+                      type: array
                     startedAt:
                       format: date-time
                       type: string

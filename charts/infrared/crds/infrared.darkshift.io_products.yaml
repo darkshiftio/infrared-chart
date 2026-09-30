@@ -116,6 +116,32 @@ spec:
                             ValuesPath is the zone's values file in the gitops repo, holding the
                             image pin; empty means products/<product>/zones/<zone>/values.yaml.
                           type: string
+                        verify:
+                          description: |-
+                            Verify is a smoke check that must pass after Argo CD reports the zone
+                            Healthy, before the Release moves on to the next zone.
+                          properties:
+                            contains:
+                              description: Contains is text the response body must
+                                contain.
+                              type: string
+                            expectStatus:
+                              description: ExpectStatus is the HTTP status that passes;
+                                0 means 200.
+                              format: int32
+                              type: integer
+                            soak:
+                              description: Soak is how long the zone must stay Healthy
+                                before the check; empty means 2m.
+                              type: string
+                            url:
+                              description: URL to GET, e.g. http://zippy.zippy-rc.svc/healthz
+                                or the zone's public URL.
+                              pattern: ^https?://
+                              type: string
+                          required:
+                          - url
+                          type: object
                       required:
                       - name
                       type: object

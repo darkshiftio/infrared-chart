@@ -260,6 +260,7 @@ spec:
                       - AwaitingApproval
                       - Promoting
                       - Syncing
+                      - Verifying
                       - Healthy
                       - Failed
                       type: string
@@ -273,6 +274,15 @@ spec:
                     startedAt:
                       format: date-time
                       type: string
+                    verifiedAt:
+                      description: VerifiedAt is when the zone's smoke check passed.
+                      format: date-time
+                      type: string
+                    verifyAttempts:
+                      description: VerifyAttempts counts smoke checks that did not
+                        pass.
+                      format: int32
+                      type: integer
                   required:
                   - name
                   - phase

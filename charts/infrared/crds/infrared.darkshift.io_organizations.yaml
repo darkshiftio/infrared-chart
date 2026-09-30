@@ -55,6 +55,37 @@ spec:
             description: 'OrganizationSpec defines an org: the tenancy and RBAC boundary
               in Infrared.'
             properties:
+              announcements:
+                description: |-
+                  Announcements configures announcement drafting (release notes, blog,
+                  newsletter, social posts). Drafts go to the org's Slack channel; nothing
+                  is published.
+                properties:
+                  accounts:
+                    description: |-
+                      Accounts are the social accounts drafts are written for. They may be
+                      pretend accounts while the org practises: Infrared never posts to them.
+                    items:
+                      description: SocialAccount is one account announcement drafts
+                        are written for.
+                      properties:
+                        handle:
+                          description: Handle, e.g. @zippy.
+                          minLength: 1
+                          type: string
+                        network:
+                          description: Network, e.g. x, linkedin, bluesky, mastodon.
+                          minLength: 1
+                          type: string
+                        voice:
+                          description: Voice is how posts on this account should sound.
+                          type: string
+                      required:
+                      - handle
+                      - network
+                      type: object
+                    type: array
+                type: object
               clusterAllowlist:
                 description: Clusters this org may deliver zones to. Managed by the
                   platform org.

@@ -118,6 +118,15 @@ spec:
                         type: string
                       type: array
                       x-kubernetes-list-type: set
+                    deliver:
+                      description: |-
+                        Deliver is where a report step's output goes: issue (an issue on the
+                        Product's backlog, the default) or slack (a draft to the org's Slack
+                        channel, nothing opened on GitHub).
+                      enum:
+                      - issue
+                      - slack
+                      type: string
                     description:
                       type: string
                     independent:

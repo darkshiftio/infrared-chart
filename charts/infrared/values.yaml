@@ -81,9 +81,9 @@ runner:
     # -- Repository under image.registry.
     repository: infrared-runner
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.20
+    tag: v0.1.0-alpha.21
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:aab6fbb791b7f882557617948886b1d93ec4e8228443466500f6303896e474c0"
+    digest: "sha256:67335bd7fa61085d6718b2a2b144cdeb57fd0f312358d891ca01f649889e0bab"
   # -- Image an init container copies a Go toolchain from, so agents can build and
   # test Go repos. Pinned by digest.
   goToolchainImage: "golang:1.26@sha256:6c2a5538f964f1c82f97ad14988bf05de100d922d159d0e398b54c7b0ca0c6c9"
@@ -93,9 +93,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.20
+    tag: v0.1.0-alpha.21
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:02be6db6204fb065d51bfdabf85d08c8b549c20246a26ea91b27e1dc8c40f015"
+    digest: "sha256:2feab4132af6c4f562bd6232d95395439df3edc39cc176c332e01aa3d02634ec"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -123,8 +123,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.19
-    digest: "sha256:ab7ff19ad2cdb43e2f75448cfad157f1b2013531e710f0996fe56dbdc8d5e13d"
+    tag: v0.1.0-alpha.21
+    digest: "sha256:41d7ec0258af4497c9fd6ba876004a8411d18abb163d7ee691a390b7c8c35580"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -147,8 +147,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.18
-    digest: "sha256:753a0ebb52d2c6e7516eefae59e85a55467ef2ff761a9f789fa0d0a3ae71c4e1"
+    tag: v0.1.0-alpha.21
+    digest: "sha256:d255db37d05379a862f33bf5b183e40ea71f8d48b468c700c4172f6c015d2c7a"
   replicas: 1
   extraArgs: []
   extraEnv: []

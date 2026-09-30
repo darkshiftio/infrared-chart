@@ -68,6 +68,56 @@ spec:
               platform:
                 description: Platform marks the org that administers the control plane.
                 type: boolean
+              scheduling:
+                description: |-
+                  Scheduling turns on AgentWorkflows' cron triggers for the org. Off by
+                  default: scheduled runs spend model tokens every day.
+                properties:
+                  enabled:
+                    description: Enabled starts runs on the AgentWorkflows' cron schedules.
+                    type: boolean
+                  timeZone:
+                    description: TimeZone the cron schedules are read in, e.g. America/New_York;
+                      empty means UTC.
+                    type: string
+                required:
+                - enabled
+                type: object
+              teams:
+                description: |-
+                  Teams give people access to the org, by GitHub login. The platform
+                  admin and API tokens have full access without a team.
+                items:
+                  description: Team is a named group of people with one role in the
+                    org.
+                  properties:
+                    description:
+                      type: string
+                    members:
+                      description: Members by GitHub login.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
+                    name:
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    role:
+                      enum:
+                      - platform-admin
+                      - org-admin
+                      - member
+                      - viewer
+                      type: string
+                  required:
+                  - name
+                  - role
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
             required:
             - displayName
             type: object

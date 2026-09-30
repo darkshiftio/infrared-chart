@@ -146,11 +146,14 @@ spec:
                         resolve (re-apply the Change on the base branch and merge it in, for a
                         conflicted pull request). Empty means build for the first agentRole step
                         and review after it.
+                        report is for runs without a Change (scheduled audits, newsletters):
+                        read the repo and report, opening an issue for findings.
                       enum:
                       - build
                       - review
                       - issue
                       - resolve
+                      - report
                       type: string
                     name:
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
@@ -333,9 +336,23 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastScheduledAt:
+                description: LastScheduledAt is when the scheduler last started runs
+                  from a cron trigger.
+                format: date-time
+                type: string
+              nextScheduledAt:
+                description: NextScheduledAt is when it will next, while the org's
+                  scheduling is on.
+                format: date-time
+                type: string
               observedGeneration:
                 format: int64
                 type: integer
+              schedule:
+                description: Schedule says in plain words whether and when the workflow
+                  runs on its own.
+                type: string
             type: object
         required:
         - spec

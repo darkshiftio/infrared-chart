@@ -142,9 +142,9 @@ rules:
   - infrared.darkshift.io
   resources:
   - agentworkflowruns
-  - organizations
-  - products
+  - clusters
   verbs:
+  - create
   - get
   - list
   - patch
@@ -162,21 +162,21 @@ rules:
 - apiGroups:
   - infrared.darkshift.io
   resources:
-  - clusters
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - infrared.darkshift.io
-  resources:
   - incidents
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - infrared.darkshift.io
+  resources:
+  - organizations
+  - products
+  verbs:
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - kpack.io

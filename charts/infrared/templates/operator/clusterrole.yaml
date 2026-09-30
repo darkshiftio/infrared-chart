@@ -187,6 +187,17 @@ rules:
   - list
   - watch
 - apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - operator.victoriametrics.com
   resources:
   - vmalertmanagerconfigs

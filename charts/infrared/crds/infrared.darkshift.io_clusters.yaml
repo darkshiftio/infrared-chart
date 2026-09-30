@@ -57,6 +57,32 @@ spec:
           spec:
             description: ClusterSpec describes a cluster Infrared knows about.
             properties:
+              connection:
+                description: Connection says how Infrared and Argo CD reach a workload
+                  cluster.
+                properties:
+                  inCluster:
+                    description: InCluster places the workload cluster's zones on
+                      the management cluster.
+                    type: boolean
+                  kubeconfigSecretRef:
+                    description: |-
+                      KubeconfigSecretRef holds a kubeconfig for the cluster, in namespace infrared.
+                      Its current context is used; token and client-certificate users are supported.
+                    properties:
+                      key:
+                        description: Key within the Secret.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
               flavor:
                 description: ClusterFlavor selects distribution-specific components
                   in templates.
@@ -71,6 +97,51 @@ spec:
                 - linode
                 - local
                 type: string
+              provision:
+                description: Provision builds the cluster from its template with an
+                  OpenTofu Job.
+                properties:
+                  action:
+                    default: plan
+                    description: |-
+                      Action is plan (show what would be built, the default) or apply (build it).
+                      Apply creates billable cloud resources.
+                    enum:
+                    - plan
+                    - apply
+                    type: string
+                  credentialsSecretRef:
+                    description: |-
+                      CredentialsSecretRef names a Secret in namespace infrared whose keys become
+                      the Job's environment (e.g. AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION).
+                      Only its name is read; key is ignored.
+                    properties:
+                      key:
+                        description: Key within the Secret.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  image:
+                    description: Image is the OpenTofu image; empty means ghcr.io/opentofu/opentofu:1.10.
+                    type: string
+                  source:
+                    description: |-
+                      Source overrides the module source; empty means
+                      git::https://github.com/darkshiftio/infrared-iac-modules//<template.module>?ref=<template.version>.
+                    type: string
+                  variables:
+                    additionalProperties:
+                      type: string
+                    description: Variables are the module's inputs.
+                    type: object
+                type: object
               region:
                 type: string
               server:
@@ -101,6 +172,14 @@ spec:
           status:
             description: ClusterStatus is the observed state of a cluster.
             properties:
+              argoSecret:
+                description: ArgoSecret is the Argo CD cluster Secret Infrared wrote,
+                  if any.
+                type: string
+              argoServer:
+                description: ArgoServer is the server URL Argo CD Applications use
+                  for this cluster.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -164,6 +243,10 @@ spec:
                 description: Detected is True for the cluster Infrared found itself
                   running on.
                 type: boolean
+              gitopsPath:
+                description: GitopsPath is the directory in the gitops repo whose
+                  Applications land on this cluster.
+                type: string
               kubernetesVersion:
                 type: string
               nodes:
@@ -172,6 +255,31 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              provision:
+                description: Provision reports the last OpenTofu Job.
+                properties:
+                  action:
+                    description: Action the Job ran.
+                    type: string
+                  generation:
+                    description: Generation is the Cluster generation the Job ran
+                      for.
+                    format: int64
+                    type: integer
+                  job:
+                    description: Job is the Job's name in namespace infrared.
+                    type: string
+                  message:
+                    type: string
+                  phase:
+                    description: Phase is Running, Succeeded or Failed.
+                    type: string
+                required:
+                - action
+                - generation
+                - job
+                - phase
+                type: object
             type: object
         required:
         - spec

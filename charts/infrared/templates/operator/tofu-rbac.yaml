@@ -1,0 +1,39 @@
+# infrared-tofu runs a workload Cluster's OpenTofu Job (spec.provision).
+# OpenTofu keeps its state in a Secret (tfstate-default-cluster-<cluster>)
+# and locks it with a Lease, both in this namespace; that is all it may touch.
+# Cloud credentials come from the Secret the Cluster names, never from here.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infrared-tofu
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: infrared-tofu
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, create, update, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, create, update, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: infrared-tofu
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: infrared-tofu
+subjects:
+  - kind: ServiceAccount
+    name: infrared-tofu
+    namespace: {{ .Release.Namespace }}

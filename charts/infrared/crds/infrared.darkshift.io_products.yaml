@@ -95,6 +95,11 @@ spec:
                           - auto
                           - human
                           type: string
+                        cluster:
+                          description: |-
+                            Cluster is the Cluster the zone runs on; empty means the gitops repo's
+                            management cluster. The Cluster must be on the org's cluster allowlist.
+                          type: string
                         environment:
                           default: pre-release
                           description: Environment is pre-release or release.

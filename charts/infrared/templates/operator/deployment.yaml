@@ -52,6 +52,8 @@ spec:
               value: {{ include "infrared.image" (dict "root" . "image" .Values.runner.image) | quote }}
             - name: INFRARED_GO_TOOLCHAIN_IMAGE
               value: {{ .Values.runner.goToolchainImage | quote }}
+            - name: INFRARED_HELM_IMAGE
+              value: {{ .Values.runner.helmImage | quote }}
             - name: INFRARED_RUNNER_NETWORK_POLICY
               value: {{ .Values.runner.networkPolicy.enabled | quote }}
             - name: INFRARED_RUNNER_EGRESS_CIDRS

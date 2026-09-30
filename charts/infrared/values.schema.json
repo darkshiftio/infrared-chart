@@ -385,6 +385,10 @@
               "description": "Private CIDRs runners may reach over HTTP(S)."
             }
           }
+        },
+        "helmImage": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

@@ -87,6 +87,9 @@ runner:
   # -- Image an init container copies a Go toolchain from, so agents can build and
   # test Go repos. Pinned by digest.
   goToolchainImage: "golang:1.26@sha256:6c2a5538f964f1c82f97ad14988bf05de100d922d159d0e398b54c7b0ca0c6c9"
+  # -- Image an init container copies helm from, so agents can lint and
+  # template a Product's chart. Pinned by digest.
+  helmImage: "alpine/helm:3.19.0@sha256:aef9b56f64e866207d9591d0abd8f6d767b36aadd12edf68f8a719716d9d29c9"
   networkPolicy:
     # -- Fence runner pods with a NetworkPolicy in each org namespace: DNS and
     # HTTP(S) to the internet only, nothing in the cluster, the VPC or cloud

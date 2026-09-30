@@ -440,6 +440,29 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              zoneFiles:
+                description: |-
+                  ZoneFiles reports whether every delivery zone has its files in the
+                  gitops repo, and the pull request that added any Infrared scaffolded.
+                properties:
+                  message:
+                    type: string
+                  observedGeneration:
+                    format: int64
+                    type: integer
+                  ready:
+                    description: Ready is true when every zone has its values file
+                      and Application.
+                    type: boolean
+                  scaffolded:
+                    description: Scaffolded are zones whose files Infrared added by
+                      copying another zone.
+                    items:
+                      type: string
+                    type: array
+                required:
+                - ready
+                type: object
               zones:
                 description: |-
                   Zones is what each delivery zone runs, as recorded by the Releases

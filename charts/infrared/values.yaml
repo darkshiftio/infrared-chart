@@ -16,7 +16,7 @@ externalURL: ""
 
 gitops:
   # -- Version (git tag) of infrared-gitops-template the API asks the operator to render.
-  templateVersion: v0.1.9
+  templateVersion: v0.1.10
 
 builds:
   # -- Registry prefix product images are built into by kpack, e.g.

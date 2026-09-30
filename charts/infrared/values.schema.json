@@ -367,6 +367,24 @@
         "goToolchainImage": {
           "type": "string",
           "minLength": 1
+        },
+        "networkPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Fence runner pods with a NetworkPolicy."
+            },
+            "extraEgressCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F:.]+/[0-9]{1,3}$"
+              },
+              "description": "Private CIDRs runners may reach over HTTP(S)."
+            }
+          }
         }
       }
     },

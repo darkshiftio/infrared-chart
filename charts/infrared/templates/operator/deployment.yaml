@@ -52,6 +52,10 @@ spec:
               value: {{ include "infrared.image" (dict "root" . "image" .Values.runner.image) | quote }}
             - name: INFRARED_GO_TOOLCHAIN_IMAGE
               value: {{ .Values.runner.goToolchainImage | quote }}
+            - name: INFRARED_RUNNER_NETWORK_POLICY
+              value: {{ .Values.runner.networkPolicy.enabled | quote }}
+            - name: INFRARED_RUNNER_EGRESS_CIDRS
+              value: {{ join "," .Values.runner.networkPolicy.extraEgressCIDRs | quote }}
             # Alertmanager sends SLO alerts here (/v1/webhooks/alertmanager/<org>).
             - name: INFRARED_API_URL
               value: {{ printf "http://%s.%s.svc:%d" (include "infrared.componentName" (dict "root" . "component" "api")) .Release.Namespace (int .Values.api.service.port) | quote }}

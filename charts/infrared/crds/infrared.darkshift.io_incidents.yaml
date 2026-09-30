@@ -1,0 +1,174 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: incidents.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: Incident
+    listKind: IncidentList
+    plural: incidents
+    shortNames:
+    - irinc
+    singular: incident
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.productRef.name
+      name: Product
+      type: string
+    - jsonPath: .spec.zone
+      name: Zone
+      type: string
+    - jsonPath: .spec.severity
+      name: Severity
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.title
+      name: Title
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Incident is something wrong in a Product's zone that people are handling:
+          opened by an alert or by hand, acknowledged, and resolved, with a timeline.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: IncidentSpec describes what went wrong and where.
+            properties:
+              alert:
+                description: IncidentAlert is the alert behind an Incident.
+                properties:
+                  fingerprint:
+                    type: string
+                  generatorURL:
+                    type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  name:
+                    type: string
+                  startsAt:
+                    format: date-time
+                    type: string
+                required:
+                - fingerprint
+                - name
+                type: object
+              description:
+                type: string
+              productRef:
+                description: LocalRef names another Infrared resource in the same
+                  namespace.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              severity:
+                default: warning
+                enum:
+                - critical
+                - warning
+                - info
+                type: string
+              source:
+                description: Source is alert (opened by an alert) or manual (opened
+                  by a person).
+                enum:
+                - alert
+                - manual
+                type: string
+              title:
+                minLength: 1
+                type: string
+              zone:
+                description: Zone the Incident affects.
+                type: string
+            required:
+            - severity
+            - source
+            - title
+            type: object
+          status:
+            description: IncidentStatus is where the Incident is and what happened.
+            properties:
+              acknowledgedAt:
+                format: date-time
+                type: string
+              acknowledgedBy:
+                type: string
+              openedAt:
+                format: date-time
+                type: string
+              phase:
+                description: IncidentPhase is where an Incident is.
+                enum:
+                - Open
+                - Acknowledged
+                - Resolved
+                type: string
+              resolvedAt:
+                format: date-time
+                type: string
+              resolvedBy:
+                type: string
+              timeline:
+                items:
+                  description: IncidentEvent is one entry on an Incident's timeline.
+                  properties:
+                    at:
+                      format: date-time
+                      type: string
+                    by:
+                      type: string
+                    kind:
+                      description: Kind is opened, firing, alert-resolved, acknowledged,
+                        resolved, reopened or note.
+                      type: string
+                    message:
+                      type: string
+                  required:
+                  - at
+                  - kind
+                  - message
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

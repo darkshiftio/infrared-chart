@@ -171,12 +171,33 @@ rules:
   - update
   - watch
 - apiGroups:
+  - infrared.darkshift.io
+  resources:
+  - incidents
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - kpack.io
   resources:
   - builds
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - operator.victoriametrics.com
+  resources:
+  - vmalertmanagerconfigs
+  - vmrules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - rbac.authorization.k8s.io

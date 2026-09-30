@@ -71,6 +71,11 @@ commonLabels: {}
 # -- The image the operator runs each AgentWorkflowRun agent step in (infrared-runner,
 # the Claude Agent SDK). Steps run as Jobs in the org namespace and need the org's
 # Secret model-provider-anthropic (key api-key).
+observability:
+  # -- Prometheus-compatible query URL the API reads SLO error ratios from (INFRARED_METRICS_URL).
+  # The default is the VictoriaMetrics single node the gitops template installs; empty reports every SLO as no-data.
+  metricsURL: "http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428"
+
 runner:
   image:
     # -- Repository under image.registry.

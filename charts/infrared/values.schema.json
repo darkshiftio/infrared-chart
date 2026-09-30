@@ -369,6 +369,15 @@
           "minLength": 1
         }
       }
+    },
+    "observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metricsURL": {
+          "type": "string"
+        }
+      }
     }
   },
   "required": [

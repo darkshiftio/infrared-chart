@@ -132,6 +132,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |
 | `mcp.access.token` / `mcp.access.existingSecret` | `""` | Bearer token MCP clients must send to `/mcp` / existing Secret |
+| `observability.metricsURL` | `http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428` | Where the API reads SLO error ratios (`INFRARED_METRICS_URL`); empty reports every SLO as no-data |
 | `runner.image.repository` / `.tag` / `.digest` | `infrared-runner`, pinned | The image AgentWorkflowRun agent steps run in (`INFRARED_RUNNER_IMAGE`, operator). Steps run as Jobs in `ir-org-<org>` and need that namespace's Secret `model-provider-anthropic` (key `api-key`). |
 | `runner.goToolchainImage` | `golang:1.26@sha256:...` | Image an init container copies a Go toolchain from, so agents can build and test Go repos (`INFRARED_GO_TOOLCHAIN_IMAGE`) |
 | `podSecurityContext` | runAsNonRoot, seccomp RuntimeDefault | Pod security for every component |

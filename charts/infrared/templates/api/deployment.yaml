@@ -41,6 +41,10 @@ spec:
             - name: INFRARED_EXTERNAL_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.observability.metricsURL }}
+            - name: INFRARED_METRICS_URL
+              value: {{ . | quote }}
+            {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

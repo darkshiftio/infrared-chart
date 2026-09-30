@@ -176,6 +176,17 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              cutDispatched:
+                description: CutDispatched is true once the release.cut event has
+                  been sent.
+                type: boolean
+              cutRuns:
+                description: |-
+                  CutRuns are the AgentWorkflowRuns started when the tag was cut (the
+                  org's enabled AgentWorkflows with a release.cut event trigger).
+                items:
+                  type: string
+                type: array
               finishedAt:
                 format: date-time
                 type: string

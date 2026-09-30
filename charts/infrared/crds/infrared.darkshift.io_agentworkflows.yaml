@@ -138,6 +138,17 @@ spec:
                       format: int32
                       minimum: 1
                       type: integer
+                    mode:
+                      description: |-
+                        Mode says what an agentRole step works on: build (implement the Change
+                        and open its pull request), review (fix or judge the Change branch) or
+                        issue (rewrite the issue and move it on the board; no code changes).
+                        Empty means build for the first agentRole step and review after it.
+                      enum:
+                      - build
+                      - review
+                      - issue
+                      type: string
                     name:
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string

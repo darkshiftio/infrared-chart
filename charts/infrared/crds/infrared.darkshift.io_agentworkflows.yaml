@@ -142,12 +142,15 @@ spec:
                       description: |-
                         Mode says what an agentRole step works on: build (implement the Change
                         and open its pull request), review (fix or judge the Change branch) or
-                        issue (rewrite the issue and move it on the board; no code changes).
-                        Empty means build for the first agentRole step and review after it.
+                        issue (rewrite the issue and move it on the board; no code changes) or
+                        resolve (re-apply the Change on the base branch and merge it in, for a
+                        conflicted pull request). Empty means build for the first agentRole step
+                        and review after it.
                       enum:
                       - build
                       - review
                       - issue
+                      - resolve
                       type: string
                     name:
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$

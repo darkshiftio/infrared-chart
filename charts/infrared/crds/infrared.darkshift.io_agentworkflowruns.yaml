@@ -175,6 +175,12 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              conflictRounds:
+                description: |-
+                  ConflictRounds counts how often the merge step sent the run back to a
+                  pullRequest.conflicted step because the base branch moved.
+                format: int32
+                type: integer
               finishedAt:
                 format: date-time
                 type: string

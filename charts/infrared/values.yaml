@@ -81,9 +81,9 @@ runner:
     # -- Repository under image.registry.
     repository: infrared-runner
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.29
+    tag: v0.1.0-alpha.32
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:8e929b52e959482dc34a9a50622977bf3051d68400ccc86065fc9da122e5598b"
+    digest: "sha256:0a9d714c62de9c7827bf6edfe4ececf7b2cf0dd7f9752c1221c11c49dd7f7999"
   # -- Image an init container copies a Go toolchain from, so agents can build and
   # test Go repos. Pinned by digest.
   goToolchainImage: "golang:1.26@sha256:6c2a5538f964f1c82f97ad14988bf05de100d922d159d0e398b54c7b0ca0c6c9"

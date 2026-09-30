@@ -245,8 +245,8 @@ spec:
                       - Failed
                       type: string
                     pullRequest:
-                      description: PullRequest is the pin PR on the gitops repo that
-                        promoted to the zone.
+                      description: PullRequest is the pull request on the gitops repo
+                        that promoted to the zone.
                       format: int32
                       type: integer
                     pullRequestURL:

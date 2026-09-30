@@ -12,4 +12,4 @@ on management cluster "{{ .Values.managementCluster.name }}".
 3. Open http://localhost:8080 and paste the setup token.
 
 Once Argo CD manages this installation (the gitops repo's `infrared` Application),
-upgrade Infrared with a pin PR in the gitops repo, not with `helm upgrade`.
+upgrade Infrared with a pull request in the gitops repo, not with `helm upgrade`.

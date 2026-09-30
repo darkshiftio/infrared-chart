@@ -1,4 +1,4 @@
-# CI: pinned images (tag@digest) and a pull secret, as a gitops pin PR sets them.
+# CI: pinned images (tag@digest) and a pull secret, as a gitops pull request sets them.
 managementCluster:
   name: ci-mgmt
 externalURL: https://infrared.example.com

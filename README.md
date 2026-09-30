@@ -58,7 +58,7 @@ operator:
 credential provider need a dockerconfigjson Secret holding an ECR token, which
 expires after 12 hours; use the credential provider instead.
 
-Pinned images, as a pin PR sets them (`repo:tag@sha256:...`):
+Pinned images, as a pull request sets them (`repo:tag@sha256:...`):
 
 ```yaml
 api:
@@ -97,7 +97,7 @@ mcp:     { existingSecret: infrared-mcp-token, access: { existingSecret: infrare
 The gitops template's `infrared` Application (sync wave 40) already sets these
 (`mcp.access` from template v0.1.7). An install adopted before 0.1.0-alpha.6 has
 no `infrared-mcp-access` Secret yet: create it once (key `token`, 48 random
-characters) before the pin PR that moves to alpha.6 and adds the value.
+characters) before the pull request that moves to alpha.6 and adds the value.
 With them set, the chart renders no Secret at all and the ones from the first
 `helm install` stay in place.
 
@@ -107,7 +107,7 @@ Before Argo CD adopts Infrared: `helm upgrade infrared oci://ghcr.io/darkshiftio
 
 **After Argo CD adopts Infrared** (the gitops repo's `registry/clusters/<cluster>/components/infrared.yaml`
 Application is Synced/Healthy), do not run `helm upgrade`: Argo CD would revert it.
-Upgrade with a pin PR in the gitops repo that changes the Application's
+Upgrade with a pull request in the gitops repo that changes the Application's
 `targetRevision` (chart version) and, if needed, the image pins (`tag` + `digest`).
 
 CRDs ship in `crds/`. Helm installs them but never upgrades them; Argo CD applies
@@ -123,7 +123,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `fullnameOverride` | `""` | Overrides the resource name prefix (`infrared` for a release named infrared) |
 | `managementCluster.name` | `infrared-mgmt` | Management cluster name (`INFRARED_CLUSTER_NAME`) |
 | `externalURL` | `""` | Public URL, if exposed (`INFRARED_EXTERNAL_URL`, api) |
-| `gitops.templateVersion` | `v0.1.8` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
+| `gitops.templateVersion` | `v0.1.9` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |

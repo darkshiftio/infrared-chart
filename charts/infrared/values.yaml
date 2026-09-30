@@ -16,7 +16,7 @@ externalURL: ""
 
 gitops:
   # -- Version (git tag) of infrared-gitops-template the API asks the operator to render.
-  templateVersion: v0.1.8
+  templateVersion: v0.1.9
 
 builds:
   # -- Registry prefix product images are built into by kpack, e.g.
@@ -88,9 +88,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.12
+    tag: v0.1.0-alpha.13
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:aad85535a928446e388a1ee9c29ce8d2868fb9d2712c7a180a1a111231149b34"
+    digest: "sha256:406b2619e94c745cd5c03054a5289d3d409b57fe81ed98afc1567a1530b7e33c"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -118,8 +118,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.11
-    digest: "sha256:951c91a6a30d5da027b043de56e2bc39efe2dd58017396f8123432d5c0d00704"
+    tag: v0.1.0-alpha.13
+    digest: "sha256:cb10ba32137737e51a34ce81c4dae086f3df91b5c5eba5b991d7b9c9ed30e2b0"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -142,8 +142,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.11
-    digest: "sha256:ad871b8fb2ee48ffed299809588e7f3dd86a65ed45b4b520a18c064874898aa7"
+    tag: v0.1.0-alpha.13
+    digest: "sha256:72dba007084f746b76cb824703c02193a4608153dbbb27e4b1b121b91f3e37c8"
   replicas: 1
   extraArgs: []
   extraEnv: []

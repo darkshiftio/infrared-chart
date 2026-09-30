@@ -105,6 +105,11 @@ spec:
           status:
             description: ReleaseStatus is the observed state of a Release.
             properties:
+              attempts:
+                description: 'Attempts counts how many times the Release has run:
+                  1, plus one per retry.'
+                format: int32
+                type: integer
               build:
                 description: Build is the kpack Build that produced the image.
                 type: string
@@ -205,6 +210,9 @@ spec:
                 type: string
               repo:
                 description: Repo is owner/name of the delivery repo.
+                type: string
+              retriedBy:
+                description: RetriedBy is who asked for the latest retry.
                 type: string
               startedAt:
                 format: date-time

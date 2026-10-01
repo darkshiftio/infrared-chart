@@ -27,15 +27,18 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
+  # Product links: the API reads the Ingresses in each zone's namespace to list
+  # where people can open the zone.
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
   # Organizations live in ir-org-* namespaces, which the API creates.
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["get", "list", "create"]
-  # Skeleton: the API reads/writes Secrets in the release namespace
-  # (infrared-setup, infrared-session, infrared-api-tokens) and in ir-org-*
-  # namespaces. RBAC cannot match a namespace prefix, so this is cluster-wide
-  # for now; P2 narrows it to Roles in the release namespace and in each
-  # ir-org-* namespace as the operator creates them.
+  # The API reads and writes Secrets in the release namespace (infrared-setup,
+  # infrared-session, infrared-api-tokens) and in ir-org-* namespaces. RBAC
+  # cannot match a namespace prefix, so this is cluster-wide.
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list", "create", "update", "patch"]

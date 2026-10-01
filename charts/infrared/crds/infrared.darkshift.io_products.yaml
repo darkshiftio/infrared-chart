@@ -136,6 +136,12 @@ spec:
                             Preview gives the zone a URL, https://<zone>.<installation previews domain>,
                             behind Infrared sign-in.
                           type: boolean
+                        public:
+                          description: |-
+                            Public opens a preview zone to anyone, without Infrared sign-in. Only
+                            org admins may set it. It applies to preview zones on the management
+                            cluster, whose chart honours preview.public.
+                          type: boolean
                         valuesPath:
                           description: |-
                             ValuesPath is the zone's values file in the gitops repo, holding the

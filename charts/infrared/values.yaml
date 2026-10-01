@@ -134,8 +134,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.50
-    digest: "sha256:b233d30c8d033f3dc4a9a8c28b178abe9e66524a4bdc4b0b9f435eedb6334424"
+    tag: v0.1.0-alpha.51
+    digest: "sha256:d04e25de4bdca9bd4730bb4aa769b2f91e41dffef5c33e17fcadb6ddcec91f02"
   replicas: 1
   extraArgs: []
   extraEnv: []

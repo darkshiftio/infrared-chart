@@ -72,6 +72,26 @@ spec:
                       Repo is the Product repo whose commits are released; empty means the
                       first repo. Releases tag this repo vX.Y.Z.
                     type: string
+                  scaffold:
+                    description: |-
+                      Scaffold has Infrared write the Product's build, a generic web chart and
+                      its zones' files into the gitops repo, then start its first Release.
+                    properties:
+                      kind:
+                        description: 'Kind of app: static (files served by nginx),
+                          node or go.'
+                        enum:
+                        - static
+                        - node
+                        - go
+                        type: string
+                      root:
+                        description: Root is the directory of a static site within
+                          the repo; empty means the top.
+                        type: string
+                    required:
+                    - kind
+                    type: object
                   zones:
                     description: |-
                       Zones in promotion order. A release reaches a zone only after every
@@ -111,6 +131,11 @@ spec:
                           description: 'Name of the zone: its namespace, e.g. checkout-rc.'
                           minLength: 1
                           type: string
+                        preview:
+                          description: |-
+                            Preview gives the zone a URL, https://<zone>.<installation previews domain>,
+                            behind Infrared sign-in.
+                          type: boolean
                         valuesPath:
                           description: |-
                             ValuesPath is the zone's values file in the gitops repo, holding the

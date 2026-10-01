@@ -53,9 +53,6 @@ spec:
           metadata:
             type: object
           spec:
-            description: |-
-              InstallationSpec records what the setup wizard has collected. Each field is
-              filled in by the API as the wizard advances; the controller derives the phase.
             properties:
               admin:
                 description: InstallationAdmin is the first platform admin, created
@@ -113,6 +110,26 @@ spec:
                 description: PlatformOrg is the Organization that administers this
                   control plane.
                 type: string
+              previews:
+                description: Previews give pre-release zones a URL behind Infrared
+                  sign-in.
+                properties:
+                  domain:
+                    description: |-
+                      Domain previews live under: zone z is https://<z>.<domain>. A wildcard DNS
+                      record for the domain must point at the management cluster's ingress.
+                    minLength: 1
+                    type: string
+                  signInURL:
+                    description: |-
+                      SignInURL is Infrared's public URL, where preview visitors sign in,
+                      e.g. https://infrared.example.com.
+                    pattern: ^https://
+                    type: string
+                required:
+                - domain
+                - signInURL
+                type: object
               tokenVerified:
                 description: TokenVerified is set once the one-time setup token has
                   been presented.

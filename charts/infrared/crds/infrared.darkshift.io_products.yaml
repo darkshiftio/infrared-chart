@@ -207,15 +207,6 @@ spec:
                       description: Owner is the provider org; empty means the org's
                         GitProvider owner.
                       type: string
-                    role:
-                      default: app
-                      description: |-
-                        Role of the repo in the Product: app (code that is built and released)
-                        or umbrella (a chart that combines other Products' charts).
-                      enum:
-                      - app
-                      - umbrella
-                      type: string
                   required:
                   - name
                   type: object

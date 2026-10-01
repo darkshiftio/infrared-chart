@@ -184,13 +184,12 @@ spec:
                       type: string
                     role:
                       default: app
-                      description: Role of the repo in the Product.
+                      description: |-
+                        Role of the repo in the Product: app (code that is built and released)
+                        or umbrella (a chart that combines other Products' charts).
                       enum:
                       - app
-                      - chart
                       - umbrella
-                      - library
-                      - docs
                       type: string
                   required:
                   - name

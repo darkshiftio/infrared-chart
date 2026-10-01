@@ -113,6 +113,11 @@ spec:
               build:
                 description: Build is the kpack Build that produced the image.
                 type: string
+              builtAt:
+                description: BuiltAt is when the build was ready and its digest tagged
+                  with the version.
+                format: date-time
+                type: string
               commit:
                 description: Commit is the commit this Release tags, resolved from
                   spec.commit.
@@ -226,6 +231,11 @@ spec:
                 description: RetriedBy is who asked for the latest retry.
                 type: string
               startedAt:
+                format: date-time
+                type: string
+              taggedAt:
+                description: TaggedAt is when the GitHub release (and so the git tag)
+                  was created.
                 format: date-time
                 type: string
               version:

@@ -14,8 +14,26 @@ managementCluster:
 # -- Public URL of the UI/API, if it is exposed (INFRARED_EXTERNAL_URL). Optional.
 externalURL: ""
 
+# What the operator writes to the Installation when it starts, so nobody patches
+# it after the install. It writes each field only while that field is empty, and
+# never overwrites one.
+installation:
+  # -- The edge the gitops template routes through (INFRARED_EDGE, operator):
+  # `traefik`, an Ingress per route as before, or `gateway`, routes on the shared
+  # Envoy Gateway. Empty means traefik. Written to the Installation's `spec.edge`.
+  edge: ""
+  # -- Preview settings (INFRARED_PREVIEWS, operator, as JSON): `domain` and
+  # `signInURL`, and optionally `ingressHost`, `ingressIP`, `managedRoots` and
+  # `cloudflareTokenSecret`. Written to the Installation's `spec.previews`.
+  # Empty leaves previews to a person, as before.
+  previews: {}
+  #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
+  #   signInURL: https://infrared.example.com  # where preview visitors sign in
+
 gitops:
-  # -- Version (git tag) of infrared-gitops-template the API asks the operator to render.
+  # -- Version of infrared-gitops-template the API asks the operator to render
+  # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
+  # to install from a branch of the template.
   templateVersion: v0.1.10
 
 builds:
@@ -25,7 +43,10 @@ builds:
   registry: ""
 
 image:
-  # -- Registry prefix shared by every component image.
+  # -- Registry prefix shared by every component image. Any registry other than
+  # this default is handed to the operator with every component's tag and digest
+  # (INFRARED_IMAGE_REGISTRY, INFRARED_IMAGES), so the gitops template writes them
+  # into the `infrared` Application and Argo CD keeps them when it adopts the release.
   registry: 977456087177.dkr.ecr.us-east-1.amazonaws.com
   # -- Pull policy for every component image.
   pullPolicy: IfNotPresent
@@ -35,6 +56,21 @@ image:
 # clusters it bootstraps and for runner Jobs: it copies the Secret into each org
 # namespace and sets it on every Job.
 imagePullSecrets: []
+
+# The Secret named by imagePullSecrets[0], a kubernetes.io/dockerconfigjson for
+# one registry, rendered when a username and password are set. Empty (the
+# default) renders none, and that Secret must already exist in the release
+# namespace. Pass the password with --set-file so it is never in a values file;
+# surrounding whitespace is trimmed. The Secret is kept on uninstall and when the
+# values stop carrying the password, as under Argo CD after adoption.
+imageCredentials:
+  # -- Registry host the credential is for. The operator also reads it for the
+  # chart repository on ghcr.io.
+  registry: ghcr.io
+  # -- Username; required with a password.
+  username: ""
+  # -- Password or token, e.g. a token that may only read packages; required with a username.
+  password: ""
 
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is
 # generated once and kept across upgrades (looked up with `lookup`). Under
@@ -50,6 +86,22 @@ session:
   # -- Session signing key (Secret `infrared-session`, key `key`). Empty generates 64 random characters.
   key: ""
   # -- Name of an existing Secret with key `key`; when set, the chart renders no session Secret.
+  existingSecret: ""
+
+# Tokens the platform's own components use, kept in one Secret,
+# `infrared-platform-tokens`, in the release namespace. The gitops template's
+# External Secrets component reads it through the ClusterSecretStore
+# `infrared-platform` and copies each token to the namespace that uses it. The
+# Secret is rendered when a token is set. Pass each token with --set-file so it is
+# never in a values file; surrounding whitespace is trimmed. It is kept on
+# uninstall and when the values stop carrying the token, as under Argo CD after
+# adoption.
+platformTokens:
+  # -- Cloudflare API token (key `cloudflare-api-token`), for the edge's DNS
+  # records and origin certificates.
+  cloudflareApiToken: ""
+  # -- `infrared-platform-tokens` when that Secret already exists; the chart then
+  # renders none. The name is fixed: the template reads it.
   existingSecret: ""
 
 # Pod-level defaults shared by every component; each component may override.

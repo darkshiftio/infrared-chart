@@ -75,6 +75,41 @@ digest is set (a pin).
 {{- with .Values.imagePullSecrets }}{{ (first .).name }}{{ end }}
 {{- end }}
 
+{{/*
+The default image.registry, darkshift's preprod ECR. Every chart version pins its
+own builds there, so a cluster on it upgrades its images with the chart version
+alone. `make verify` fails if values.yaml's default and this one differ.
+*/}}
+{{- define "infrared.defaultRegistry" -}}
+977456087177.dkr.ecr.us-east-1.amazonaws.com
+{{- end }}
+
+{{/*
+The registry to hand to the operator (INFRARED_IMAGE_REGISTRY), or empty for the
+default registry. Images from any other registry are pinned in the values, and
+those pins have to reach the gitops repo's `infrared` Application, or Argo CD
+renders the chart's defaults once it adopts the release. The Application then
+carries the same registry, so the operator keeps receiving it.
+*/}}
+{{- define "infrared.handedRegistry" -}}
+{{- $registry := trimSuffix "/" .Values.image.registry }}
+{{- if and $registry (ne $registry (include "infrared.defaultRegistry" .)) }}{{ $registry }}{{ end }}
+{{- end }}
+
+{{/*
+Every component's pin as JSON (INFRARED_IMAGES): {"<component>": {"tag", "digest"}}
+for operator, api, ui, mcp and runner. The tag is the one the chart renders (the
+appVersion when empty); the digest is empty when the image is not pinned.
+*/}}
+{{- define "infrared.imagePins" -}}
+{{- $pins := dict }}
+{{- range $c := list "operator" "api" "ui" "mcp" "runner" }}
+{{- $img := (index $.Values $c).image }}
+{{- $_ := set $pins $c (dict "tag" (default $.Chart.AppVersion $img.tag) "digest" (default "" $img.digest)) }}
+{{- end }}
+{{- toJson $pins }}
+{{- end }}
+
 {{/* Name of the MCP token Secret. */}}
 {{- define "infrared.mcpAccessSecret" -}}
 {{- default (printf "%s-mcp-access" (include "infrared.fullname" .)) .Values.mcp.access.existingSecret }}

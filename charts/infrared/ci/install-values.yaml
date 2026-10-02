@@ -1,0 +1,21 @@
+# CI: a fresh install from one values file on a cluster outside AWS, layered on
+# ghcr-values.yaml. The operator writes the edge and the previews to the
+# Installation, the API renders the gitops template at a commit, and the chart
+# renders the image pull Secret and the platform tokens Secret from values.
+# scripts/verify.sh passes the password and the token with --set-file, as an
+# install does, so no credential is in a values file.
+managementCluster:
+  name: ci-install
+installation:
+  edge: gateway
+  previews:
+    domain: preview.example.com
+    signInURL: https://infrared.example.com
+    managedRoots: []
+gitops:
+  templateVersion: 0123456789abcdef0123456789abcdef01234567
+image:
+  # A trailing slash is trimmed, in the images and in INFRARED_IMAGE_REGISTRY.
+  registry: ghcr.io/darkshiftio/
+imageCredentials:
+  username: ci-reader

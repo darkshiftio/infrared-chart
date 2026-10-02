@@ -34,7 +34,8 @@ which is exactly `infrared` for that release name, and the gitops template's
 `infrared` Application uses release name `infrared` so that adoption lines up.
 
 Private images: create a `kubernetes.io/dockerconfigjson` Secret in the
-namespace and pass `--set 'imagePullSecrets[0].name=ghcr-pull'`. The first name
+namespace, or let the chart render it from `imageCredentials` ("Secrets from
+values"), and pass `--set 'imagePullSecrets[0].name=ghcr-pull'`. The first name
 is also handed to the operator (`INFRARED_IMAGE_PULL_SECRET`) for the clusters
 it bootstraps, and for runner Jobs: the operator copies the Secret into each
 org namespace and sets it on every Job, so the runner image pulls with it too.
@@ -81,7 +82,17 @@ runner:
 
 (`ci/ghcr-values.yaml` renders exactly this in `make verify`.) The registry and
 the digests have to reach the gitops repo's `infrared` values too, or Argo CD
-renders the defaults again once it adopts the release.
+renders the defaults again once it adopts the release. So for any registry other
+than the default, the chart hands the registry and every component's pin to the
+operator (`INFRARED_IMAGE_REGISTRY`, and `INFRARED_IMAGES` as JSON:
+`{"operator": {"tag": "...", "digest": "sha256:..."}, "api": ..., "ui": ...,
+"mcp": ..., "runner": ...}`), and the operator hands them to the gitops template,
+which writes them into the `infrared` Application. The Application then carries
+the same registry, so the operator keeps receiving them after adoption. On the
+default registry neither is set, and the chart version's own pins apply.
+
+The pull Secret itself can come from values, so a fresh install needs nothing
+made by hand; see "Secrets from values".
 
 Pinned images, as a pull request sets them (`repo:tag@sha256:...`):
 
@@ -125,6 +136,48 @@ no `infrared-mcp-access` Secret yet: create it once (key `token`, 48 random
 characters) before the pull request that moves to alpha.6 and adds the value.
 With them set, the chart renders no Secret at all and the ones from the first
 `helm install` stay in place.
+
+## Secrets from values
+
+Two Secrets that a person used to make by hand before `helm install` can come from
+values. Each is rendered only when its value is set, so by default the chart
+renders neither. Pass the values with `--set-file`, so they are never written into
+a values file; the chart trims surrounding whitespace, such as a file's final
+newline.
+
+| Secret (namespace = release) | Type, key | From | Read by |
+|---|---|---|---|
+| The name in `imagePullSecrets[0]` | `kubernetes.io/dockerconfigjson`, `.dockerconfigjson`: one entry for `imageCredentials.registry` (default `ghcr.io`) | `imageCredentials.username` and `imageCredentials.password`, both or neither. Neither: the Secret must already exist, as before | The kubelet for every pod; the operator for Argo CD's chart repository Secret and for runner Jobs, which it copies the Secret to |
+| `infrared-platform-tokens` | `Opaque`, `cloudflare-api-token` | `platformTokens.cloudflareApiToken`; `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it |
+
+```bash
+helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <version> \
+  -n infrared --create-namespace -f values.yaml \
+  --set-file imageCredentials.password="$HOME/path/to/registry-token" \
+  --set-file platformTokens.cloudflareApiToken="$HOME/path/to/cloudflare-token"
+```
+
+with `imagePullSecrets: [{name: ghcr-pull}]` and `imageCredentials.username` in
+`values.yaml`. Write `$HOME`, not `~`: the shell does not expand a `~` after
+`=` in these arguments. Both Secrets carry `helm.sh/resource-policy: keep`. After
+Argo CD adopts the release it renders the chart without these values, so it
+renders neither Secret, and the ones from the install stay in place.
+
+## The Installation's edge and previews
+
+The operator writes `installation.edge` and `installation.previews` to the
+Installation when it starts (`INFRARED_EDGE`, and `INFRARED_PREVIEWS` as JSON), each
+only while the Installation's field is empty, and never overwrites one. So a
+fresh install needs no patch afterwards, and a person's later change stands. Both
+are empty by default, and then the chart renders exactly what it rendered before.
+
+```yaml
+installation:
+  edge: gateway                      # or traefik; empty means traefik
+  previews:
+    domain: preview.example.com      # zone z answers at https://<z>.preview.example.com
+    signInURL: https://infrared.example.com
+```
 
 ## Extensions
 
@@ -189,11 +242,15 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `fullnameOverride` | `""` | Overrides the resource name prefix (`infrared` for a release named infrared) |
 | `managementCluster.name` | `infrared-mgmt` | Management cluster name (`INFRARED_CLUSTER_NAME`) |
 | `externalURL` | `""` | Public URL, if exposed (`INFRARED_EXTERNAL_URL`, api) |
-| `gitops.templateVersion` | `v0.1.9` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
+| `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
+| `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
+| `gitops.templateVersion` | `v0.1.10` | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
-| `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). |
+| `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
 | `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job |
+| `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
+| `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |
@@ -246,7 +303,7 @@ change it came from.
 ## Development
 
 ```bash
-make verify     # shell checks, helm lint, helm template (6 value sets), assertions, kubeconform
+make verify     # shell checks, helm lint, helm template (9 value sets), assertions, kubeconform
 make template   # render with defaults
 ```
 

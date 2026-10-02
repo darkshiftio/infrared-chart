@@ -23,6 +23,14 @@ if command -v shellcheck >/dev/null; then
   if shellcheck "$root"/hack/*.sh "$root"/scripts/*.sh; then ok shellcheck; else bad shellcheck; fi
 fi
 
+# A fresh install outside AWS passes its two secrets with --set-file, from files
+# that end in a newline; these stand in for them.
+printf 'ci-password\n' >"$out/ci-password"
+printf '  ci-cloudflare-token\n\n' >"$out/ci-cloudflare-token"
+install=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
+  --set-file "imageCredentials.password=$out/ci-password"
+  --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token")
+
 step "helm lint"
 for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
@@ -31,6 +39,8 @@ for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/
     cat "$out/lint.log"; bad "lint ${v:-defaults}"
   fi
 done
+if helm lint --strict "$chart" "${install[@]}" >"$out/lint.log" 2>&1; then ok "lint install (ghcr + install values, secrets by --set-file)"
+else cat "$out/lint.log"; bad "lint install"; fi
 
 step "helm template"
 helm template infrared "$chart" -n infrared --include-crds >"$out/defaults.yaml"
@@ -40,7 +50,25 @@ helm template other "$chart" -n ir-test >"$out/other.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" >"$out/extensions.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" >"$out/ghcr.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr"
+helm template infrared "$chart" -n infrared "${install[@]}" >"$out/install.yaml"
+# What Argo CD renders once it adopts a release outside AWS: the template's
+# values carry the registry, the pins and the pull secret's name, and no secret.
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" >"$out/ghcr-adopted.yaml"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted"
+
+# envs <render>: every literal env entry of a render as NAME=value, one per line,
+# into <render>.env, for assertions on the operator's inputs.
+envs() {
+  awk '/^ +- name: [A-Z0-9_]+$/ {n=$3; next} n && /^ +value: / {sub(/^ +value: /, ""); print n "=" $0} {n=""}' \
+    "$out/$1.yaml" >"$out/$1.env"
+}
+for f in defaults digests ecr ghcr install ghcr-adopted; do envs "$f"; done
+# secret <render> <Secret> <key>: that key of that Secret, decoded.
+secret() {
+  awk -v s="$2" -v k="$3" '
+    /^---/ {n=""} /^  name: / {n=$2}
+    n == s && $1 == k":" {gsub(/"/, "", $2); print $2}' "$out/$1.yaml" | base64 --decode
+}
 
 step "assertions"
 check() { # check <file> <description> <grep -E pattern> [count]
@@ -86,6 +114,52 @@ check ghcr.yaml "operator runs steps in the ghcr runner, pinned by digest" 'valu
 check ghcr.yaml "the one pull secret on every pod" '^        - name: ghcr-pull$' 4
 check ghcr.yaml "the pull secret handed to the operator for runner Jobs" 'value: "ghcr-pull"' 1
 check ghcr.yaml "nothing pulls from ECR" '977456087177' 0
+# has <file> <description> <whole line, fixed string> [count]
+has() {
+  local n; n="$(grep -cxF -- "$3" "$out/$1" || true)"
+  if [[ "$n" == "${4:-1}" ]]; then ok "$2"; else bad "$2 (found $n, want ${4:-1})"; fi
+}
+ghcr_pins='{\"api\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000022\",\"tag\":\"one-install-0000002\"},\"mcp\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000024\",\"tag\":\"one-install-0000004\"},\"operator\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000021\",\"tag\":\"one-install-0000001\"},\"runner\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000025\",\"tag\":\"one-install-0000005\"},\"ui\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000023\",\"tag\":\"one-install-0000003\"}}'
+# The operator hands a registry other than the default, and every pin, to the
+# gitops template (INFRARED_IMAGE_REGISTRY, INFRARED_IMAGES), which writes them
+# into the `infrared` Application, so Argo CD keeps them once it adopts the release.
+has ghcr.env "registry outside AWS handed to the operator" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
+has ghcr.env "every pin handed to the operator, as JSON" "INFRARED_IMAGES=\"$ghcr_pins\""
+check ghcr.yaml "no pull Secret without imageCredentials" '^type: kubernetes\.io/dockerconfigjson$' 0
+has ghcr-adopted.env "after adoption the operator still gets the registry" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
+has ghcr-adopted.env "after adoption the operator still gets every pin" "INFRARED_IMAGES=\"$ghcr_pins\""
+check ghcr-adopted.yaml "after adoption no Secret is rendered, so the install's stay as they are" '^kind: Secret$' 0
+check ghcr-adopted.yaml "after adoption every pod still pulls with the pull secret" '^        - name: ghcr-pull$' 4
+# The default registry: the chart version's own pins, nothing handed on (and the
+# default in values.yaml matches infrared.defaultRegistry).
+for f in defaults digests ecr; do
+  check "$f.env" "$f: no registry or pins handed to the operator" '^INFRARED_(IMAGE_REGISTRY|IMAGES)=' 0
+done
+# The Installation's edge and previews, and the two Secrets rendered from values:
+# none of it by default, so the default render is what it was.
+check defaults.env "no edge or previews by default" '^INFRARED_(EDGE|PREVIEWS)=' 0
+check defaults.yaml "no pull Secret by default" '^type: kubernetes\.io/dockerconfigjson$' 0
+check defaults.yaml "no platform tokens Secret by default" 'infrared-platform-tokens' 0
+# A fresh install from one values file: everything the operator writes to the
+# Installation, and every token where it is used.
+has install.env "the edge the operator writes to spec.edge" 'INFRARED_EDGE="gateway"'
+has install.env "the previews the operator writes to spec.previews, as JSON" \
+  'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"managedRoots\":[],\"signInURL\":\"https://infrared.example.com\"}"'
+has install.env "the gitops template at a commit" 'INFRARED_GITOPS_TEMPLATE_VERSION="0123456789abcdef0123456789abcdef01234567"'
+has install.env "a trailing slash on the registry is trimmed" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
+check install.yaml "images name the registry without a double slash" 'ghcr\.io/darkshiftio//' 0
+check install.yaml "pull Secret named by imagePullSecrets[0], a dockerconfigjson" '^type: kubernetes\.io/dockerconfigjson$' 1
+check install.yaml "the pull Secret is ghcr-pull" '^  name: ghcr-pull$' 1
+check install.yaml "platform tokens in Secret infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
+check install.yaml "every Secret from values is kept, like the generated ones" '^    helm\.sh/resource-policy: keep$' 7
+want_auth="$(printf 'ci-reader:ci-password' | base64)"
+got="$(secret install ghcr-pull .dockerconfigjson)"
+if [[ "$got" == "{\"auths\":{\"ghcr.io\":{\"auth\":\"$want_auth\",\"password\":\"ci-password\",\"username\":\"ci-reader\"}}}" ]]; then
+  ok "pull Secret holds one ghcr.io entry, the password trimmed"
+else bad "pull Secret's .dockerconfigjson is not the one ghcr.io entry expected"; fi
+if [[ "$(secret install infrared-platform-tokens cloudflare-api-token)" == ci-cloudflare-token ]]; then
+  ok "Cloudflare token under key cloudflare-api-token, whitespace trimmed"
+else bad "infrared-platform-tokens' cloudflare-api-token is not the token, trimmed"; fi
 check other.yaml "other release names its UI Service <release>-infrared" '^  name: other-infrared$'
 check other.yaml "other release proxies to its own api" 'value: "http://other-infrared-api:8080"'
 
@@ -130,6 +204,18 @@ refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
   --set "$ext,ui.extensions[0].upstream=ledger:8080,ui.extensionsProxySecret.existingSecret=x"
 refuse "a duplicate extension id fails" 'id "ledger" is listed more than once' \
   --set "$ext,ui.extensions[1].id=ledger,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
+refuse "an edge other than traefik or gateway fails" "at '/installation/edge'" --set installation.edge=nginx
+refuse "previews without a signInURL fail" "missing property 'signInURL'" --set installation.previews.domain=preview.example.com
+refuse "a signInURL that is not https fails" "at '/installation/previews/signInURL'" \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=http://infrared.example.com
+refuse "a template version that is a branch fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=main
+refuse "a short commit SHA fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=0123456
+refuse "imageCredentials without imagePullSecrets fail" "imageCredentials needs imagePullSecrets[0].name" \
+  --set imageCredentials.username=u,imageCredentials.password=p
+refuse "a username without a password fails" "imageCredentials needs both username and password" \
+  --set 'imageCredentials.username=u,imagePullSecrets[0].name=ghcr-pull'
+refuse "platform tokens under another Secret name fail" "at '/platformTokens/existingSecret'" \
+  --set platformTokens.existingSecret=other
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
@@ -138,7 +224,7 @@ if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
 else bad "operator ClusterRole has no generated rules (run hack/sync-operator.sh)"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

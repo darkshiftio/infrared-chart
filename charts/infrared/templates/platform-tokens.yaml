@@ -1,0 +1,24 @@
+{{- /*
+The platform's tokens, in one Secret with a fixed name: the gitops template's
+External Secrets component reads `infrared-platform-tokens` in this namespace
+through the ClusterSecretStore `infrared-platform`, and copies each key to the
+namespace that uses it. Rendered when a token is set and existingSecret is not.
+Kept on uninstall, and when the values stop carrying the token (Argo CD renders
+the chart without it after adoption), like the generated Secrets.
+*/}}
+{{- $t := .Values.platformTokens }}
+{{- $cloudflare := trim (default "" $t.cloudflareApiToken) }}
+{{- if and $cloudflare (not $t.existingSecret) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: infrared-platform-tokens
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  cloudflare-api-token: {{ $cloudflare | b64enc | quote }}
+{{- end }}

@@ -31,13 +31,78 @@
       "type": "string",
       "pattern": "^(https?://.+)?$"
     },
+    "installation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the operator writes to the Installation while each field is empty.",
+      "properties": {
+        "edge": {
+          "type": "string",
+          "enum": [
+            "",
+            "traefik",
+            "gateway"
+          ],
+          "description": "spec.edge (INFRARED_EDGE); empty means traefik."
+        },
+        "previews": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "spec.previews (INFRARED_PREVIEWS, as JSON); empty leaves previews to a person.",
+          "properties": {
+            "domain": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Zone z answers at https://<z>.<domain>."
+            },
+            "signInURL": {
+              "type": "string",
+              "pattern": "^https://",
+              "description": "Infrared's public URL, where preview visitors sign in."
+            },
+            "ingressHost": {
+              "type": "string",
+              "description": "The name customers point their own domains at with a CNAME."
+            },
+            "ingressIP": {
+              "type": "string",
+              "description": "The ingress's public address, for A records on root domains."
+            },
+            "managedRoots": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Domains Infrared manages in Cloudflare, under which any org can claim a subdomain."
+            },
+            "cloudflareTokenSecret": {
+              "type": "string",
+              "description": "A Secret in the release namespace whose api-token key may edit DNS for the managed roots."
+            }
+          },
+          "anyOf": [
+            {
+              "maxProperties": 0
+            },
+            {
+              "required": [
+                "domain",
+                "signInURL"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "gitops": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "templateVersion": {
           "type": "string",
-          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+.*$"
+          "pattern": "^(v[0-9]+\\.[0-9]+\\.[0-9]+.*|[0-9a-f]{40})$",
+          "description": "A tag of infrared-gitops-template, or a full 40-character commit SHA."
         }
       },
       "required": [
@@ -78,6 +143,44 @@
         "required": [
           "name"
         ]
+      }
+    },
+    "imageCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The Secret named by imagePullSecrets[0], rendered when username and password are set.",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]+)?$",
+          "description": "Registry host the credential is for."
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string",
+          "description": "Pass it with --set-file; surrounding whitespace is trimmed."
+        }
+      }
+    },
+    "platformTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Secret infrared-platform-tokens, rendered when a token is set.",
+      "properties": {
+        "cloudflareApiToken": {
+          "type": "string",
+          "description": "Key cloudflare-api-token. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "existingSecret": {
+          "type": "string",
+          "enum": [
+            "",
+            "infrared-platform-tokens"
+          ],
+          "description": "infrared-platform-tokens when it already exists; the chart then renders none."
+        }
       }
     },
     "setup": {

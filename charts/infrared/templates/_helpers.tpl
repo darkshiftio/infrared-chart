@@ -110,6 +110,18 @@ appVersion when empty); the digest is empty when the image is not pinned.
 {{- toJson $pins }}
 {{- end }}
 
+{{/*
+The backup bucket as JSON (INFRARED_BACKUP): {"bucket", "endpoint", "region"},
+or empty when none of the three is set. values.schema.json asks for all three or
+none, and the operator refuses anything else at start.
+*/}}
+{{- define "infrared.backup" -}}
+{{- $b := .Values.backup }}
+{{- if or $b.bucket $b.endpoint $b.region }}
+{{- toJson (dict "bucket" $b.bucket "endpoint" $b.endpoint "region" $b.region) }}
+{{- end }}
+{{- end }}
+
 {{/* Name of the MCP token Secret. */}}
 {{- define "infrared.mcpAccessSecret" -}}
 {{- default (printf "%s-mcp-access" (include "infrared.fullname" .)) .Values.mcp.access.existingSecret }}

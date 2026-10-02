@@ -1,9 +1,10 @@
 # CI: a fresh install from one values file on a cluster outside AWS, layered on
 # ghcr-values.yaml. The operator writes the edge and the previews to the
-# Installation, the API renders the gitops template at a commit, and the chart
-# renders the image pull Secret and the platform tokens Secret from values.
-# scripts/verify.sh passes the password and the token with --set-file, as an
-# install does, so no credential is in a values file.
+# Installation, the API renders the gitops template at a commit, the operator
+# hands the stores, the backup bucket and the components left out to the
+# template, and the chart renders the image pull Secret and the platform tokens
+# Secret from values. scripts/verify.sh passes the password and the tokens with
+# --set-file, as an install does, so no credential is in a values file.
 managementCluster:
   name: ci-install
 installation:
@@ -19,3 +20,11 @@ image:
   registry: ghcr.io/darkshiftio/
 imageCredentials:
   username: ci-reader
+stores:
+  enabled: true
+backup:
+  bucket: ci-backup
+  endpoint: https://backup.example.com
+  region: us-east-1
+components:
+  disabled: [infisical]

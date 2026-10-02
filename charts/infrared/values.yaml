@@ -42,6 +42,29 @@ builds:
   # Empty leaves the gitops template's builds component out.
   registry: ""
 
+stores:
+  # -- Install the platform's stores through the gitops template: one Postgres
+  # and one object store in the cluster (INFRARED_STORES, operator). Off leaves
+  # them out, as before.
+  enabled: false
+
+# The bucket outside the cluster that copies of the stores go to (INFRARED_BACKUP,
+# operator, as JSON): all three, or none. Empty means no copies. The bucket's key
+# comes from platformTokens.
+backup:
+  # -- Bucket name.
+  bucket: ""
+  # -- The bucket's S3 endpoint: https:// and a host, e.g. `https://s3.example.com`.
+  endpoint: ""
+  # -- The region S3 requests are signed for, e.g. `us-east-1`.
+  region: ""
+
+components:
+  # -- The gitops template's components the install leaves out, by name, e.g.
+  # `[infisical]` (INFRARED_DISABLED_COMPONENTS, operator, as JSON). Empty leaves
+  # out none.
+  disabled: []
+
 image:
   # -- Registry prefix shared by every component image. Any registry other than
   # this default is handed to the operator with every component's tag and digest
@@ -100,6 +123,12 @@ platformTokens:
   # -- Cloudflare API token (key `cloudflare-api-token`), for the edge's DNS
   # records and origin certificates.
   cloudflareApiToken: ""
+  # -- Access key ID of the backup bucket's key (key `backup-access-key-id`);
+  # required with the secret access key.
+  backupAccessKeyId: ""
+  # -- Secret access key of the backup bucket's key (key `backup-secret-access-key`);
+  # required with the access key ID.
+  backupSecretAccessKey: ""
   # -- `infrared-platform-tokens` when that Secret already exists; the chart then
   # renders none. The name is fixed: the template reads it.
   existingSecret: ""

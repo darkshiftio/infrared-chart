@@ -173,6 +173,14 @@
           "type": "string",
           "description": "Key cloudflare-api-token. Pass it with --set-file; surrounding whitespace is trimmed."
         },
+        "backupAccessKeyId": {
+          "type": "string",
+          "description": "Key backup-access-key-id, with backupSecretAccessKey. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "backupSecretAccessKey": {
+          "type": "string",
+          "description": "Key backup-secret-access-key, with backupAccessKeyId. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
         "existingSecret": {
           "type": "string",
           "enum": [
@@ -622,6 +630,87 @@
         "registry": {
           "type": "string",
           "description": "Registry prefix product images are built into; empty disables the builds component."
+        }
+      }
+    },
+    "stores": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Install the platform's stores through the gitops template (INFRARED_STORES)."
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The bucket outside the cluster that copies of the stores go to (INFRARED_BACKUP, as JSON): all three, or none.",
+      "properties": {
+        "bucket": {
+          "type": "string",
+          "pattern": "^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$",
+          "description": "Bucket name: 3 to 63 lowercase letters, digits, dots and hyphens."
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^(https://[^/?#@\\s]+/?)?$",
+          "description": "The bucket's S3 endpoint: https:// and a host, no path."
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$",
+          "description": "The region S3 requests are signed for, e.g. us-east-1."
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "bucket": {
+              "const": ""
+            },
+            "endpoint": {
+              "const": ""
+            },
+            "region": {
+              "const": ""
+            }
+          }
+        },
+        {
+          "properties": {
+            "bucket": {
+              "minLength": 1
+            },
+            "endpoint": {
+              "minLength": 1
+            },
+            "region": {
+              "minLength": 1
+            }
+          },
+          "required": [
+            "bucket",
+            "endpoint",
+            "region"
+          ]
+        }
+      ]
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "maxLength": 63
+          },
+          "description": "The gitops template's components the install leaves out, by name (INFRARED_DISABLED_COMPONENTS, as JSON)."
         }
       }
     },

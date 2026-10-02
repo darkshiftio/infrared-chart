@@ -148,13 +148,15 @@ newline.
 | Secret (namespace = release) | Type, key | From | Read by |
 |---|---|---|---|
 | The name in `imagePullSecrets[0]` | `kubernetes.io/dockerconfigjson`, `.dockerconfigjson`: one entry for `imageCredentials.registry` (default `ghcr.io`) | `imageCredentials.username` and `imageCredentials.password`, both or neither. Neither: the Secret must already exist, as before | The kubelet for every pod; the operator for Argo CD's chart repository Secret and for runner Jobs, which it copies the Secret to |
-| `infrared-platform-tokens` | `Opaque`, `cloudflare-api-token` | `platformTokens.cloudflareApiToken`; `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it |
+| `infrared-platform-tokens` | `Opaque`: `cloudflare-api-token`, `backup-access-key-id` and `backup-secret-access-key`, a key for each token set | `platformTokens.cloudflareApiToken`; `platformTokens.backupAccessKeyId` and `platformTokens.backupSecretAccessKey`, both or neither; `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it |
 
 ```bash
 helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <version> \
   -n infrared --create-namespace -f values.yaml \
   --set-file imageCredentials.password="$HOME/path/to/registry-token" \
-  --set-file platformTokens.cloudflareApiToken="$HOME/path/to/cloudflare-token"
+  --set-file platformTokens.cloudflareApiToken="$HOME/path/to/cloudflare-token" \
+  --set-file platformTokens.backupAccessKeyId="$HOME/path/to/backup-key-id" \
+  --set-file platformTokens.backupSecretAccessKey="$HOME/path/to/backup-key-secret"
 ```
 
 with `imagePullSecrets: [{name: ghcr-pull}]` and `imageCredentials.username` in
@@ -178,6 +180,29 @@ installation:
     domain: preview.example.com      # zone z answers at https://<z>.preview.example.com
     signInURL: https://infrared.example.com
 ```
+
+## The stores, the backup bucket and the components left out
+
+Three settings the operator hands to the gitops template, which installs what
+they name. All are empty by default, and then the chart renders exactly what it
+rendered before.
+
+```yaml
+stores:
+  enabled: true                      # INFRARED_STORES: one Postgres and one object store in the cluster
+backup:                              # INFRARED_BACKUP, as JSON: all three, or none
+  bucket: example-backup
+  endpoint: https://s3.example.com
+  region: us-east-1                  # the region S3 requests are signed for
+components:
+  disabled: [infisical]              # INFRARED_DISABLED_COMPONENTS, as JSON
+```
+
+The bucket's key is two tokens, `platformTokens.backupAccessKeyId` and
+`platformTokens.backupSecretAccessKey`, passed with `--set-file` (see "Secrets
+from values"). The operator refuses to start on a malformed value and says
+why. After Argo CD adopts the release, the gitops repo's `infrared` Application
+has to carry the three settings, or the operator stops receiving them.
 
 ## Extensions
 
@@ -246,11 +271,15 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
 | `gitops.templateVersion` | `v0.1.10` | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
+| `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
+| `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster that copies of the stores go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
+| `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
 | `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job |
 | `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
 | `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
+| `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`. Pass them with `--set-file` |
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |

@@ -1,0 +1,13 @@
+# CI: the stores, the backup bucket and the components left out, as the gitops
+# repo's `infrared` Application carries them after Argo CD adopts the release,
+# layered on ghcr-values.yaml and adopted-values.yaml. The operator keeps
+# receiving them, and no Secret is rendered: the bucket's key stays in the
+# install's infrared-platform-tokens.
+stores:
+  enabled: true
+backup:
+  bucket: ci-backup
+  endpoint: https://backup.example.com
+  region: us-east-1
+components:
+  disabled: [infisical]

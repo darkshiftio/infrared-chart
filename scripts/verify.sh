@@ -23,16 +23,20 @@ if command -v shellcheck >/dev/null; then
   if shellcheck "$root"/hack/*.sh "$root"/scripts/*.sh; then ok shellcheck; else bad shellcheck; fi
 fi
 
-# A fresh install outside AWS passes its two secrets with --set-file, from files
+# A fresh install outside AWS passes its secrets with --set-file, from files
 # that end in a newline; these stand in for them.
 printf 'ci-password\n' >"$out/ci-password"
 printf '  ci-cloudflare-token\n\n' >"$out/ci-cloudflare-token"
+printf 'ci-backup-key-id\n' >"$out/ci-backup-key-id"
+printf 'ci-backup-secret\n' >"$out/ci-backup-secret"
+backup_key=(--set-file "platformTokens.backupAccessKeyId=$out/ci-backup-key-id"
+  --set-file "platformTokens.backupSecretAccessKey=$out/ci-backup-secret")
 install=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set-file "imageCredentials.password=$out/ci-password"
-  --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token")
+  --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token" "${backup_key[@]}")
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -54,7 +58,13 @@ helm template infrared "$chart" -n infrared "${install[@]}" >"$out/install.yaml"
 # What Argo CD renders once it adopts a release outside AWS: the template's
 # values carry the registry, the pins and the pull secret's name, and no secret.
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" >"$out/ghcr-adopted.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted"
+# ...and once the template's Application carries the stores, the backup bucket
+# and the components left out as well.
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
+  -f "$chart/ci/stores-adopted-values.yaml" >"$out/stores-adopted.yaml"
+# The backup bucket's key alone, without a Cloudflare token.
+helm template infrared "$chart" -n infrared "${backup_key[@]}" >"$out/backup-key.yaml"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -62,7 +72,7 @@ envs() {
   awk '/^ +- name: [A-Z0-9_]+$/ {n=$3; next} n && /^ +value: / {sub(/^ +value: /, ""); print n "=" $0} {n=""}' \
     "$out/$1.yaml" >"$out/$1.env"
 }
-for f in defaults digests ecr ghcr install ghcr-adopted; do envs "$f"; done
+for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -163,6 +173,24 @@ else bad "pull Secret's .dockerconfigjson is not the one ghcr.io entry expected"
 if [[ "$(secret install infrared-platform-tokens cloudflare-api-token)" == ci-cloudflare-token ]]; then
   ok "Cloudflare token under key cloudflare-api-token, whitespace trimmed"
 else bad "infrared-platform-tokens' cloudflare-api-token is not the token, trimmed"; fi
+if [[ "$(secret install infrared-platform-tokens backup-access-key-id)" == ci-backup-key-id &&
+      "$(secret install infrared-platform-tokens backup-secret-access-key)" == ci-backup-secret ]]; then
+  ok "the backup bucket's key under backup-access-key-id and backup-secret-access-key, trimmed"
+else bad "infrared-platform-tokens' backup-access-key-id or backup-secret-access-key is not the key, trimmed"; fi
+# The stores, the backup bucket and the components left out: none by default,
+# each handed to the operator for the gitops template from the install's values,
+# and still handed on once the template's Application carries them.
+check defaults.env "no stores, backup bucket or components left out by default" '^INFRARED_(STORES|BACKUP|DISABLED_COMPONENTS)=' 0
+for f in install stores-adopted; do
+  has "$f.env" "$f: the stores on" 'INFRARED_STORES="true"'
+  has "$f.env" "$f: the backup bucket, as JSON" \
+    'INFRARED_BACKUP="{\"bucket\":\"ci-backup\",\"endpoint\":\"https://backup.example.com\",\"region\":\"us-east-1\"}"'
+  has "$f.env" "$f: the components left out, as JSON" 'INFRARED_DISABLED_COMPONENTS="[\"infisical\"]"'
+done
+check stores-adopted.yaml "after adoption with the stores, still no Secret" '^kind: Secret$' 0
+check backup-key.yaml "the backup bucket's key alone renders infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
+check backup-key.yaml "...with no Cloudflare key" 'cloudflare-api-token' 0
+check backup-key.yaml "...and both of the bucket's keys" '^  backup-(access-key-id|secret-access-key): ' 2
 check other.yaml "other release names its UI Service <release>-infrared" '^  name: other-infrared$'
 check other.yaml "other release proxies to its own api" 'value: "http://other-infrared-api:8080"'
 
@@ -219,6 +247,20 @@ refuse "a username without a password fails" "imageCredentials needs both userna
   --set 'imageCredentials.username=u,imagePullSecrets[0].name=ghcr-pull'
 refuse "platform tokens under another Secret name fail" "at '/platformTokens/existingSecret'" \
   --set platformTokens.existingSecret=other
+refuse "a backup key ID without its secret fails" "platformTokens.backupAccessKeyId and platformTokens.backupSecretAccessKey go together" \
+  --set-file "platformTokens.backupAccessKeyId=$out/ci-backup-key-id"
+refuse "a backup secret without its key ID fails" "platformTokens.backupAccessKeyId and platformTokens.backupSecretAccessKey go together" \
+  --set-file "platformTokens.backupSecretAccessKey=$out/ci-backup-secret"
+refuse "a backup bucket without its endpoint and region fails" "at '/backup'" --set backup.bucket=ci-backup
+refuse "a backup endpoint over http fails" "at '/backup/endpoint'" \
+  --set backup.bucket=ci-backup,backup.endpoint=http://backup.example.com,backup.region=us-east-1
+refuse "a backup endpoint with a path fails" "at '/backup/endpoint'" \
+  --set backup.bucket=ci-backup,backup.endpoint=https://backup.example.com/ci,backup.region=us-east-1
+refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
+  --set backup.bucket=CI-Backup,backup.endpoint=https://backup.example.com,backup.region=us-east-1
+refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
+refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
+refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
@@ -227,7 +269,7 @@ if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
 else bad "operator ClusterRole has no generated rules (run hack/sync-operator.sh)"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

@@ -1,0 +1,88 @@
+# Publishes the chart of a branch to oci://ghcr.io/darkshiftio/charts/infrared under a pre-release
+# version, on demand, so a branch can be installed and tested before it is released. release.yml
+# publishes real versions on v* tags; this workflow never pushes a tag, so it never fires that one.
+#
+# Trigger: on demand, never on every push. From a workstation:
+#   gh workflow run publish-prerelease.yml -R darkshiftio/infrared-chart --ref feat/one-install
+# GitHub dispatches a workflow that is not on the default branch only once it knows the workflow.
+# A push that changes this file on feat/one-install registers it; that run's job is skipped, so
+# nothing is published until a workflow_dispatch.
+#
+# The version is <Chart.yaml version>.oneinstall.<run number>, e.g. 0.1.0-alpha.92.oneinstall.7,
+# and appVersion is the same with a v. Semver orders it above its base and below the next release
+# (0.1.0-alpha.93, or 0.1.0), so successive runs sort upward, a cluster whose gitops repo pins the
+# base or an older version moves up to it (hydration keeps the higher of the two pins), and no
+# pre-release ever outranks a later release for a --devel user. A version is never published twice.
+name: publish-prerelease
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/one-install]
+    paths: [.github/workflows/publish-prerelease.yml]
+
+permissions: {}
+
+concurrency:
+  group: publish-prerelease-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HELM_VERSION: v4.3.0
+  KUBECONFORM_VERSION: v0.8.0
+  REPO: oci://ghcr.io/darkshiftio/charts
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - name: Install kubeconform
+        run: |
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+      - run: make verify
+      - name: Choose the pre-release version
+        run: |
+          base="$(awk '/^version:/{print $2}' charts/infrared/Chart.yaml)"
+          if ! [[ "$base" =~ ^0\.1\.0-alpha\.[0-9]+$ ]]; then
+            echo "Chart.yaml version $base is not 0.1.0-alpha.N; choose how a pre-release of it sorts first" >&2
+            exit 1
+          fi
+          echo "VERSION=$base.oneinstall.$GITHUB_RUN_NUMBER" >>"$GITHUB_ENV"
+      - name: Log in to ghcr.io
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | helm registry login ghcr.io -u "$GH_ACTOR" --password-stdin
+      - name: Refuse to publish a version twice
+        run: |
+          if helm show chart "$REPO/infrared" --version "$VERSION" >/dev/null 2>&1; then
+            echo "$REPO/infrared $VERSION is already published; dispatch a new run instead of re-running this one" >&2
+            exit 1
+          fi
+      - name: Package
+        run: helm package charts/infrared --version "$VERSION" --app-version "v$VERSION" -d dist
+      - name: Push
+        run: |
+          helm push "dist/infrared-$VERSION.tgz" "$REPO" 2>&1 | tee push.log
+          digest="$(sed -n 's/^Digest: *//p' push.log | head -1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "helm push printed no digest" >&2; exit 1; }
+          {
+            echo "### Published"
+            echo
+            echo "| Chart | Version | Digest | Commit |"
+            echo "|---|---|---|---|"
+            echo "| \`$REPO/infrared\` | \`$VERSION\` | \`$digest\` | \`$GITHUB_SHA\` |"
+            echo
+            echo "\`helm template infrared $REPO/infrared --version $VERSION -n infrared -f <values>\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+          echo "::notice title=published::$REPO/infrared $VERSION ($digest)"

@@ -142,6 +142,59 @@ spec:
                             org admins may set it. It applies to preview zones on the management
                             cluster, whose chart honours preview.public.
                           type: boolean
+                        replicas:
+                          description: |-
+                            Replicas is how many pods run the app in the zone; empty leaves the
+                            chart's default.
+                          format: int32
+                          maximum: 20
+                          minimum: 0
+                          type: integer
+                        resources:
+                          description: Resources reserved for each of the app's pods;
+                            empty leaves the chart's defaults.
+                          properties:
+                            cpu:
+                              description: CPU requested, e.g. 100m or 1.
+                              pattern: ^([0-9]+m|[0-9]+(\.[0-9]+)?)$
+                              type: string
+                            memory:
+                              description: Memory requested and its limit, e.g. 256Mi
+                                or 1Gi.
+                              pattern: ^[0-9]+(Mi|Gi)$
+                              type: string
+                          type: object
+                        storage:
+                          description: |-
+                            Storage is persistent volumes mounted into the app. Each zone has its own;
+                            removing one from the list leaves its data in the cluster.
+                          items:
+                            description: ZoneVolume is a persistent volume mounted
+                              into the app.
+                            properties:
+                              mountPath:
+                                description: MountPath is where the app sees it, e.g.
+                                  /data.
+                                pattern: ^/[A-Za-z0-9._/-]*$
+                                type: string
+                              name:
+                                description: Name of the volume, unique in the zone.
+                                pattern: ^[a-z0-9]([-a-z0-9]{0,28}[a-z0-9])?$
+                                type: string
+                              size:
+                                description: Size, e.g. 1Gi.
+                                pattern: ^[0-9]+(Mi|Gi)$
+                                type: string
+                            required:
+                            - mountPath
+                            - name
+                            - size
+                            type: object
+                          maxItems: 8
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - name
+                          x-kubernetes-list-type: map
                         valuesPath:
                           description: |-
                             ValuesPath is the zone's values file in the gitops repo, holding the

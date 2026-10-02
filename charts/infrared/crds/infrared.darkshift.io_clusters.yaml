@@ -112,9 +112,11 @@ spec:
                     type: string
                   credentialsSecretRef:
                     description: |-
-                      CredentialsSecretRef names a Secret in namespace infrared whose keys become
-                      the Job's environment (e.g. AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION).
-                      Only its name is read; key is ignored.
+                      CredentialsSecretRef is ignored: the Job's cloud credentials are always
+                      the keys of Secret cluster-<name>-credentials in namespace infrared (see
+                      ClusterCredentialsSecret), so each cluster has its own.
+
+                      Deprecated: kept so existing objects stay valid.
                     properties:
                       key:
                         description: Key within the Secret.
@@ -272,7 +274,8 @@ spec:
                   message:
                     type: string
                   phase:
-                    description: Phase is Running, Succeeded or Failed.
+                    description: Phase is Waiting (for the credentials Secret), Running,
+                      Succeeded or Failed.
                     type: string
                 required:
                 - action

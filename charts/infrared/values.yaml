@@ -32,7 +32,8 @@ image:
 
 # -- Image pull secrets for every pod, e.g. `[{name: ghcr-pull}]`. The first
 # name is also handed to the operator (INFRARED_IMAGE_PULL_SECRET) for the
-# clusters it bootstraps.
+# clusters it bootstraps and for runner Jobs: it copies the Secret into each org
+# namespace and sets it on every Job.
 imagePullSecrets: []
 
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is

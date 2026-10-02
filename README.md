@@ -36,7 +36,8 @@ which is exactly `infrared` for that release name, and the gitops template's
 Private images: create a `kubernetes.io/dockerconfigjson` Secret in the
 namespace and pass `--set 'imagePullSecrets[0].name=ghcr-pull'`. The first name
 is also handed to the operator (`INFRARED_IMAGE_PULL_SECRET`) for the clusters
-it bootstraps.
+it bootstraps, and for runner Jobs: the operator copies the Secret into each
+org namespace and sets it on every Job, so the runner image pulls with it too.
 
 **darkshift's own builds are in ECR.** kpack on darkshift-build pushes every
 component to `977456087177.dkr.ecr.us-east-1.amazonaws.com/infrared-<component>`
@@ -57,6 +58,30 @@ operator:
 (`ci/ecr-values.yaml` renders exactly this in `make verify`.) Nodes without the
 credential provider need a dockerconfigjson Secret holding an ECR token, which
 expires after 12 hours; use the credential provider instead.
+
+**Clusters outside AWS pull from ghcr.** They cannot reach that ECR registry, so
+every component, the runner included, comes from `ghcr.io/darkshiftio` pinned by
+digest, with one read-only dockerconfigjson Secret for all of them:
+
+```yaml
+image:
+  registry: ghcr.io/darkshiftio
+imagePullSecrets:
+  - name: ghcr-pull        # kubernetes.io/dockerconfigjson, in the release namespace
+operator:
+  image:
+    tag: one-install-1a2b3c4
+    digest: sha256:...     # from the image workflow's run summary
+runner:
+  image:
+    tag: one-install-1a2b3c4
+    digest: sha256:...
+# api, ui and mcp the same way
+```
+
+(`ci/ghcr-values.yaml` renders exactly this in `make verify`.) The registry and
+the digests have to reach the gitops repo's `infrared` values too, or Argo CD
+renders the defaults again once it adopts the release.
 
 Pinned images, as a pull request sets them (`repo:tag@sha256:...`):
 
@@ -168,7 +193,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
-| `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET` |
+| `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job |
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |
@@ -236,6 +261,22 @@ CI (`.github/workflows/ci.yml`) runs `make verify` on every PR and on `main`.
 
 Component images are not built here: kpack builds them on darkshift-build
 (darkshiftio/gitops) and `scripts/release-tag.sh` there produces the pins.
+
+### Pre-releases from a branch
+
+`.github/workflows/publish-prerelease.yml` publishes the chart of a branch,
+on demand, as `<version>.oneinstall.<run number>`: for `0.1.0-alpha.92` in
+`Chart.yaml`, run 7 publishes `0.1.0-alpha.92.oneinstall.7`. Semver puts that
+above `0.1.0-alpha.92` and below the next release, so successive runs sort
+upward, a cluster whose gitops repo pins the base version or an older one moves
+up to it, and no pre-release ever outranks a later release for `--devel`. It
+never pushes a tag, so `release.yml` never fires. Install it by its exact
+version:
+
+```bash
+gh workflow run publish-prerelease.yml -R darkshiftio/infrared-chart --ref <branch>
+helm template infrared oci://ghcr.io/darkshiftio/charts/infrared --version 0.1.0-alpha.92.oneinstall.7 -n infrared
+```
 
 ## License
 

@@ -129,6 +129,7 @@ rules:
   - agentworkflowruns/status
   - agentworkflows/status
   - clusters/status
+  - domains/status
   - gitopsrepos/status
   - gitproviders/status
   - installations/status
@@ -163,14 +164,7 @@ rules:
 - apiGroups:
   - infrared.darkshift.io
   resources:
-  - incidents
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - infrared.darkshift.io
-  resources:
+  - domains
   - organizations
   - products
   verbs:
@@ -178,6 +172,14 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - infrared.darkshift.io
+  resources:
+  - incidents
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - kpack.io

@@ -100,6 +100,30 @@ spec:
                       description: DeliveryZone is one zone a release is promoted
                         to.
                       properties:
+                        addresses:
+                          description: |-
+                            Addresses the zone is also served at, beyond its address on the platform
+                            domain: a name under a domain the org can use (its own verified Domains,
+                            the platform org's shared ones, or the platform domain). Who can open
+                            them follows the zone's access.
+                          items:
+                            description: 'ZoneAddress is one more address of a zone:
+                              name.domain, or domain itself.'
+                            properties:
+                              domain:
+                                description: Domain, e.g. acme.com or acme.darkshift.io.
+                                pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$
+                                type: string
+                              name:
+                                description: Name under the domain, e.g. www or shop;
+                                  empty is the domain itself.
+                                pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)?$
+                                type: string
+                            required:
+                            - domain
+                            type: object
+                          maxItems: 10
+                          type: array
                         applicationPath:
                           description: |-
                             ApplicationPath is the zone's Argo CD Application in the gitops repo,

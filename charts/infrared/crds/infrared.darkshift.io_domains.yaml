@@ -1,0 +1,146 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: domains.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: Domain
+    listKind: DomainList
+    plural: domains
+    singular: domain
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.name
+      name: Domain
+      type: string
+    - jsonPath: .spec.kind
+      name: Kind
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Domain is a DNS name an org can put zone addresses under.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DomainSpec is a DNS name an org serves zones under.
+            properties:
+              kind:
+                description: |-
+                  Kind is external (the org's own domain) or managed (a subdomain of a root
+                  Infrared manages).
+                enum:
+                - external
+                - managed
+                type: string
+              name:
+                description: Name is the domain, e.g. acme.com, shop.acme.com or acme.darkshift.io.
+                maxLength: 253
+                pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$
+                type: string
+              shared:
+                description: |-
+                  Shared lets every org put zone addresses under the domain. Only the
+                  platform org's domains can be shared.
+                type: boolean
+            required:
+            - kind
+            - name
+            type: object
+          status:
+            description: DomainStatus is what Infrared found in DNS.
+            properties:
+              checkedAt:
+                format: date-time
+                type: string
+              checks:
+                description: Checks, from the latest look at DNS.
+                items:
+                  description: DomainCheck is the result of one DNS check.
+                  properties:
+                    message:
+                      description: Message says what DNS answered and, when it's wrong,
+                        how to fix it.
+                      type: string
+                    name:
+                      description: 'Name of the check: ownership, traffic, caa.'
+                      type: string
+                    ok:
+                      type: boolean
+                  required:
+                  - message
+                  - name
+                  - ok
+                  type: object
+                type: array
+              message:
+                type: string
+              phase:
+                type: string
+              records:
+                description: Records to add at the DNS provider (none for managed
+                  domains).
+                items:
+                  description: DNSRecord is a record someone adds at their DNS provider.
+                  properties:
+                    name:
+                      type: string
+                    purpose:
+                      description: Purpose says what the record is for, in plain words.
+                      type: string
+                    type:
+                      enum:
+                      - TXT
+                      - CNAME
+                      - A
+                      type: string
+                    value:
+                      type: string
+                  required:
+                  - name
+                  - type
+                  - value
+                  type: object
+                type: array
+              token:
+                description: 'Token proves ownership: the value of the ownership TXT
+                  record.'
+                type: string
+              verifiedAt:
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

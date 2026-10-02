@@ -114,12 +114,33 @@ spec:
                 description: Previews give pre-release zones a URL behind Infrared
                   sign-in.
                 properties:
+                  cloudflareTokenSecret:
+                    description: |-
+                      CloudflareTokenSecret names a Secret in Infrared's namespace whose
+                      api-token key may edit DNS for the managed roots.
+                    type: string
                   domain:
                     description: |-
                       Domain previews live under: zone z is https://<z>.<domain>. A wildcard DNS
                       record for the domain must point at the management cluster's ingress.
                     minLength: 1
                     type: string
+                  ingressHost:
+                    description: |-
+                      IngressHost is the name customers point their own domains at with a
+                      CNAME, e.g. ingress.apps.example.com; it resolves to the ingress.
+                    type: string
+                  ingressIP:
+                    description: IngressIP is the ingress's public address, for A
+                      records on root domains.
+                    type: string
+                  managedRoots:
+                    description: |-
+                      ManagedRoots are domains Infrared manages in Cloudflare, under which any
+                      org can claim a subdomain (e.g. darkshift.io gives acme.darkshift.io).
+                    items:
+                      type: string
+                    type: array
                   signInURL:
                     description: |-
                       SignInURL is Infrared's public URL, where preview visitors sign in,

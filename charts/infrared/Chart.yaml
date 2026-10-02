@@ -2,8 +2,8 @@ apiVersion: v2
 name: infrared
 description: Infrared, an operator/CRD-driven gitops control plane for agentic change management.
 type: application
-version: 0.1.0-alpha.85
-appVersion: v0.1.0-alpha.85
+version: 0.1.0-alpha.86
+appVersion: v0.1.0-alpha.86
 kubeVersion: ">=1.30.0-0"
 home: https://github.com/darkshiftio/infrared-chart
 sources:

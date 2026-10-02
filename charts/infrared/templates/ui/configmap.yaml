@@ -1,0 +1,94 @@
+{{- /*
+Extensions (ui.extensions), rendered only when the list is not empty: the
+default install has no ConfigMap. The UI image's bin/start-nginx reads these
+keys from /etc/infrared-ui/extensions/, fills in the two placeholders (the
+proxy secret from INFRARED_EXT_PROXY_SECRET, the cluster DNS server from
+/etc/resolv.conf) and refuses to start if either is left.
+  extensions.json  served at /extensions.json: the rail's runtime config
+  http.conf        included in nginx's http block: the resolver and upstreams
+  server.conf      included in nginx's server block: the /ext/<id>/ locations
+*/}}
+{{- with .Values.ui.extensions }}
+{{- $exts := list }}
+{{- $seen := dict }}
+{{- range . }}
+{{- if hasKey $seen .id }}
+{{- fail (printf "ui.extensions: id %q is listed more than once" .id) }}
+{{- end }}
+{{- $_ := set $seen .id true }}
+{{- $paths := .paths | default (list "v1" "ui") }}
+{{- $entry := .entry | default (printf "/ext/%s/ui/entry.js" .id) }}
+{{- if not (hasPrefix (printf "/ext/%s/ui/" .id) $entry) }}
+{{- fail (printf "ui.extensions: entry %q of %q is not under /ext/%s/ui/" $entry .id .id) }}
+{{- end }}
+{{- if not (has "ui" $paths) }}
+{{- fail (printf "ui.extensions: paths of %q must include ui, which serves its entry" .id) }}
+{{- end }}
+{{- $exts = append $exts (dict "id" .id "title" .title "icon" (.icon | default "puzzle") "entry" $entry "upstream" .upstream "paths" $paths "name" (printf "ext_%s" (.id | replace "-" "_"))) }}
+{{- end }}
+{{- $public := list }}
+{{- range $exts }}
+{{- $public = append $public (pick . "id" "title" "icon" "entry") }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "infrared.uiExtensionsName" $ }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" $ "component" "ui") | nindent 4 }}
+data:
+  # What the browser may know: no upstreams, no secrets.
+  extensions.json: |
+    {{- toPrettyJson $public | nindent 4 }}
+  http.conf: |
+    # nginx's resolver ignores search domains, so every upstream is a fully
+    # qualified name. An upstream that is down or does not resolve answers 502;
+    # nginx still starts.
+    resolver __EXT_RESOLVER__ valid=30s;
+    {{- range $exts }}
+
+    upstream {{ .name }} {
+      zone {{ .name }} 64k;
+      server {{ .upstream }} resolve;
+    }
+    {{- end }}
+  server.conf: |
+    # Each declared path of an extension is proxied, prefix stripped, to its
+    # upstream once infrared-api's /v1/auth/check (the /_ext_auth location)
+    # accepts the session: only a GitHub sign-in passes, and its login is sent
+    # as X-Infrared-Github with the proxy secret. The browser's Cookie and
+    # Authorization never reach the extension, and its Set-Cookie never reaches
+    # the browser. The proxy headers repeat the /api/ location's, because a
+    # location's own proxy_set_header drops the inherited ones. No add_header
+    # here, so the server's security headers still apply.
+    {{- range $exts }}
+    {{- $e := . }}
+    {{- range $e.paths }}
+
+    location ^~ /ext/{{ $e.id }}/{{ . }}/ {
+      auth_request /_ext_auth;
+      auth_request_set $ext_github $upstream_http_x_infrared_github;
+      proxy_pass http://{{ $e.name }}/{{ . }}/;
+      proxy_http_version 1.1;
+      proxy_set_header Host $http_host;
+      proxy_set_header X-Forwarded-Proto $ir_forwarded_proto;
+      proxy_set_header X-Forwarded-Host $ir_forwarded_host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Prefix /ext/{{ $e.id }};
+      proxy_set_header Connection "";
+      proxy_set_header X-Infrared-Github $ext_github;
+      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET__";
+      proxy_set_header Cookie "";
+      proxy_set_header Authorization "";
+      proxy_hide_header Set-Cookie;
+      proxy_hide_header X-Content-Type-Options;
+    }
+    {{- end }}
+
+    # Nothing else under /ext/{{ $e.id }}/ is the extension's to serve.
+    location ^~ /ext/{{ $e.id }}/ {
+      return 404;
+    }
+    {{- end }}
+{{- end }}

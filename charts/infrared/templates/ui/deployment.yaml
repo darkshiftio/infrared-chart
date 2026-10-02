@@ -1,5 +1,15 @@
 {{- $c := .Values.ui }}
 {{- $ctx := dict "root" . "c" $c "component" "ui" }}
+{{- $annotations := $c.podAnnotations | default dict }}
+{{- /* Extensions: the ConfigMap start-nginx reads, the proxy secret, and a checksum so pods roll when the ConfigMap changes. */}}
+{{- with $c.extensions }}
+{{- if not $c.extensionsProxySecret.existingSecret }}
+{{- fail "ui.extensions is set, so ui.extensionsProxySecret.existingSecret must name the Secret whose value (key ui.extensionsProxySecret.key) the UI sends to extension upstreams as X-Infrared-Proxy-Secret" }}
+{{- end }}
+{{- $_ := set $ctx "volumes" (list (dict "name" "extensions" "configMap" (dict "name" (include "infrared.uiExtensionsName" $)))) }}
+{{- $_ := set $ctx "volumeMounts" (list (dict "name" "extensions" "mountPath" "/etc/infrared-ui/extensions" "readOnly" true)) }}
+{{- $annotations = merge (dict "checksum/extensions" (include (print $.Template.BasePath "/ui/configmap.yaml") $ | sha256sum)) $annotations }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,7 +27,7 @@ spec:
     metadata:
       labels:
         {{- include "infrared.componentLabels" $ctx | nindent 8 }}
-      {{- with $c.podAnnotations }}
+      {{- with $annotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -37,6 +47,14 @@ spec:
               value: {{ include "infrared.apiURL" . | quote }}
             - name: INFRARED_MCP_UPSTREAM
               value: {{ include "infrared.mcpURL" . | quote }}
+            {{- with $c.extensions }}
+            # Sent to every extension upstream as X-Infrared-Proxy-Secret.
+            - name: INFRARED_EXT_PROXY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $c.extensionsProxySecret.existingSecret | quote }}
+                  key: {{ $c.extensionsProxySecret.key | quote }}
+            {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

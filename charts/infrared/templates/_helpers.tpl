@@ -92,9 +92,15 @@ digest is set (a pin).
 {{- printf "http://%s:%d" (include "infrared.componentName" (dict "root" . "component" "mcp")) (int .Values.mcp.service.port) }}
 {{- end }}
 
+{{/* The UI's extensions ConfigMap: <fullname>-ui-extensions. */}}
+{{- define "infrared.uiExtensionsName" -}}
+{{- printf "%s-extensions" (include "infrared.componentName" (dict "root" . "component" "ui")) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
 {{/*
 Pod-level settings shared by every component: pull secrets, security,
-scheduling. Call with (dict "root" $ "c" .Values.api "component" "api").
+scheduling. Call with (dict "root" $ "c" .Values.api "component" "api"); an
+optional "volumes" list is added after the shared /tmp volume.
 */}}
 {{- define "infrared.podCommon" -}}
 serviceAccountName: {{ include "infrared.componentName" (dict "root" .root "component" .component) }}
@@ -126,9 +132,15 @@ volumes:
   - name: tmp
     emptyDir:
       sizeLimit: 256Mi
+  {{- with .volumes }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
 {{- end }}
 
-{{/* Container settings shared by every component. Same call as podCommon. */}}
+{{/*
+Container settings shared by every component. Same call as podCommon; an
+optional "volumeMounts" list is added after the /tmp mount.
+*/}}
 {{- define "infrared.containerCommon" -}}
 image: {{ include "infrared.image" (dict "root" .root "image" .c.image) }}
 imagePullPolicy: {{ .root.Values.image.pullPolicy }}
@@ -139,6 +151,9 @@ resources:
 volumeMounts:
   - name: tmp
     mountPath: /tmp
+  {{- with .volumeMounts }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
 {{- end }}
 
 {{/* HTTP probes. Call with (dict "port" "http"). */}}

@@ -101,6 +101,47 @@ characters) before the pull request that moves to alpha.6 and adds the value.
 With them set, the chart renders no Secret at all and the ones from the first
 `helm install` stay in place.
 
+## Extensions
+
+`ui.extensions` adds services the org runs to the UI: each gets a rail item
+and a proxy behind Infrared's sign-in. The list is empty by default, and then
+the chart renders exactly what it renders without it.
+
+```yaml
+ui:
+  extensions:
+    - id: ledger              # ^[a-z][a-z0-9-]{1,30}$
+      title: Ledger
+      icon: book              # puzzle (default), book, wallet, receipt, users, key, landmark, scroll
+      upstream: ledger.ledger.svc.cluster.local:8080   # FQDN:port
+      paths: [v1, ui]         # the default
+  extensionsProxySecret:
+    existingSecret: infrared-ext-proxy   # key `secret`
+```
+
+With extensions set, the chart renders ConfigMap `<fullname>-ui-extensions`
+(`extensions.json`, `http.conf`, `server.conf`), mounts it read-only at
+`/etc/infrared-ui/extensions/`, sets `INFRARED_EXT_PROXY_SECRET` from the
+Secret, and annotates the pods with the ConfigMap's checksum so they roll when
+it changes. The UI's nginx then:
+
+- serves `/extensions.json`: `id`, `title`, `icon` and `entry` of each
+  extension, nothing else (`[]` without extensions);
+- proxies `/ext/<id>/<path>/` to `<upstream>/<path>/` for each declared path,
+  once the API's `GET /v1/auth/check` accepts the session cookie. Only a
+  GitHub sign-in passes. Its login goes upstream as `X-Infrared-Github`,
+  together with `X-Infrared-Proxy-Secret`; the browser's `Cookie` and
+  `Authorization` do not, and the upstream's `Set-Cookie` never reaches the
+  browser;
+- answers 404 for anything else under `/ext/<id>/`, and 502 while an upstream
+  is down or does not resolve.
+
+`upstream` is a fully qualified name, because nginx's resolver ignores search
+domains. The Secret's value is 32 or more of `A-Z a-z 0-9 _ -` (one trailing
+newline is ignored), and the UI refuses to start without one. The UI reads it
+only at start, so restart the UI Deployment after rotating it; the extension
+checks the same value.
+
 ## Upgrading
 
 Before Argo CD adopts Infrared: `helm upgrade infrared oci://ghcr.io/darkshiftio/charts/infrared --version <v> -n infrared --reuse-values`.
@@ -147,6 +188,8 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `<c>.serviceAccount.annotations` | `{}` | ServiceAccount annotations |
 | `<c>.service.port` | operator 8081, api/mcp 8080, ui 80 | Service port |
 | `ui.service.type` | `ClusterIP` | Type of the primary Service |
+| `ui.extensions` | `[]` | Extensions in the UI's rail, proxied at `/ext/<id>/<path>/` after sign-in: `id`, `title`, `icon`, `upstream` (FQDN:port), `paths` (default `[v1, ui]`), `entry` (default `/ext/<id>/ui/entry.js`). See "Extensions" |
+| `ui.extensionsProxySecret.existingSecret` / `.key` | `""` / `secret` | Secret whose value the UI sends to every extension upstream as `X-Infrared-Proxy-Secret` (`INFRARED_EXT_PROXY_SECRET`); required when `ui.extensions` is set |
 | `<c>.podAnnotations`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints` | empty | Scheduling |
 | `<c>.podSecurityContext` / `<c>.containerSecurityContext` | unset | Per-component override of the shared security contexts |
 | `operator.rbac.extraRules` | `[]` | Rules appended to the generated operator ClusterRole |
@@ -178,7 +221,7 @@ change it came from.
 ## Development
 
 ```bash
-make verify     # shell checks, helm lint, helm template (5 value sets), assertions, kubeconform
+make verify     # shell checks, helm lint, helm template (6 value sets), assertions, kubeconform
 make template   # render with defaults
 ```
 

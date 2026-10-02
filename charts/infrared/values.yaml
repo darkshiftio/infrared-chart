@@ -180,6 +180,25 @@ ui:
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+  # -- Extensions: services the org runs that the UI shows in its rail and proxies at
+  # /ext/<id>/<path>/, one location per declared path, to signed-in GitHub users only.
+  # Anything else under /ext/<id>/ is 404. Empty (the default) leaves the slot off: no
+  # ConfigMap, mount or env. `upstream` is an FQDN and port, because nginx's resolver
+  # ignores search domains.
+  extensions: []
+  # - id: ledger
+  #   title: Ledger
+  #   icon: book            # puzzle (default), book, wallet, receipt, users, key, landmark, scroll
+  #   upstream: ledger.ledger.svc.cluster.local:8080
+  #   paths: [v1, ui]       # optional, default [v1, ui]
+  #   entry: ""             # optional, default /ext/<id>/ui/entry.js
+  extensionsProxySecret:
+    # -- Name of an existing Secret whose value the UI sends to every extension upstream as
+    # X-Infrared-Proxy-Secret (INFRARED_EXT_PROXY_SECRET; 32 or more of A-Z a-z 0-9 _ -).
+    # Required when `extensions` is not empty.
+    existingSecret: ""
+    # -- Key in that Secret.
+    key: secret
 
 mcp:
   # -- Token the MCP server presents to the API (Secret `<fullname>-mcp-token`, key `token`). Empty generates one.

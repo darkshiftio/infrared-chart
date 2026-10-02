@@ -24,7 +24,7 @@ if command -v shellcheck >/dev/null; then
 fi
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -38,7 +38,8 @@ helm template infrared "$chart" -n infrared --include-crds -f "$chart/ci/digests
 helm template infrared "$chart" -n infrared -f "$chart/ci/adopted-values.yaml" >"$out/adopted.yaml"
 helm template other "$chart" -n ir-test >"$out/other.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr"
+helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" >"$out/extensions.yaml"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions"
 
 step "assertions"
 check() { # check <file> <description> <grep -E pattern> [count]
@@ -81,6 +82,48 @@ check ecr.yaml "ECR values need no pull secret" 'imagePullSecrets:' 0
 check other.yaml "other release names its UI Service <release>-infrared" '^  name: other-infrared$'
 check other.yaml "other release proxies to its own api" 'value: "http://other-infrared-api:8080"'
 
+# Extensions: off by default; with ui.extensions, the UI proxies only the declared paths.
+check defaults.yaml "no extensions by default: no ConfigMap" '^kind: ConfigMap$' 0
+check defaults.yaml "no extensions by default: no mount" 'infrared-ui/extensions' 0
+check defaults.yaml "no extensions by default: no proxy secret env" 'INFRARED_EXT_PROXY_SECRET' 0
+check defaults.yaml "no extensions by default: no checksum annotation" 'checksum/extensions' 0
+check extensions.yaml "extensions ConfigMap <fullname>-ui-extensions" '^  name: infrared-ui-extensions$' 1
+check extensions.yaml "extensions ConfigMap keys" '^  (extensions\.json|http\.conf|server\.conf): \|$' 3
+check extensions.yaml "extensions.json carries no upstream" '"upstream"' 0
+check extensions.yaml "extensions.json defaults the entry" '"entry": "/ext/ledger/ui/entry\.js"' 1
+check extensions.yaml "extensions.json defaults the icon" '"icon": "puzzle"' 1
+check extensions.yaml "one resolver, filled in by start-nginx" '^    resolver __EXT_RESOLVER__ valid=30s;$' 1
+check extensions.yaml "upstream ext_<id> with '-' as '_'" '^    upstream ext_(ledger|field_notes) \{$' 2
+check extensions.yaml "upstream resolves its FQDN at run time" '^      server ledger\.ledger\.svc\.cluster\.local:8080 resolve;$' 1
+check extensions.yaml "ledger proxies v1 and ui only" '^    location \^~ /ext/ledger/[a-z0-9_-]+/ \{$' 2
+check extensions.yaml "v1 prefix stripped to the upstream" '^      proxy_pass http://ext_ledger/v1/;$' 1
+check extensions.yaml "declared paths only for field-notes" '^    location \^~ /ext/field-notes/(api|ui)/ \{$' 2
+check extensions.yaml "everything else under /ext/<id>/ is 404" '^    location \^~ /ext/(ledger|field-notes)/ \{$' 2
+check extensions.yaml "every proxied location asks /_ext_auth first" '^      auth_request /_ext_auth;$' 4
+check extensions.yaml "login from the auth response" '^      proxy_set_header X-Infrared-Github [$]ext_github;$' 4
+check extensions.yaml "proxy secret placeholder" '^      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET__";$' 4
+check extensions.yaml "browser cookies never reach an extension" '^      proxy_set_header Cookie "";$' 4
+check extensions.yaml "browser Authorization never reaches an extension" '^      proxy_set_header Authorization "";$' 4
+check extensions.yaml "an extension's Set-Cookie never reaches the browser" '^      proxy_hide_header Set-Cookie;$' 4
+check extensions.yaml "the /api/ proxy headers are repeated" '^      proxy_set_header (Host|X-Forwarded-Proto|X-Forwarded-Host|X-Forwarded-For|X-Forwarded-Prefix|Connection) ' 24
+check extensions.yaml "no add_header, so the server's security headers apply" '^ +add_header ' 0
+check extensions.yaml "UI mounts the ConfigMap read-only" '^            - mountPath: /etc/infrared-ui/extensions$' 1
+check extensions.yaml "UI reads the proxy secret from the existing Secret" '^                  name: "infrared-ext-proxy"$' 1
+check extensions.yaml "UI rolls when the ConfigMap changes" '^        checksum/extensions: [0-9a-f]{64}$' 1
+# refuse <description> <expected error> <helm template args...>: the render must fail with that error.
+refuse() {
+  local desc="$1" want="$2"; shift 2
+  if helm template infrared "$chart" -n infrared "$@" >/dev/null 2>"$out/refuse.log"; then bad "$desc (rendered)"
+  elif grep -qF -- "$want" "$out/refuse.log"; then ok "$desc"
+  else cat "$out/refuse.log"; bad "$desc (wrong error)"; fi
+}
+ext='ui.extensions[0].id=ledger,ui.extensions[0].title=Ledger,ui.extensions[0].upstream=ledger.ledger.svc.cluster.local:8080'
+refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"
+refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
+  --set "$ext,ui.extensions[0].upstream=ledger:8080,ui.extensionsProxySecret.existingSecret=x"
+refuse "a duplicate extension id fails" 'id "ledger" is listed more than once' \
+  --set "$ext,ui.extensions[1].id=ledger,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
+
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
      "$chart/templates/operator/clusterrole.yaml" | grep -q '^- apiGroups'; then
@@ -88,7 +131,7 @@ if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
 else bad "operator ClusterRole has no generated rules (run hack/sync-operator.sh)"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr; do
+for f in defaults digests adopted other ecr extensions; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

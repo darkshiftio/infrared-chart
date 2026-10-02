@@ -1,0 +1,20 @@
+# CI: two extensions. The UI proxies /ext/ledger/{v1,ui}/ and
+# /ext/field-notes/{api,ui}/ to their upstreams after Infrared sign-in, mounts
+# the rendered ConfigMap for bin/start-nginx and reads the proxy secret from an
+# existing Secret. infrared-ui's start-nginx test uses this render as its
+# fixture.
+managementCluster:
+  name: ci-mgmt
+ui:
+  extensions:
+    - id: ledger
+      title: Ledger
+      icon: book
+      upstream: ledger.ledger.svc.cluster.local:8080
+    - id: field-notes
+      title: Field notes
+      upstream: field-notes.tools.svc.cluster.local:9090
+      paths: [api, ui]
+      entry: /ext/field-notes/ui/assets/remote.js
+  extensionsProxySecret:
+    existingSecret: infrared-ext-proxy

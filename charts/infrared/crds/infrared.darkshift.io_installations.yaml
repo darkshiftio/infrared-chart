@@ -81,6 +81,18 @@ spec:
                 - email
                 - passwordSecretRef
                 type: object
+              edge:
+                description: |-
+                  Edge is how traffic reaches Infrared and its zones: traefik, through
+                  Traefik Ingresses as before, or gateway, through one shared Gateway run
+                  by Envoy Gateway. Empty means traefik. The gitops template installs the
+                  edge it names. The operator fills it from INFRARED_EDGE while it is
+                  empty, and never overwrites a value someone set.
+                enum:
+                - ""
+                - traefik
+                - gateway
+                type: string
               gitProviderRef:
                 description: GitProviderRef is the platform org's git provider.
                 properties:
@@ -111,8 +123,9 @@ spec:
                   control plane.
                 type: string
               previews:
-                description: Previews give pre-release zones a URL behind Infrared
-                  sign-in.
+                description: |-
+                  Previews give pre-release zones a URL behind Infrared sign-in. The
+                  operator fills it from INFRARED_PREVIEWS while it is unset.
                 properties:
                   cloudflareTokenSecret:
                     description: |-

@@ -98,7 +98,8 @@ spec:
                     description: Repo is the template's git URL.
                     type: string
                   version:
-                    description: Version is a tag of the template repo.
+                    description: Version is a tag, or a full 40-character commit SHA,
+                      of the template repo.
                     minLength: 1
                     type: string
                 required:

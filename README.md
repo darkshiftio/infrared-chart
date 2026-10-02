@@ -293,6 +293,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 
 ```bash
 make sync-operator   # hack/sync-operator.sh [../infrared-operator]
+INFRARED_OPERATOR_DIR=<another checkout> make sync-operator   # e.g. a branch's worktree
 ```
 
 copies `config/crd/bases/*.yaml` into `charts/infrared/crds/` and replaces the

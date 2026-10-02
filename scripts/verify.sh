@@ -88,6 +88,9 @@ check defaults.yaml "API reads runner pod logs" '^    resources: \["pods/log"\]$
 check defaults.yaml "four Deployments" '^kind: Deployment$' 4
 check defaults.yaml "generated Secrets: setup, session, mcp token, api tokens" '^  name: infrared-(setup|session|mcp-token|api-tokens)$' 4
 check defaults.yaml "CRDs included" '^kind: CustomResourceDefinition$'
+# The operator writes installation.edge to spec.edge: without the field in the
+# CRD, the API server would drop it (synced from an operator that has it).
+check defaults.yaml "Installation CRD has spec.edge" '^              edge:$' 1
 check defaults.yaml "operator runs with --leader-elect" '^            - --leader-elect$' 1
 check defaults.yaml "mcp runs 'serve'" '^            - serve$' 1
 check defaults.yaml "UI proxies to infrared-api" 'value: "http://infrared-api:8080"'

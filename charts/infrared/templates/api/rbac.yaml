@@ -35,6 +35,10 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list"]
+  # Environment detail: each zone's persistent volume claims and recent events.
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "events"]
+    verbs: ["get", "list"]
   # Product links: the API reads the Ingresses in each zone's namespace to list
   # where people can open the zone.
   - apiGroups: ["networking.k8s.io"]

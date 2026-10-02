@@ -27,6 +27,14 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
+  # Product environments: the API reads each zone's Argo CD Application (sync and
+  # health) and the app's Deployment (ready pods).
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
   # Product links: the API reads the Ingresses in each zone's namespace to list
   # where people can open the zone.
   - apiGroups: ["networking.k8s.io"]

@@ -552,11 +552,48 @@ spec:
                     description: Ready is true when every zone has its values file
                       and Application.
                     type: boolean
+                  removing:
+                    description: Removing names the zones Infrared is removing.
+                    items:
+                      type: string
+                    type: array
                   scaffolded:
                     description: Scaffolded are zones whose files Infrared added by
                       copying another zone.
                     items:
                       type: string
+                    type: array
+                  zones:
+                    description: |-
+                      Zones are the zones whose files Infrared has seen in the gitops repo,
+                      with their paths, so a zone taken out of the spec (or the whole Product,
+                      when it is deleted) is removed from the gitops repo and the cluster.
+                    items:
+                      description: ZoneRecord is where a zone's files live and where
+                        it runs.
+                      properties:
+                        application:
+                          type: string
+                        applicationName:
+                          description: ApplicationName is the Argo CD Application's
+                            name.
+                          type: string
+                        cluster:
+                          description: Cluster is the workload cluster; empty is the
+                            management cluster.
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          description: Namespace is where the zone's app runs.
+                          type: string
+                        values:
+                          type: string
+                      required:
+                      - application
+                      - name
+                      - values
+                      type: object
                     type: array
                 required:
                 - ready

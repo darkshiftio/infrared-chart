@@ -115,6 +115,7 @@ rules:
   - infrared.darkshift.io
   resources:
   - agentroles/finalizers
+  - domains/finalizers
   - gitopsrepos/finalizers
   - gitproviders/finalizers
   - installations/finalizers

@@ -388,9 +388,9 @@ them on every sync (the gitops template syncs the `infrared` Application with
 - **api**: ClusterRole over every `infrared.darkshift.io` resource and status;
   zones' Ingresses get/list and, on a Gateway edge, their HTTPRoutes get (a
   zone's links); Deployments, StatefulSets, CronJobs and CloudNativePG
-  Clusters get/list (the platform by layer: Infrared's own Deployments, Gitea,
-  Argo CD's controller and repo server, the stores' Postgres and the CronJob
-  that copies the buckets); namespaces get/list/create (organizations live in `ir-org-*` namespaces);
+  Clusters and Backups get/list (the platform by layer: Infrared's own
+  Deployments, Gitea, Argo CD's controller and repo server, the stores'
+  Postgres and its backups, and the CronJob that copies the buckets); namespaces get/list/create (organizations live in `ir-org-*` namespaces);
   secrets get/list/create/update/patch. The secrets rule is cluster-wide in this
   skeleton; P2 narrows it to the release namespace and the `ir-org-*` namespaces.
 - **ui**, **mcp**: no Kubernetes API access (no token is mounted).

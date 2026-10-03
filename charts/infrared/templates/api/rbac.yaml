@@ -37,8 +37,10 @@ rules:
     verbs: ["get", "list"]
   # The platform by layer: besides the Deployments above, the API reads Argo
   # CD's application controller (a StatefulSet), the stores' Postgres (a
-  # CloudNativePG Cluster, for its WAL archive and base backups) and the
-  # CronJob that copies the buckets, to say whether each layer is ready.
+  # CloudNativePG Cluster and its Backups: its WAL archive and how old its last
+  # base backup is, which CloudNativePG records only on the Backup when a
+  # plugin takes it) and the CronJob that copies the buckets, to say whether
+  # each layer is ready.
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
     verbs: ["get", "list"]
@@ -46,7 +48,7 @@ rules:
     resources: ["cronjobs"]
     verbs: ["get", "list"]
   - apiGroups: ["postgresql.cnpg.io"]
-    resources: ["clusters"]
+    resources: ["clusters", "backups"]
     verbs: ["get", "list"]
   # Environment detail: each zone's persistent volume claims and recent events.
   - apiGroups: [""]

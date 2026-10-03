@@ -374,16 +374,16 @@ if [[ "$route_rule" == *'resources: ["httproutes"]'* && "$route_rule" == *'verbs
   ok "the API may get HTTPRoutes"
 else bad "the API's ClusterRole has no rule to get HTTPRoutes"; fi
 # The platform by layer (workspace TODO item 91): the API reads Argo CD's
-# controller, the stores' Postgres and the bucket copy's CronJob. get and list,
-# nothing more.
+# controller, the stores' Postgres and its Backups, and the bucket copy's
+# CronJob. get and list, nothing more.
 api_rules="$(obj defaults ClusterRole infrared-api)"
-for rule in 'apps statefulsets' 'batch cronjobs' 'postgresql.cnpg.io clusters'; do
-  read -r group resource <<<"$rule"
-  # The rule's three lines: its group, its one resource, get and list.
-  if grep -A2 -xF "  - apiGroups: [\"$group\"]" <<<"$api_rules" | grep -A1 -xF "    resources: [\"$resource\"]" |
+for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"clusters", "backups"'; do
+  group="${rule%%|*}" resources="${rule#*|}"
+  # The rule's three lines: its group, its resources, get and list.
+  if grep -A2 -xF "  - apiGroups: [\"$group\"]" <<<"$api_rules" | grep -A1 -xF "    resources: [$resources]" |
        grep -qxF '    verbs: ["get", "list"]'; then
-    ok "the API may get and list $resource ($group), for the platform by layer"
-  else bad "the API's ClusterRole has no rule to get and list $resource ($group)"; fi
+    ok "the API may get and list ${resources//\"/} ($group), for the platform by layer"
+  else bad "the API's ClusterRole has no rule to get and list ${resources//\"/} ($group)"; fi
 done
 
 step "kubeconform"

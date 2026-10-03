@@ -110,6 +110,9 @@ spec:
                       fieldPath: metadata.namespace
                 - name: INFRARED_CLUSTER_NAME
                   value: {{ .Values.managementCluster.name | quote }}
+                # The copy's manifest names the version, as the operator's does.
+                - name: INFRARED_VERSION
+                  value: {{ .Chart.AppVersion | quote }}
                 # SeaweedFS ignores the region; S3's signature needs one.
                 - name: AWS_REGION
                   value: us-east-1

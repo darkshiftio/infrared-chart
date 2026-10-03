@@ -131,6 +131,9 @@ spec:
               env:
                 - name: INFRARED_CLUSTER_NAME
                   value: {{ .Values.managementCluster.name | quote }}
+                # The dump's manifest names the version, as the operator's does.
+                - name: INFRARED_VERSION
+                  value: {{ .Chart.AppVersion | quote }}
                 - name: AWS_REGION
                   value: us-east-1
                 - name: AWS_ACCESS_KEY_ID

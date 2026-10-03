@@ -320,12 +320,15 @@ oc="$(obj copies CronJob infrared-objects-copy)"
 gd="$(obj copies CronJob infrared-gitea-dump)"
 # Each reader takes its whole input: one that stops early fails the pipe (SIGPIPE).
 op_image="$(obj copies Deployment infrared-operator | awk '/^ +image: / && !n {print $2; n = 1}')"
+# Each copy's manifest names the version: the chart's appVersion, as the operator's.
+app_version="$(awk '/^appVersion:/ {print $2}' "$chart/Chart.yaml")"
 gitea_image="$(obj copies Deployment gitea | awk '/^ +image: / && !n {print $2; n = 1}')"
 if lines "$oc" '  schedule: "35 * * * *"' '  timeZone: Etc/UTC' '  concurrencyPolicy: Forbid' '      activeDeadlineSeconds: 900' \
     '          serviceAccountName: infrared-objects-copy' "              image: $op_image" '                - copy-objects' \
     '                - --bucket=infrared-objects' '                - --endpoint=http://seaweedfs-s3.stores.svc:8333' \
-    '                - --retention=9d' "                - --recipient=$recipient" '                      name: objects-copy-s3'; then
-  ok "infrared-objects-copy: the operator's copy-objects at 35 past, Forbid, 15 minutes, into infrared-objects, kept 9d, as objects-copy"
+    '                - --retention=9d' "                - --recipient=$recipient" '                      name: objects-copy-s3' \
+    '                - name: INFRARED_VERSION' "                  value: \"$app_version\""; then
+  ok "infrared-objects-copy: the operator's copy-objects at 35 past, Forbid, 15 minutes, into infrared-objects, kept 9d, as objects-copy, naming $app_version"
 else bad "infrared-objects-copy is not the copy of Infrared's objects the copies values ask for"; fi
 if [[ "$(obj copies ClusterRole infrared-objects-copy | grep -E '^ +verbs:' | sort -u)" == '    verbs: ["get", "list"]' ]] \
     && [[ "$(objn copies ClusterRoleBinding infrared-objects-copy '^    name: infrared-objects-copy$')" == 1 ]]; then
@@ -338,8 +341,8 @@ if [[ -n "$gitea_image" ]] && lines "$gd" '  schedule: "40 * * * *"' '  concurre
     "              image: $gitea_image" '                  gitea dump --config "$GITEA_APP_INI" --type tar.gz --skip-log --skip-index \' \
     "              image: $op_image" '                - put' '                - --dir=/dump' '                - --bucket=gitea-dumps' \
     '                - --retention=8d' "                - --recipient=$recipient" '                claimName: gitea-shared-storage' \
-    '                      name: gitea-dump-s3'; then
-  ok "infrared-gitea-dump: Gitea's own image dumps on Gitea's node, then the operator's put, at 40 past, Forbid, 15 minutes, into gitea-dumps"
+    '                      name: gitea-dump-s3' '                - name: INFRARED_VERSION' "                  value: \"$app_version\""; then
+  ok "infrared-gitea-dump: Gitea's own image dumps on Gitea's node, then the operator's put, at 40 past, Forbid, 15 minutes, into gitea-dumps, naming $app_version"
 else bad "infrared-gitea-dump is not Gitea's dump the copies values ask for"; fi
 check copies-nogitea.yaml "without Gitea, the copy of Infrared's objects (its account, rules, binding and CronJob)" '^  name: infrared-objects-copy$' 5
 check copies-nogitea.yaml "...no CronJob infrared-gitea-dump" '^  name: infrared-gitea-dump$' 0

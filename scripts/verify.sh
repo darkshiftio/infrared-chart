@@ -56,6 +56,10 @@ if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" >"$out/lint.log" 2>
 else cat "$out/lint.log"; bad "lint install with Gitea"; fi
 if helm lint --strict "$chart" "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" >"$out/lint.log" 2>&1; then ok "lint Gitea after adoption"
 else cat "$out/lint.log"; bad "lint Gitea after adoption"; fi
+copies=(-f "$chart/ci/copies-values.yaml")
+restore=(-f "$chart/ci/restore-values.yaml")
+if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" "${copies[@]}" "${restore[@]}" >"$out/lint.log" 2>&1; then ok "lint a restore with Gitea and the copies"
+else cat "$out/lint.log"; bad "lint a restore with Gitea and the copies"; fi
 
 step "helm template"
 helm template infrared "$chart" -n infrared --include-crds >"$out/defaults.yaml"
@@ -78,7 +82,16 @@ helm template infrared "$chart" -n infrared "${backup_key[@]}" >"$out/backup-key
 # Gitea as the forge: a fresh install, and what Argo CD renders once it adopts it.
 helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" >"$out/gitea.yaml"
 helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" >"$out/gitea-adopted.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted"
+# The copies: a fresh install with Gitea and every copy's setting; without
+# Gitea; and what Argo CD renders once it adopts the first, whose `infrared`
+# Application carries the same copies. And a restore at install.
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${copies[@]}" >"$out/copies.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" "${copies[@]}" >"$out/copies-nogitea.yaml"
+# The Application carries the cluster's name, the install's.
+helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" "${copies[@]}" \
+  --set managementCluster.name=ci-install >"$out/copies-adopted.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${copies[@]}" "${restore[@]}" >"$out/restore.yaml"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -86,7 +99,7 @@ envs() {
   awk '/^ +- name: [A-Z0-9_]+$/ {n=$3; next} n && /^ +value: / {sub(/^ +value: /, ""); print n "=" $0} {n=""}' \
     "$out/$1.yaml" >"$out/$1.env"
 }
-for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted; do envs "$f"; done
+for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted copies copies-adopted restore; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -285,6 +298,87 @@ else cat "$out/gitea-adoption.diff"; bad "Argo CD's render of Gitea differs from
 check other.yaml "other release names its UI Service <release>-infrared" '^  name: other-infrared$'
 check other.yaml "other release proxies to its own api" 'value: "http://other-infrared-api:8080"'
 
+# The copies: none by default, so every render above is what it was. With a
+# recipient, two CronJobs run the operator's copy-objects and put modes, on the
+# schedules set, and the settings reach the operator for the gitops template;
+# Argo CD's render after adoption, whose `infrared` Application carries the same
+# copies, renders them byte for byte.
+check defaults.env "no copies, Zot retention or restore handed on by default" '^INFRARED_(COPIES|REGISTRY_RETENTION|RESTORE)=' 0
+for f in defaults digests adopted ghcr install ghcr-adopted stores-adopted gitea gitea-adopted; do
+  check "$f.yaml" "$f: no copy and no restore" '^  name: (infrared-objects-copy|infrared-gitea-dump|infrared-restore|infrared-gitea-restore)$' 0
+done
+recipient=age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
+copies_json='{\"gitea\":{\"retention\":\"8d\",\"schedule\":\"40 * * * *\"},\"mirror\":{\"retention\":\"10d\",\"schedule\":\"47 * * * *\"},\"objects\":{\"retention\":\"9d\",\"schedule\":\"35 * * * *\"},\"postgres\":{\"retention\":\"14d\",\"schedule\":\"0 30 2 * * *\"},\"recipients\":[\"'"$recipient"'\"]}'
+retention_json='{\"gcDelay\":\"30m\",\"gcInterval\":\"2h\",\"keepNewest\":20,\"keepTags\":[\"^v[0-9]\",\"^release-\"],\"untaggedAfter\":\"48h\"}'
+for f in copies copies-adopted; do
+  has "$f.env" "$f: the copies handed to the operator, as JSON" "INFRARED_COPIES=\"$copies_json\""
+  has "$f.env" "$f: Zot's retention handed to the operator, as JSON" "INFRARED_REGISTRY_RETENTION=\"$retention_json\""
+done
+# lines <object text> <whole lines...>: true when every line is in the object.
+lines() { local o="$1" l; shift; for l in "$@"; do grep -qxF -- "$l" <<<"$o" || { echo "  missing: $l"; return 1; }; done; }
+oc="$(obj copies CronJob infrared-objects-copy)"
+gd="$(obj copies CronJob infrared-gitea-dump)"
+op_image="$(obj copies Deployment infrared-operator | awk '/^ +image: / {print $2; exit}')"
+gitea_image="$(obj copies Deployment gitea | awk '/^ +image: / {print $2; exit}')"
+if lines "$oc" '  schedule: "35 * * * *"' '  timeZone: Etc/UTC' '  concurrencyPolicy: Forbid' '      activeDeadlineSeconds: 900' \
+    '          serviceAccountName: infrared-objects-copy' "              image: $op_image" '                - copy-objects' \
+    '                - --bucket=infrared-objects' '                - --endpoint=http://seaweedfs-s3.stores.svc:8333' \
+    '                - --retention=9d' "                - --recipient=$recipient" '                      name: objects-copy-s3'; then
+  ok "infrared-objects-copy: the operator's copy-objects at 35 past, Forbid, 15 minutes, into infrared-objects, kept 9d, as objects-copy"
+else bad "infrared-objects-copy is not the copy of Infrared's objects the copies values ask for"; fi
+if [[ "$(obj copies ClusterRole infrared-objects-copy | grep -E '^ +verbs:' | sort -u)" == '    verbs: ["get", "list"]' ]] \
+    && [[ "$(objn copies ClusterRoleBinding infrared-objects-copy '^    name: infrared-objects-copy$')" == 1 ]]; then
+  ok "infrared-objects-copy reads Infrared's kinds, namespaces, Secrets and ConfigMaps, and writes nothing"
+else bad "infrared-objects-copy's ClusterRole is not read-only"; fi
+# shellcheck disable=SC2016,SC1003 # the dump's own command line, matched as it renders
+if [[ -n "$gitea_image" ]] && lines "$gd" '  schedule: "40 * * * *"' '  concurrencyPolicy: Forbid' '      activeDeadlineSeconds: 900' \
+    '          automountServiceAccountToken: false' '            runAsUser: 1000' '                      app.kubernetes.io/name: gitea' \
+    '                      app.kubernetes.io/instance: infrared' '                  topologyKey: kubernetes.io/hostname' \
+    "              image: $gitea_image" '                  gitea dump --config "$GITEA_APP_INI" --type tar.gz --skip-log --skip-index \' \
+    "              image: $op_image" '                - put' '                - --dir=/dump' '                - --bucket=gitea-dumps' \
+    '                - --retention=8d' "                - --recipient=$recipient" '                claimName: gitea-shared-storage' \
+    '                      name: gitea-dump-s3'; then
+  ok "infrared-gitea-dump: Gitea's own image dumps on Gitea's node, then the operator's put, at 40 past, Forbid, 15 minutes, into gitea-dumps"
+else bad "infrared-gitea-dump is not Gitea's dump the copies values ask for"; fi
+check copies-nogitea.yaml "without Gitea, the copy of Infrared's objects (its account, rules, binding and CronJob)" '^  name: infrared-objects-copy$' 5
+check copies-nogitea.yaml "...no CronJob infrared-gitea-dump" '^  name: infrared-gitea-dump$' 0
+same=1
+for o in "CronJob infrared-objects-copy" "CronJob infrared-gitea-dump" "ClusterRole infrared-objects-copy" "ClusterRoleBinding infrared-objects-copy" "ServiceAccount infrared-objects-copy"; do
+  # shellcheck disable=SC2086 # kind and name
+  [[ -n "$(obj copies $o)" && "$(obj copies $o)" == "$(obj copies-adopted $o)" ]] || { echo "  differs after adoption: $o"; same=0; }
+done
+if [[ "$same" == 1 ]]; then ok "after adoption the copies' CronJobs and RBAC render as the install's"
+else bad "Argo CD's render of the copies differs from the install's"; fi
+
+# A restore at install: the operator, the API and the Job infrared-restore get
+# INFRARED_RESTORE; the Job's every right is in the ClusterRoleBinding
+# infrared-restore; Gitea starts with no pod, and infrared-gitea-restore fills
+# its volume as Gitea's user, reading the restore's plan alone. The identity is
+# a Secret made before the install: the chart renders none. Argo CD's render,
+# which carries no restore, renders none of it (copies-adopted, above).
+has restore.env "the operator, the API and the restore Job get INFRARED_RESTORE, as JSON" 'INFRARED_RESTORE="{\"from\":\"2026-10-03T05:00:00Z\"}"' 3
+check copies-adopted.yaml "after adoption no restore is rendered" 'INFRARED_RESTORE|^  name: infrared-(gitea-)?restore$' 0
+rj="$(obj restore Job infrared-restore)"
+if lines "$rj" '      serviceAccountName: infrared-restore' "          image: $op_image" '            - restore' \
+    '            - --identity-file=/var/run/infrared/backup-identity/identity' '          values: [2, 3]' \
+    '            secretName: infrared-backup-identity' '            optional: true' '            defaultMode: 0440' '        fsGroup: 65532' \
+    '                  name: infrared-platform-tokens' '                  key: backup-access-key-id'; then
+  ok "infrared-restore: the operator's restore mode, the identity from a Secret made before the install, read by its group alone"
+else bad "the Job infrared-restore is wrong"; fi
+if [[ "$(objn restore ClusterRoleBinding infrared-restore '^  name: infrared-restore$')" == 2 ]] \
+    && [[ "$(grep -cE '^kind: (Role|RoleBinding)$' <<<"$(obj restore Role infrared-restore; obj restore RoleBinding infrared-restore)" || true)" == 0 ]] \
+    && [[ "$(obj restore ClusterRole infrared-restore | grep -cE '"delete"' || true)" == 0 ]]; then
+  ok "infrared-restore's rights are all in the ClusterRoleBinding infrared-restore, and none deletes"
+else bad "infrared-restore's rights are not all in its one ClusterRoleBinding, or one deletes"; fi
+gr="$(obj restore Job infrared-gitea-restore)"
+if lines "$gr" '      serviceAccountName: infrared-gitea-restore' "          image: $op_image" '            - gitea-restore' '            - --data=/data' \
+    '            claimName: gitea-shared-storage' '        runAsUser: 1000' '        fsGroup: 1000' '            defaultMode: 0440' \
+    && [[ "$(obj restore Role infrared-gitea-restore | grep -E '^ +(resourceNames|verbs):' | tr -s ' ')" == $' resourceNames: ["infrared-restore"]\n verbs: ["get"]' ]] \
+    && [[ "$(objn restore Deployment gitea '^  replicas: 0$')" == 1 ]]; then
+  ok "infrared-gitea-restore fills Gitea's volume as Gitea's user, reading the restore's plan alone, while Gitea has no pod"
+else bad "the Job infrared-gitea-restore, its Role, or Gitea's replicas are wrong"; fi
+check restore.yaml "the chart renders no identity Secret" '^  name: infrared-backup-identity$' 0
+
 # Extensions: off by default; with ui.extensions, the UI proxies only the declared paths.
 check defaults.yaml "no extensions by default: no ConfigMap" '^kind: ConfigMap$' 0
 check defaults.yaml "no extensions by default: no mount" 'infrared-ui/extensions' 0
@@ -360,6 +454,14 @@ refuse "Gitea under another name than gitea-http fails" "at '/gitea/fullnameOver
 refuse "a volume size that is not a quantity fails" "at '/gitea/persistence/size'" --set gitea.persistence.size=10
 refuse "a registry address with a scheme fails" "at '/registry/address'" --set registry.address=http://10.43.0.50:5000
 refuse "a registry address with a path fails" "at '/registry/address'" --set registry.address=10.43.0.50:5000/acme
+refuse "a recipient that is not an age key fails" "at '/copies/recipients/0'" --set 'copies.recipients[0]=ssh-ed25519'
+refuse "a Postgres schedule of five fields fails" "at '/copies/postgres/schedule'" --set-string 'copies.postgres.schedule=0 3 * * *'
+refuse "a retention in hours fails" "at '/copies/objects/retention'" --set copies.objects.retention=168h
+refuse "Zot keeping more than 1000 newest tags fails" "at '/registry/retention/keepNewest'" --set registry.retention.keepNewest=1001
+refuse "a restore time that is not UTC fails" "at '/restore/from'" --set restore.from=2026-10-03T05:00:00+02:00
+refuse "a restore without the stores fails" "restore.enabled needs stores.enabled" --set restore.enabled=true
+refuse "a restore without a backup bucket fails" "restore.enabled needs backup.bucket" --set restore.enabled=true,stores.enabled=true
+refuse "a restore with Gitea running fails" "needs --set gitea.replicaCount=0" -f "$chart/ci/install-values.yaml" -f "$chart/ci/gitea-values.yaml" --set restore.enabled=true
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
@@ -387,7 +489,7 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted copies copies-nogitea copies-adopted restore; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

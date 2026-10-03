@@ -1,0 +1,170 @@
+{{- /*
+Gitea's hourly dump. It needs Gitea's exact image and its volume, so it is a
+CronJob here, in the release namespace, on Gitea's node: a read-write-once
+volume is shared by the pods of one node. A first container runs
+`gitea dump --type tar.gz --skip-log --skip-index` into an emptyDir, as Gitea's
+own user; then the operator's image, in its put mode, encrypts the dump with
+age to copies.recipients, since it holds app.ini's security keys, writes
+<UTC>.tar.gz.age and its manifest to SeaweedFS's bucket gitea-dumps as the S3
+identity gitea-dump (the Secret gitea-dump-s3, which the gitops template copies
+here), and deletes dumps older than the retention. Exec into Gitea's pod would
+reach every Secret here, and a sidecar would leave no Job behind. Rendered only
+with Gitea and a recipient.
+*/}}
+{{- if and .Values.copies.recipients .Values.gitea.enabled }}
+{{- $g := .Values.copies.gitea | default dict }}
+{{- $ctx := dict "root" . "component" "gitea-dump" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: infrared-gitea-dump
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+spec:
+  # After the copy of Infrared's objects and before the mirror.
+  schedule: {{ default "10 * * * *" $g.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      # Fifteen minutes, waiting for Gitea's node included.
+      activeDeadlineSeconds: 900
+      podFailurePolicy:
+        rules:
+          - action: FailJob
+            onExitCodes:
+              containerName: put
+              operator: In
+              values: [2]
+      template:
+        metadata:
+          labels:
+            {{- include "infrared.componentLabels" $ctx | nindent 12 }}
+        spec:
+          # Neither container talks to the Kubernetes API.
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          # Gitea's own user: the rootless image runs as 1000, and its files are
+          # that user's.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          # On Gitea's node, which holds its volume.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: gitea
+                      app.kubernetes.io/instance: {{ .Release.Name }}
+                  topologyKey: kubernetes.io/hostname
+          initContainers:
+            - name: dump
+              image: {{ include "infrared.giteaImage" . | quote }}
+              imagePullPolicy: {{ .Values.gitea.image.pullPolicy | default "IfNotPresent" }}
+              env:
+                - name: GITEA_APP_INI
+                  value: /data/gitea/conf/app.ini
+                - name: GITEA_CUSTOM
+                  value: /data/gitea
+                - name: GITEA_WORK_DIR
+                  value: /data
+                - name: GITEA_TEMP
+                  value: /tmp/gitea
+                - name: TMPDIR
+                  value: /tmp/gitea
+                - name: HOME
+                  value: /data/gitea/git
+              command:
+                - /bin/bash
+                - -ec
+                - |
+                  # The dump is named by its start, as put expects: <UTC>.tar.gz.
+                  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+                  mkdir -p /tmp/gitea
+                  gitea dump --config "$GITEA_APP_INI" --type tar.gz --skip-log --skip-index \
+                    --tempdir /tmp/gitea --file "/dump/$stamp.tar.gz"
+                  echo "dumped Gitea to $stamp.tar.gz"
+              # As Gitea's own container: it opens Gitea's database and files.
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 1Gi
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: dump
+                  mountPath: /dump
+                - name: tmp
+                  mountPath: /tmp
+          containers:
+            - name: put
+              image: {{ include "infrared.operatorImage" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              args:
+                - put
+                - --dir=/dump
+                - --bucket=gitea-dumps
+                - --endpoint={{ include "infrared.copiesEndpoint" . }}
+                - --retention={{ default "7d" $g.retention }}
+                {{- range .Values.copies.recipients }}
+                - --recipient={{ . }}
+                {{- end }}
+              env:
+                - name: INFRARED_CLUSTER_NAME
+                  value: {{ .Values.managementCluster.name | quote }}
+                - name: AWS_REGION
+                  value: us-east-1
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: gitea-dump-s3
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: gitea-dump-s3
+                      key: AWS_SECRET_ACCESS_KEY
+              securityContext:
+                {{- toYaml .Values.containerSecurityContext | nindent 16 }}
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: {{ .Values.gitea.persistence.claimName | default "gitea-shared-storage" }}
+            - name: dump
+              emptyDir:
+                sizeLimit: {{ .Values.gitea.persistence.size | default "10Gi" }}
+            - name: tmp
+              emptyDir:
+                sizeLimit: {{ .Values.gitea.persistence.size | default "10Gi" }}
+{{- end }}

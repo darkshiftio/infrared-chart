@@ -234,3 +234,86 @@ readinessProbe:
   periodSeconds: 10
   timeoutSeconds: 3
 {{- end }}
+
+{{/*
+The platform's copies as JSON (INFRARED_COPIES): {"recipients", and each of
+"postgres", "mirror", "objects", "gitea" with its "schedule" and "retention"},
+only the fields that are set; empty when none is, so nothing is handed on.
+*/}}
+{{- define "infrared.copies" -}}
+{{- $c := .Values.copies | default dict }}
+{{- $out := dict }}
+{{- with $c.recipients }}{{ $_ := set $out "recipients" . }}{{ end }}
+{{- range $k := list "postgres" "mirror" "objects" "gitea" }}
+{{- $s := index $c $k | default dict }}
+{{- $e := dict }}
+{{- with $s.schedule }}{{ $_ := set $e "schedule" . }}{{ end }}
+{{- with $s.retention }}{{ $_ := set $e "retention" . }}{{ end }}
+{{- if $e }}{{ $_ := set $out $k $e }}{{ end }}
+{{- end }}
+{{- if $out }}{{ toJson $out }}{{ end }}
+{{- end }}
+
+{{/*
+Zot's retention as JSON (INFRARED_REGISTRY_RETENTION): only the fields that are
+set; empty when none is.
+*/}}
+{{- define "infrared.registryRetention" -}}
+{{- $r := .Values.registry.retention | default dict }}
+{{- $out := dict }}
+{{- with $r.untaggedAfter }}{{ $_ := set $out "untaggedAfter" . }}{{ end }}
+{{- with $r.keepTags }}{{ $_ := set $out "keepTags" . }}{{ end }}
+{{- with $r.keepNewest }}{{ $_ := set $out "keepNewest" (int .) }}{{ end }}
+{{- with $r.gcInterval }}{{ $_ := set $out "gcInterval" . }}{{ end }}
+{{- with $r.gcDelay }}{{ $_ := set $out "gcDelay" . }}{{ end }}
+{{- if $out }}{{ toJson $out }}{{ end }}
+{{- end }}
+
+{{/*
+A restore as JSON (INFRARED_RESTORE): {"from": "<RFC 3339>"}, or {} for the
+newest copies; empty without restore.enabled. The variable's presence is what
+says the install is a restore. It checks what a restore needs, and fails the
+render without it.
+*/}}
+{{- define "infrared.restore" -}}
+{{- if .Values.restore.enabled }}
+{{- if not .Values.stores.enabled }}
+{{- fail "restore.enabled needs stores.enabled: the copies a restore reads are the stores' copies" }}
+{{- end }}
+{{- if not .Values.backup.bucket }}
+{{- fail "restore.enabled needs backup.bucket, backup.endpoint and backup.region: the bucket the copies are in" }}
+{{- end }}
+{{- if and .Values.gitea.enabled (ne (int .Values.gitea.replicaCount) 0) }}
+{{- fail "restore.enabled with gitea.enabled needs --set gitea.replicaCount=0: Gitea starts once the restore has filled its volume" }}
+{{- end }}
+{{- if .Values.restore.from }}{{ toJson (dict "from" .Values.restore.from) }}{{ else }}{{ "{}" }}{{ end }}
+{{- end }}
+{{- end }}
+
+{{/* The operator's image, which also runs the copies' and the restore's modes. */}}
+{{- define "infrared.operatorImage" -}}
+{{- include "infrared.image" (dict "root" . "image" .Values.operator.image) }}
+{{- end }}
+
+{{/*
+Gitea's own image, as the gitea chart renders it (its "gitea.image"), for the
+dump, which has to run Gitea's exact version.
+*/}}
+{{- define "infrared.giteaImage" -}}
+{{- $i := .Values.gitea.image }}
+{{- $registry := (.Values.global | default dict).imageRegistry | default $i.registry }}
+{{- $tag := printf "%s%s" (toString $i.tag) (ternary "-rootless" "" (default false $i.rootless)) }}
+{{- $digest := "" }}{{ with $i.digest }}{{ $digest = printf "@%s" (toString .) }}{{ end }}
+{{- if $i.fullOverride }}{{ $i.fullOverride }}
+{{- else if $registry }}{{ printf "%s/%s:%s%s" $registry $i.repository $tag $digest }}
+{{- else }}{{ printf "%s:%s%s" $i.repository $tag $digest }}
+{{- end }}
+{{- end }}
+
+{{/*
+Where the copies of Infrared's objects and of Gitea go: SeaweedFS's S3 gateway,
+which the gitops template runs with the stores (components/seaweedfs).
+*/}}
+{{- define "infrared.copiesEndpoint" -}}
+http://seaweedfs-s3.stores.svc:8333
+{{- end }}

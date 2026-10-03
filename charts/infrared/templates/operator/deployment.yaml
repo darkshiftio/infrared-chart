@@ -87,6 +87,23 @@ spec:
             - name: INFRARED_DISABLED_COMPONENTS
               value: {{ toJson . | quote }}
             {{- end }}
+            {{- with include "infrared.copies" . }}
+            # The platform's copies: their schedules and retentions, and the
+            # age recipients of the encrypted ones, for the gitops template.
+            - name: INFRARED_COPIES
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "infrared.registryRetention" . }}
+            # Zot's garbage collection and retention, for the gitops template.
+            - name: INFRARED_REGISTRY_RETENTION
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "infrared.restore" . }}
+            # This install is a restore: the operator starts no controller
+            # until the Job infrared-restore has restored Infrared's objects.
+            - name: INFRARED_RESTORE
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.gitea.enabled }}
             # The Gitea this chart runs: the operator gives an org's GitProvider
             # its bot's token only when spec.gitea.url is this one.

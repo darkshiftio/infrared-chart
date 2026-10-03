@@ -51,6 +51,20 @@ registry:
   # organization's builder, lets steps whose AgentRole may publish push to it,
   # and hands it to the gitops template (its `Registry`). Empty: none of them.
   address: ""
+  # Zot's garbage collection and retention (INFRARED_REGISTRY_RETENTION,
+  # operator, as JSON, for the gitops template's Zot). Each empty field keeps
+  # the template's default, shown with it.
+  retention:
+    # -- An untagged image goes this long after it was untagged, e.g. `48h`. Empty: `24h`.
+    untaggedAfter: ""
+    # -- Every tag that matches one of these regular expressions is kept, e.g. `["^v[0-9]"]`. Empty: `["^v[0-9]"]`.
+    keepTags: []
+    # -- Besides those, each repository keeps its this many newest tags, 1 to 1000. 0: `10`.
+    keepNewest: 0
+    # -- How often garbage is collected, e.g. `1h`. Empty: `1h`.
+    gcInterval: ""
+    # -- How long a blob stays after its last use before it may be collected, e.g. `1h`. Empty: `1h`.
+    gcDelay: ""
 
 stores:
   # -- Install the platform's stores through the gitops template: one Postgres
@@ -68,6 +82,55 @@ backup:
   endpoint: ""
   # -- The region S3 requests are signed for, e.g. `us-east-1`.
   region: ""
+
+# The platform's copies (INFRARED_COPIES, operator, as JSON; the gitops template
+# carries it into its infrared Application). Every field is empty by default,
+# which keeps the default beside it, so an install that sets nothing renders
+# what it rendered before. Schedules are UTC; retentions are whole days, e.g. 7d.
+copies:
+  # -- age recipients (public keys, `age1...`) the hourly copies of Infrared's
+  # objects and of Gitea are encrypted to: one or more, and any one of their
+  # private keys restores both. Empty (the default) makes neither copy, and the
+  # gitops template makes neither bucket, so nothing changes until a person
+  # makes the key. Only the public half is ever in values.
+  recipients: []
+  postgres:
+    # -- Postgres's base backup: six cron fields, seconds first. Empty: `0 0 3 * * *`.
+    schedule: ""
+    # -- How long Postgres's archive is kept. Empty: `7d`.
+    retention: ""
+  mirror:
+    # -- The buckets' copy to the backup bucket: five cron fields. Empty: `17 * * * *`.
+    schedule: ""
+    # -- How long what a copy replaced or deleted is kept. Empty: `7d`.
+    retention: ""
+  objects:
+    # -- The copy of Infrared's objects (CronJob infrared-objects-copy): five cron fields. Empty: `5 * * * *`.
+    schedule: ""
+    # -- How long each copy is kept. Empty: `7d`.
+    retention: ""
+  gitea:
+    # -- Gitea's dump (CronJob infrared-gitea-dump, with gitea.enabled): five cron fields. Empty: `10 * * * *`.
+    schedule: ""
+    # -- How long each dump is kept. Empty: `7d`.
+    retention: ""
+
+# Restore at install: this install comes back from the backup bucket's copies,
+# made by an install of the same name, before anything acts on them. Give the
+# install's usual values with restore.enabled, and, with Gitea,
+# gitea.replicaCount=0: Gitea starts once its data is back. The age identity
+# that opens the copies is the Secret infrared-backup-identity (key identity),
+# made with kubectl before helm install, never a value: Helm keeps every value
+# in its release record, which outlives the restore. The operator deletes that
+# Secret once the restore is complete. Argo CD never renders any of this.
+restore:
+  # -- Restore this install from the backup bucket's copies (INFRARED_RESTORE,
+  # operator and API): the Jobs infrared-restore and, with Gitea,
+  # infrared-gitea-restore. Needs stores.enabled and a backup bucket.
+  enabled: false
+  # -- Restore the newest copies at or before this time, RFC 3339 in UTC, e.g.
+  # `2026-10-03T05:00:00Z`. Empty: the newest.
+  from: ""
 
 components:
   # -- The gitops template's components the install leaves out, by name, e.g.

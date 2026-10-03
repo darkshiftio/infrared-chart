@@ -1,0 +1,169 @@
+{{- /*
+Restore at install (restore.enabled): the Job infrared-restore runs the
+operator's image in its restore mode. It picks the restore point from the backup
+bucket's copies, writes it to the ConfigMap infrared-restore (phase Planned),
+waits for Gitea's restore with Gitea, then scales Gitea to one, restores
+Infrared's own objects in their order (phase ObjectsRestored) and exits. The
+operator starts no controller until then, and finishes the restore (phase
+Complete), when it deletes this Job, its ClusterRoleBinding and the Secret
+infrared-backup-identity. So every right the Job has is in the one binding,
+some of them limited by name; the ClusterRole and the ServiceAccount stay,
+inert. Argo CD never renders any of this: the gitops repo carries no restore.
+*/}}
+{{- with include "infrared.restore" . }}
+{{- $restore := . }}
+{{- $ctx := dict "root" $ "component" "restore" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infrared-restore
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: infrared-restore
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+rules:
+  # Infrared's objects, their status and their finalizers: made again, never
+  # deleted.
+  - apiGroups: ["infrared.darkshift.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # The organizations' namespaces, the Secrets and the owned ConfigMaps, and the
+  # restore's own ConfigMap: made again or brought up to date, never deleted.
+  - apiGroups: [""]
+    resources: ["namespaces", "secrets", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Gitea, started once its data is back, and its restore Job, waited for.
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["gitea"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    resourceNames: ["infrared-gitea-restore"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: infrared-restore
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: infrared-restore
+subjects:
+  - kind: ServiceAccount
+    name: infrared-restore
+    namespace: {{ $.Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: infrared-restore
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 10800
+  # A mistake in the flags, the environment or the identity (exit 2), or a
+  # refusal (exit 3: no copy to restore, the mirror has not carried it, a
+  # checksum that does not match), is never retried: a person decides.
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          operator: In
+          values: [2, 3]
+  template:
+    metadata:
+      labels:
+        {{- include "infrared.componentLabels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: infrared-restore
+      restartPolicy: Never
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # The operator image's own user; the identity's file is readable by its
+      # group alone.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: {{ include "infrared.operatorImage" $ }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args:
+            - restore
+            - --identity-file=/var/run/infrared/backup-identity/identity
+          env:
+            - name: INFRARED_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: INFRARED_CLUSTER_NAME
+              value: {{ $.Values.managementCluster.name | quote }}
+            - name: INFRARED_RESTORE
+              value: {{ $restore | quote }}
+            - name: INFRARED_BACKUP
+              value: {{ include "infrared.backup" $ | quote }}
+            # The backup bucket's key, which only reads here.
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-platform-tokens
+                  key: backup-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-platform-tokens
+                  key: backup-secret-access-key
+            {{- if $.Values.gitea.enabled }}
+            - name: INFRARED_GITEA_URL
+              value: {{ include "infrared.giteaURL" $ | quote }}
+            - name: INFRARED_GITEA_ADMIN_SECRET
+              value: "infrared-gitea-admin"
+            {{- end }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: identity
+              mountPath: /var/run/infrared/backup-identity
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Made with kubectl before helm install, and deleted by the operator once
+        # the restore is complete. Optional, so a missing one is the restore's
+        # own error (exit 2), not a pod that never starts.
+        - name: identity
+          secret:
+            secretName: infrared-backup-identity
+            optional: true
+            defaultMode: 0440
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+{{- end }}

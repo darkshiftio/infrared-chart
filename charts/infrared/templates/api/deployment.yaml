@@ -58,6 +58,12 @@ spec:
             - name: INFRARED_GITEA_ADMIN_SECRET
               value: "infrared-gitea-admin"
             {{- end }}
+            {{- with include "infrared.restore" . }}
+            # This install is a restore: the API refuses the setup wizard and
+            # every run's start until the restore is complete.
+            - name: INFRARED_RESTORE
+              value: {{ . | quote }}
+            {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

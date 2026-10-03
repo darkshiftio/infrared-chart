@@ -221,6 +221,77 @@ address to the gitops template, which runs the registry. Empty, the default,
 renders nothing and changes nothing. As with the stores, the gitops repo's
 `infrared` Application has to carry it once Argo CD adopts the release.
 
+## The copies
+
+`copies` sets when the platform's copies are made and how long each is kept, and
+`copies.recipients` the age recipients the two encrypted ones go to. Every field is
+empty by default, which keeps its default, so an install that sets nothing renders
+exactly what it rendered before. Schedules are UTC and retentions whole days.
+
+```yaml
+copies:
+  recipients: [age1...]              # public keys only; empty makes no encrypted copy
+  postgres: {schedule: "0 0 3 * * *", retention: 7d}   # seconds first
+  mirror:   {schedule: "17 * * * *",  retention: 7d}
+  objects:  {schedule: "5 * * * *",   retention: 7d}
+  gitea:    {schedule: "10 * * * *",  retention: 7d}
+registry:
+  retention: {untaggedAfter: 24h, keepTags: ["^v[0-9]"], keepNewest: 10, gcInterval: 1h, gcDelay: 1h}
+```
+
+Postgres's archive and the mirror are the gitops template's: the chart hands
+`copies` (`INFRARED_COPIES`) and `registry.retention`
+(`INFRARED_REGISTRY_RETENTION`) to the operator as JSON, and the template carries
+both in its `infrared` Application, so they survive Argo CD's adoption. With a
+recipient, the chart runs two CronJobs of its own in the release namespace, each
+the operator's image in one of its modes, and the template makes their buckets:
+
+| CronJob | When | What |
+|---|---|---|
+| `infrared-objects-copy` | `5 * * * *` | `copy-objects`: Infrared's own objects with their status, the Secrets the cluster cannot make again and the ConfigMaps they own, as the ServiceAccount `infrared-objects-copy`, which may read and nothing more |
+| `infrared-gitea-dump` (with `gitea.enabled`) | `10 * * * *` | on Gitea's node, as Gitea's user, Gitea's own image runs `gitea dump --type tar.gz --skip-log --skip-index`; then `put` encrypts and uploads it. The dump holds `app.ini`'s security keys, so it is encrypted too |
+
+Each copy is encrypted with age to every recipient, written to its bucket in the
+platform's object store (`infrared-objects`, `gitea-dumps`) as `<UTC>.tar.gz.age`
+with a clear manifest `<UTC>.json`, and older ones go after the retention. The
+hourly mirror then carries both buckets outside. Both run with `Forbid` and a
+15-minute deadline; their keys are the Secrets `objects-copy-s3` and
+`gitea-dump-s3`, which the gitops template copies here. Any one recipient's
+private key opens both copies, and a restore needs both, so one key is enough.
+The private key is never a value: see "Restore at install".
+
+## Restore at install
+
+An install restores itself from the backup bucket's copies, made by an install of
+the same name, before anything acts on them. The person who holds the age key
+makes its Secret first, then installs with the usual values:
+
+```bash
+kubectl create namespace infrared
+kubectl -n infrared create secret generic infrared-backup-identity \
+  --from-file=identity="$HOME/path/to/age-identity"
+helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <version> \
+  -n infrared -f values.yaml <the usual --set-file tokens> \
+  --set restore.enabled=true --set gitea.replicaCount=0   # [--set restore.from=2026-10-03T05:00:00Z]
+```
+
+The identity is a Secret, never a value: Helm keeps every value in its release
+record, which outlives the restore. `restore.enabled` needs `stores.enabled` and a
+backup bucket, and with Gitea `gitea.replicaCount=0`: the chart refuses the install
+without them. It then renders:
+
+| What | Name | Does |
+|---|---|---|
+| `INFRARED_RESTORE` (`{"from": ...}` or `{}`) | the operator, the API | the operator starts no controller and the API no setup wizard and no run until the restore allows |
+| Job | `infrared-restore`, ServiceAccount, ClusterRole and ClusterRoleBinding of the same name | the operator's `restore` mode: picks the copies, writes the ConfigMap `infrared-restore` (phase `Planned`), waits for Gitea's restore, starts Gitea, restores Infrared's objects (phase `ObjectsRestored`) |
+| Job (with Gitea) | `infrared-gitea-restore`, ServiceAccount, Role and RoleBinding of the same name | the operator's `gitea-restore` mode: fills Gitea's empty volume from the Gitea dump the plan names, as Gitea's user, reading the plan alone |
+
+The operator finishes the restore (phase `Complete`) once the gitops template has
+brought the stores back, and then deletes the Secret `infrared-backup-identity`,
+both Jobs and both bindings, so no restore right outlives it. The ClusterRole and
+the ServiceAccounts stay, inert. Argo CD's render carries no `restore`, so it
+renders none of this.
+
 ## Gitea
 
 `gitea.enabled: true` runs Gitea in the release namespace as the forge for the
@@ -340,6 +411,13 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `gitops.templateVersion` | `v0.1.10` | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `registry.address` | `""` | The install's own registry, host and port with no scheme (`INFRARED_REGISTRY`, operator and API). See "The install's own registry" |
+| `registry.retention.untaggedAfter` / `.keepTags` / `.keepNewest` / `.gcInterval` / `.gcDelay` | `""` / `[]` / `0` / `""` / `""` | Zot's retention and garbage collection (`INFRARED_REGISTRY_RETENTION`, operator, JSON); each empty one keeps the gitops template's: `24h`, `["^v[0-9]"]`, `10`, `1h`, `1h`. See "The copies" |
+| `copies.recipients` | `[]` | age recipients (`age1...`, public keys) the copies of Infrared's objects and of Gitea are encrypted to; empty makes neither. See "The copies" |
+| `copies.postgres.schedule` / `.retention` | `""` / `""` | Postgres's base backup, six cron fields, seconds first, and how long its archive is kept, whole days; empty: `0 0 3 * * *`, `7d` (`INFRARED_COPIES`, operator, JSON) |
+| `copies.mirror.schedule` / `.retention` | `""` / `""` | The buckets' copy to the backup bucket; empty: `17 * * * *`, `7d` |
+| `copies.objects.schedule` / `.retention` | `""` / `""` | The CronJob `infrared-objects-copy`; empty: `5 * * * *`, `7d` |
+| `copies.gitea.schedule` / `.retention` | `""` / `""` | The CronJob `infrared-gitea-dump`, with `gitea.enabled`; empty: `10 * * * *`, `7d` |
+| `restore.enabled` / `.from` | `false` / `""` | Restore this install from the backup bucket's copies at install (`INFRARED_RESTORE`, operator and API), the newest at or before `from` (RFC 3339, UTC), the newest when empty. See "Restore at install" |
 | `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
 | `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster that copies of the stores go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
@@ -394,6 +472,17 @@ them on every sync (the gitops template syncs the `infrared` Application with
   secrets get/list/create/update/patch. The secrets rule is cluster-wide in this
   skeleton; P2 narrows it to the release namespace and the `ir-org-*` namespaces.
 - **ui**, **mcp**: no Kubernetes API access (no token is mounted).
+- **infrared-objects-copy** (with `copies.recipients`): ClusterRole that may get
+  and list every `infrared.darkshift.io` resource, namespaces, Secrets and
+  ConfigMaps, and nothing else. `infrared-gitea-dump` mounts no token.
+- **infrared-restore** (with `restore.enabled`): ClusterRole that may get, list,
+  watch, create, update and patch every `infrared.darkshift.io` resource,
+  namespaces, Secrets and ConfigMaps, create events, and, by name, scale the
+  Deployment `gitea` and read the Job `infrared-gitea-restore`; it deletes
+  nothing. Every right is in the one ClusterRoleBinding `infrared-restore`,
+  which the operator deletes when the restore is complete.
+  **infrared-gitea-restore**: a Role that may get the ConfigMap
+  `infrared-restore`, and nothing else.
 
 ## Keeping the chart in step with the operator
 

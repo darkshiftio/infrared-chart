@@ -1,0 +1,145 @@
+{{- /*
+Gitea's restore (restore.enabled with gitea.enabled): the Job
+infrared-gitea-restore runs the operator's image in its gitea-restore mode on
+Gitea's empty volume, while Gitea's Deployment has no pod (gitea.replicaCount
+0, which the chart asks for). It waits for the restore's plan in the ConfigMap
+infrared-restore, then fills the volume from the Gitea dump the plan names:
+app.ini and its keys, the data, the repositories and the database. On a volume
+that holds anything, it does nothing. The Job infrared-restore then starts
+Gitea; its own init keeps the restored app.ini. The operator deletes this Job
+and its RoleBinding once the restore is complete. A Job rather than an init
+container in Gitea's pod: the gitea chart takes no init container that depends
+on this chart's values, and a Gitea that started once would have written new
+keys over the empty volume.
+*/}}
+{{- if and (include "infrared.restore" .) .Values.gitea.enabled }}
+{{- $ctx := dict "root" . "component" "gitea-restore" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infrared-gitea-restore
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+---
+# Read the restore's plan, nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: infrared-gitea-restore
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["infrared-restore"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: infrared-gitea-restore
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: infrared-gitea-restore
+subjects:
+  - kind: ServiceAccount
+    name: infrared-gitea-restore
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: infrared-gitea-restore
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 7200
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          operator: In
+          values: [2, 3]
+  template:
+    metadata:
+      labels:
+        {{- include "infrared.componentLabels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: infrared-gitea-restore
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Gitea's own user and group, as Gitea's pod runs: what it writes is
+      # Gitea's, on a volume Kubernetes gives the group.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: {{ include "infrared.operatorImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - gitea-restore
+            - --data=/data
+            - --identity-file=/var/run/infrared/backup-identity/identity
+          env:
+            - name: INFRARED_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: INFRARED_BACKUP
+              value: {{ include "infrared.backup" . | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-platform-tokens
+                  key: backup-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-platform-tokens
+                  key: backup-secret-access-key
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: identity
+              mountPath: /var/run/infrared/backup-identity
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.gitea.persistence.claimName | default "gitea-shared-storage" }}
+        - name: identity
+          secret:
+            secretName: infrared-backup-identity
+            optional: true
+            defaultMode: 0440
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.gitea.persistence.size | default "10Gi" }}
+{{- end }}

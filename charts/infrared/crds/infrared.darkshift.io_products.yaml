@@ -357,6 +357,17 @@ spec:
                           - histogram
                           - threshold
                           type: object
+                        uptime:
+                          description: |-
+                            Uptime counts the minutes the zone had no ready pod against all minutes,
+                            from kube-state-metrics: it needs nothing from the app.
+                          properties:
+                            deployment:
+                              description: |-
+                                Deployment narrows it to one Deployment in the zone's namespace; empty
+                                means any Deployment there.
+                              type: string
+                          type: object
                       type: object
                     name:
                       description: Name, e.g. availability or latency.

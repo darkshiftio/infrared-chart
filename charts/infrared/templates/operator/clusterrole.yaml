@@ -220,12 +220,28 @@ rules:
   - watch
 - apiGroups:
   - rbac.authorization.k8s.io
+  resourceNames:
+  - infrared-restore
+  resources:
+  - clusterrolebindings
+  verbs:
+  - delete
+- apiGroups:
+  - rbac.authorization.k8s.io
   resources:
   - clusterroles
   - roles
   verbs:
   - bind
   - escalate
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - infrared-gitea-restore
+  resources:
+  - rolebindings
+  verbs:
+  - delete
 # END GENERATED RULES
 {{- with .Values.operator.rbac.extraRules }}
 {{ toYaml . }}

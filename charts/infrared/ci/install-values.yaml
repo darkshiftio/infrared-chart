@@ -28,3 +28,5 @@ backup:
   region: us-east-1
 components:
   disabled: [infisical]
+registry:
+  address: 10.43.0.50:5000

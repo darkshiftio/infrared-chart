@@ -42,6 +42,15 @@ builds:
   # Empty leaves the gitops template's builds component out.
   registry: ""
 
+registry:
+  # -- The install's own registry, as builds and nodes reach it: host and port,
+  # no scheme, e.g. `10.43.0.50:5000` (Zot, over plain HTTP inside the
+  # cluster; INFRARED_REGISTRY, operator and API). The operator keeps a
+  # registry user, rule and push credential per organization, builds as each
+  # organization's builder, lets steps whose AgentRole may publish push to it,
+  # and hands it to the gitops template (its `Registry`). Empty: none of them.
+  address: ""
+
 stores:
   # -- Install the platform's stores through the gitops template: one Postgres
   # and one object store in the cluster (INFRARED_STORES, operator). Off leaves

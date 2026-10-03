@@ -45,6 +45,11 @@ spec:
             - name: INFRARED_METRICS_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.registry.address }}
+            # The install's own registry, where steps publish and Releases take images from.
+            - name: INFRARED_REGISTRY
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.gitea.enabled }}
             # The Gitea this chart runs, and the Secret with its site admin,
             # which the setup wizard's forge step makes an org's bot user with.

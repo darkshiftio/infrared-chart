@@ -206,6 +206,21 @@ from values"). The operator refuses to start on a malformed value and says
 why. After Argo CD adopts the release, the gitops repo's `infrared` Application
 has to carry the three settings, or the operator stops receiving them.
 
+## The install's own registry
+
+```yaml
+registry:
+  address: 10.43.0.50:5000           # INFRARED_REGISTRY, operator and API: host and port, no scheme
+```
+
+The registry inside the cluster (Zot), as builds and nodes reach it. The
+operator then keeps a registry user, rule and push credential per
+organization, builds each organization's Products as its own builder, lets a
+step whose AgentRole may publish push under `<org>/<product>`, and hands the
+address to the gitops template, which runs the registry. Empty, the default,
+renders nothing and changes nothing. As with the stores, the gitops repo's
+`infrared` Application has to carry it once Argo CD adopts the release.
+
 ## Gitea
 
 `gitea.enabled: true` runs Gitea in the release namespace as the forge for the
@@ -324,6 +339,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
 | `gitops.templateVersion` | `v0.1.10` | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
+| `registry.address` | `""` | The install's own registry, host and port with no scheme (`INFRARED_REGISTRY`, operator and API). See "The install's own registry" |
 | `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
 | `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster that copies of the stores go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
@@ -370,7 +386,8 @@ them on every sync (the gitops template syncs the `infrared` Application with
   `config/rbac/role.yaml` (kubebuilder markers), plus a Role for leader election
   in the release namespace.
 - **api**: ClusterRole over every `infrared.darkshift.io` resource and status;
-  namespaces get/list/create (organizations live in `ir-org-*` namespaces);
+  zones' Ingresses get/list and, on a Gateway edge, their HTTPRoutes get (a
+  zone's links); namespaces get/list/create (organizations live in `ir-org-*` namespaces);
   secrets get/list/create/update/patch. The secrets rule is cluster-wide in this
   skeleton; P2 narrows it to the release namespace and the `ir-org-*` namespaces.
 - **ui**, **mcp**: no Kubernetes API access (no token is mounted).

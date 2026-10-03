@@ -66,6 +66,12 @@ spec:
             {{- end }}
             - name: INFRARED_BUILD_REGISTRY
               value: {{ .Values.builds.registry | quote }}
+            {{- with .Values.registry.address }}
+            # The install's own registry: a user, rule and push credential per
+            # organization, steps that publish, and the gitops template's Registry.
+            - name: INFRARED_REGISTRY
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.stores.enabled }}
             # The platform's stores, which the gitops template installs.
             - name: INFRARED_STORES

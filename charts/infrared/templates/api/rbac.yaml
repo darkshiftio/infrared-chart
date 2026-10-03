@@ -44,6 +44,11 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list"]
+  # ...and on a Gateway edge each zone's HTTPRoute <product>-preview, its
+  # hostnames and who may open it.
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get"]
   # Organizations live in ir-org-* namespaces, which the API creates.
   - apiGroups: [""]
     resources: ["namespaces"]

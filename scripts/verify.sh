@@ -205,6 +205,13 @@ check stores-adopted.yaml "after adoption with the stores, still no Secret" '^ki
 check backup-key.yaml "the backup bucket's key alone renders infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check backup-key.yaml "...with no Cloudflare key" 'cloudflare-api-token' 0
 check backup-key.yaml "...and both of the bucket's keys" '^  backup-(access-key-id|secret-access-key): ' 2
+# The install's own registry: none by default, so the default render is what it
+# was; handed to the operator and the API from the install's values, and still
+# once the template's Application carries it.
+check defaults.env "no install registry by default" '^INFRARED_REGISTRY=' 0
+for f in install stores-adopted; do
+  has "$f.env" "$f: the install's registry, to the operator and the API" 'INFRARED_REGISTRY="10.43.0.50:5000"' 2
+done
 
 # Gitea: off by default, so every other render leaves it out.
 # obj <render> <kind> <name>: that object's document; objn: how many of its lines match.
@@ -351,12 +358,21 @@ refuse "Gitea reading its admin from another Secret fails" "at '/gitea/gitea/adm
   --set gitea.enabled=true,gitea.gitea.admin.existingSecret=other
 refuse "Gitea under another name than gitea-http fails" "at '/gitea/fullnameOverride'" --set gitea.fullnameOverride=forge
 refuse "a volume size that is not a quantity fails" "at '/gitea/persistence/size'" --set gitea.persistence.size=10
+refuse "a registry address with a scheme fails" "at '/registry/address'" --set registry.address=http://10.43.0.50:5000
+refuse "a registry address with a path fails" "at '/registry/address'" --set registry.address=10.43.0.50:5000/acme
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
      "$chart/templates/operator/clusterrole.yaml" | grep -q '^- apiGroups'; then
   ok "operator ClusterRole carries generated rules"
 else bad "operator ClusterRole has no generated rules (run hack/sync-operator.sh)"; fi
+check defaults.yaml "the operator writes each org's builder ServiceAccount" '^  - serviceaccounts$' 1
+# On a Gateway edge the API reads each zone's HTTPRoute for its links
+# (workspace TODO item 89): get, nothing more.
+route_rule="$(obj defaults ClusterRole infrared-api | awk '/^  - apiGroups: \["gateway\.networking\.k8s\.io"\]$/ {f=1; print; next} f && /^  (- apiGroups:|#)/ {f=0} f')"
+if [[ "$route_rule" == *'resources: ["httproutes"]'* && "$route_rule" == *'verbs: ["get"]'* && "$(grep -c . <<<"$route_rule")" == 3 ]]; then
+  ok "the API may get HTTPRoutes"
+else bad "the API's ClusterRole has no rule to get HTTPRoutes"; fi
 
 step "kubeconform"
 for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted; do

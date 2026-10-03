@@ -105,9 +105,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.106
+    tag: v0.1.0-alpha.107
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:d1ae681340ea57871d4f859a984c17f23e3e2b32258958ddc3f89f0beec1ab1c"
+    digest: "sha256:99153a9c9050171984364ecf58f2e06b3ac20b86b0d08bd7cb906567282992da"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []

@@ -122,6 +122,16 @@ none, and the operator refuses anything else at start.
 {{- end }}
 {{- end }}
 
+{{/*
+Where the operator, the API and the cluster reach the Gitea this chart runs
+(INFRARED_GITEA_URL): its Service, gitea-http, in the release namespace, without
+a trailing slash. Gitea's ROOT_URL (gitea.gitea.config.server.ROOT_URL) is the
+same with one; `make verify` checks that they agree.
+*/}}
+{{- define "infrared.giteaURL" -}}
+{{- printf "http://%s-http.%s.svc.cluster.local:%d" .Values.gitea.fullnameOverride .Release.Namespace (int .Values.gitea.service.http.port) }}
+{{- end }}
+
 {{/* Name of the MCP token Secret. */}}
 {{- define "infrared.mcpAccessSecret" -}}
 {{- default (printf "%s-mcp-access" (include "infrared.fullname" .)) .Values.mcp.access.existingSecret }}

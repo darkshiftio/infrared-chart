@@ -1,0 +1,36 @@
+{{- /*
+Gitea's site admin, in the Secret infrared-gitea-admin (keys username, password
+and email), when gitea.enabled. Generated once and kept, like the Secrets in
+secrets.yaml:
+  1. giteaAdmin.existingSecret set -> nothing is rendered; the Secret must exist.
+     The gitops template's `infrared` Application sets it, so Argo CD, where
+     `lookup` returns nothing, never renders a new password after adoption.
+  2. the Secret already in the cluster (lookup): every key is kept as it is.
+  3. a new one: the username and email from gitea.gitea.admin, and 32 random
+     characters as the password.
+The name is fixed. Gitea reads the username and password from it
+(gitea.gitea.admin.existingSecret) and resets the admin's password to it at
+every start; the API reads it (INFRARED_GITEA_ADMIN_SECRET). Gitea creates the
+admin with the email from gitea.gitea.admin.email, the same one.
+*/}}
+{{- if and .Values.gitea.enabled (not .Values.giteaAdmin.existingSecret) }}
+{{- $admin := .Values.gitea.gitea.admin }}
+{{- $prev := ((lookup "v1" "Secret" .Release.Namespace "infrared-gitea-admin") | default dict).data | default dict }}
+{{- $username := index $prev "username" | default "" | b64dec | default $admin.username }}
+{{- $password := index $prev "password" | default "" | b64dec | default (randAlphaNum 32) }}
+{{- $email := index $prev "email" | default "" | b64dec | default $admin.email }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: infrared-gitea-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "gitea") | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  username: {{ $username | b64enc | quote }}
+  password: {{ $password | b64enc | quote }}
+  email: {{ $email | b64enc | quote }}
+{{- end }}

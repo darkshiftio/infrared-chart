@@ -23,6 +23,11 @@ if command -v shellcheck >/dev/null; then
   if shellcheck "$root"/hack/*.sh "$root"/scripts/*.sh; then ok shellcheck; else bad shellcheck; fi
 fi
 
+# The gitea chart, vendored by make deps (hack/deps.sh) at Chart.lock's version.
+step "dependencies"
+if "$root/hack/deps.sh" --check; then ok "charts/ holds the gitea chart Chart.lock names, its sha256 checked"
+else bad "dependencies: run make deps"; fi
+
 # A fresh install outside AWS passes its secrets with --set-file, from files
 # that end in a newline; these stand in for them.
 printf 'ci-password\n' >"$out/ci-password"
@@ -45,6 +50,12 @@ for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/
 done
 if helm lint --strict "$chart" "${install[@]}" >"$out/lint.log" 2>&1; then ok "lint install (ghcr + install values, secrets by --set-file)"
 else cat "$out/lint.log"; bad "lint install"; fi
+gitea=(-f "$chart/ci/gitea-values.yaml")
+adopted=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" -f "$chart/ci/stores-adopted-values.yaml")
+if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" >"$out/lint.log" 2>&1; then ok "lint install with Gitea"
+else cat "$out/lint.log"; bad "lint install with Gitea"; fi
+if helm lint --strict "$chart" "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" >"$out/lint.log" 2>&1; then ok "lint Gitea after adoption"
+else cat "$out/lint.log"; bad "lint Gitea after adoption"; fi
 
 step "helm template"
 helm template infrared "$chart" -n infrared --include-crds >"$out/defaults.yaml"
@@ -64,7 +75,10 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "
   -f "$chart/ci/stores-adopted-values.yaml" >"$out/stores-adopted.yaml"
 # The backup bucket's key alone, without a Cloudflare token.
 helm template infrared "$chart" -n infrared "${backup_key[@]}" >"$out/backup-key.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key"
+# Gitea as the forge: a fresh install, and what Argo CD renders once it adopts it.
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" >"$out/gitea.yaml"
+helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" >"$out/gitea-adopted.yaml"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -72,7 +86,7 @@ envs() {
   awk '/^ +- name: [A-Z0-9_]+$/ {n=$3; next} n && /^ +value: / {sub(/^ +value: /, ""); print n "=" $0} {n=""}' \
     "$out/$1.yaml" >"$out/$1.env"
 }
-for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted; do envs "$f"; done
+for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -191,6 +205,76 @@ check stores-adopted.yaml "after adoption with the stores, still no Secret" '^ki
 check backup-key.yaml "the backup bucket's key alone renders infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check backup-key.yaml "...with no Cloudflare key" 'cloudflare-api-token' 0
 check backup-key.yaml "...and both of the bucket's keys" '^  backup-(access-key-id|secret-access-key): ' 2
+
+# Gitea: off by default, so every other render leaves it out.
+# obj <render> <kind> <name>: that object's document; objn: how many of its lines match.
+obj() {
+  awk -v k="$2" -v n="$3" '
+    function flush() { if (kind == k && name == n) printf "%s", doc; doc = ""; kind = ""; name = "" }
+    /^---/ { flush(); next }
+    { doc = doc $0 "\n" }
+    /^kind: / { kind = $2 }
+    /^  name: / && name == "" { name = $2 }
+    END { flush() }' "$out/$1.yaml"
+}
+objn() { obj "$1" "$2" "$3" | grep -cE -- "$4" || true; }
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key; do
+  check "$f.yaml" "$f: no Gitea" '^  name: (gitea|gitea-http|gitea-ssh|gitea-shared-storage|infrared-gitea-admin)$' 0
+done
+check defaults.env "no Gitea address or admin Secret handed on by default" '^INFRARED_GITEA_' 0
+# A fresh install with Gitea: one pod of Gitea 1.27.3 on one volume, its admin
+# Secret generated once and kept, its address and that Secret handed on.
+gitea_url=http://gitea-http.infrared.svc.cluster.local:3000
+has gitea.env "the operator and the API reach Gitea at its Service" "INFRARED_GITEA_URL=\"$gitea_url\"" 2
+has gitea.env "the API reads Gitea's admin from infrared-gitea-admin" 'INFRARED_GITEA_ADMIN_SECRET="infrared-gitea-admin"'
+check gitea.yaml "five Deployments: Infrared's four and Gitea" '^kind: Deployment$' 5
+check gitea.yaml "Gitea 1.27.3, rootless, by digest, in each of its four containers" \
+  'image: "docker\.gitea\.com/gitea:1\.27\.3-rootless@sha256:[0-9a-f]{64}"$' 4
+if [[ "$(objn gitea Deployment gitea '^  replicas: 1$|^    type: Recreate$')" == 2 ]]; then
+  ok "one Gitea pod, replaced with Recreate: its volume is ReadWriteOnce"
+else bad "Gitea is not one pod with strategy Recreate"; fi
+if [[ "$(objn gitea Deployment gitea '^ +name: infrared-gitea-admin$')" == 2 ]]; then
+  ok "Gitea's admin username and password come from infrared-gitea-admin"
+else bad "Gitea does not read its admin from infrared-gitea-admin"; fi
+if [[ "$(secret gitea infrared-gitea-admin username) $(secret gitea infrared-gitea-admin email)" == "gitea_admin gitea_admin@gitea.local" &&
+      "$(secret gitea infrared-gitea-admin password)" =~ ^[A-Za-z0-9]{32}$ &&
+      "$(objn gitea Secret infrared-gitea-admin '^    helm\.sh/resource-policy: keep$')" == 1 ]]; then
+  ok "infrared-gitea-admin: the admin's username and email, 32 random characters, kept"
+else bad "infrared-gitea-admin is not the admin's username, email and a generated password, kept"; fi
+svc="$(obj gitea Service gitea-http)"
+if grep -qx '  type: ClusterIP' <<<"$svc" && grep -qx '    port: 3000' <<<"$svc" && ! grep -q 'clusterIP: None' <<<"$svc"; then
+  ok "Service gitea-http: ClusterIP, not headless, port 3000"
+else bad "Service gitea-http is not a ClusterIP Service on port 3000"; fi
+pvc="$(obj gitea PersistentVolumeClaim gitea-shared-storage)"
+if grep -qx '  storageClassName: "linode-block-storage-retain"' <<<"$pvc" && grep -qx '      storage: 10Gi' <<<"$pvc" &&
+   grep -qx '    - ReadWriteOnce' <<<"$pvc" && grep -qx '    helm.sh/resource-policy: keep' <<<"$pvc" &&
+   grep -qx '    argocd.argoproj.io/sync-options: Prune=false,Delete=false' <<<"$pvc"; then
+  ok "Gitea's claim: 10Gi of the class from values, ReadWriteOnce, kept by helm and never pruned or deleted by Argo CD"
+else bad "Gitea's claim is not 10Gi of linode-block-storage-retain, kept and never pruned"; fi
+cfg="$(obj gitea Secret gitea-inline-config)"
+missing=""
+for want in DB_TYPE=sqlite3 ADAPTER=memory TYPE=level DISABLE_REGISTRATION=true REQUIRE_SIGNIN_VIEW=true \
+    ENABLE_BASIC_AUTHENTICATION=true DISABLE_SSH=true START_SSH_SERVER=false OFFLINE_MODE=true "ROOT_URL=$gitea_url/"; do
+  # A section with one key renders on its own line: `database: DB_TYPE=sqlite3`.
+  grep -qxE " +([^ :]+: )?$want" <<<"$cfg" || missing="$missing $want"
+done
+if [[ -z "$missing" ]] && ! grep -q DISABLE_REGULAR_ORG_CREATION <<<"$cfg"; then
+  ok "Gitea: SQLite, memory cache, LevelDB queue, sign-in, no registration, basic auth, no SSH, ROOT_URL is INFRARED_GITEA_URL/"
+else bad "Gitea's settings lack:$missing (or refuse users new organizations, which the API's bot needs)"; fi
+check gitea.yaml "Gitea has no Ingress" '^kind: Ingress$' 0
+check gitea.yaml "no database, cache or test pod of the gitea chart's own" '^# Source: infrared/charts/gitea/charts/|helm\.sh/hook' 0
+# What Argo CD renders once it adopts the release: no admin Secret, which Gitea
+# still reads; the address and the Secret's name still handed on; and every
+# object of Gitea's as the install rendered it, so adoption changes nothing.
+check gitea-adopted.yaml "after adoption infrared-gitea-admin is not rendered" '^  name: infrared-gitea-admin$' 0
+check gitea-adopted.yaml "...and Gitea still reads it" '^ +name: infrared-gitea-admin$' 2
+has gitea-adopted.env "after adoption the operator and the API still reach Gitea" "INFRARED_GITEA_URL=\"$gitea_url\"" 2
+has gitea-adopted.env "after adoption the API still reads Gitea's admin Secret" 'INFRARED_GITEA_ADMIN_SECRET="infrared-gitea-admin"'
+check gitea-adopted.yaml "after adoption the only Secrets are Gitea's scripts and settings" '^kind: Secret$' 3
+gitea_objs() { awk '/^---/ {p = 0} /^# Source: infrared\/charts\/gitea\// {p = 1} p' "$out/$1.yaml"; }
+if [[ -n "$(gitea_objs gitea)" ]] && diff <(gitea_objs gitea) <(gitea_objs gitea-adopted) >"$out/gitea-adoption.diff"; then
+  ok "after adoption every object of Gitea's renders as the install's: adoption changes nothing of it"
+else cat "$out/gitea-adoption.diff"; bad "Argo CD's render of Gitea differs from the install's"; fi
 check other.yaml "other release names its UI Service <release>-infrared" '^  name: other-infrared$'
 check other.yaml "other release proxies to its own api" 'value: "http://other-infrared-api:8080"'
 
@@ -261,6 +345,12 @@ refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
 refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
 refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
+refuse "gitea.enabled as a string fails" "at '/gitea/enabled'" --set-string gitea.enabled=true
+refuse "Gitea's admin Secret under another name fails" "at '/giteaAdmin/existingSecret'" --set giteaAdmin.existingSecret=other
+refuse "Gitea reading its admin from another Secret fails" "at '/gitea/gitea/admin/existingSecret'" \
+  --set gitea.enabled=true,gitea.gitea.admin.existingSecret=other
+refuse "Gitea under another name than gitea-http fails" "at '/gitea/fullnameOverride'" --set gitea.fullnameOverride=forge
+refuse "a volume size that is not a quantity fails" "at '/gitea/persistence/size'" --set gitea.persistence.size=10
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
@@ -269,7 +359,7 @@ if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
 else bad "operator ClusterRole has no generated rules (run hack/sync-operator.sh)"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

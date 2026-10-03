@@ -133,6 +133,17 @@ platformTokens:
   # renders none. The name is fixed: the template reads it.
   existingSecret: ""
 
+# Gitea's site admin, in the Secret `infrared-gitea-admin` (keys username,
+# password and email), when gitea.enabled. The chart generates it once, with a
+# random password, and keeps it: on upgrades, on uninstall, and once Argo CD
+# adopts the release. Gitea reads the username and password from it and resets
+# the admin's password to it at every start; the API reads it
+# (INFRARED_GITEA_ADMIN_SECRET) to make an org's bot user. Never printed.
+giteaAdmin:
+  # -- `infrared-gitea-admin` when that Secret already exists; the chart then
+  # renders none, as under Argo CD (the gitops template sets it). The name is fixed.
+  existingSecret: ""
+
 # Pod-level defaults shared by every component; each component may override.
 podSecurityContext:
   runAsNonRoot: true
@@ -316,3 +327,121 @@ mcp:
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+
+# Gitea, the forge an install may run for its orgs' repos: the chart's `gitea`
+# dependency (gitea chart 12.7.0, Gitea 1.27.3), off by default. Every key below
+# but `enabled` is the gitea chart's own (https://gitea.com/gitea/helm-gitea),
+# preset for one pod: SQLite on one volume, an in-memory cache, a LevelDB queue,
+# no ingress and no SSH, sign-in required and no self-registration. The operator
+# and the API reach it at http://gitea-http.<release namespace>.svc.cluster.local:3000
+# (INFRARED_GITEA_URL), and its site admin is the Secret giteaAdmin describes.
+gitea:
+  # -- Run Gitea in the release namespace, and hand its address to the operator
+  # and the API (INFRARED_GITEA_URL) and its admin Secret to the API
+  # (INFRARED_GITEA_ADMIN_SECRET).
+  enabled: false
+  # -- Fixed: the Deployment is `gitea` and its Service `gitea-http`.
+  fullnameOverride: gitea
+  replicaCount: 1
+  # One pod on a ReadWriteOnce volume: the old pod lets go of it before the new
+  # one starts.
+  strategy:
+    type: Recreate
+  image:
+    registry: docker.gitea.com
+    repository: gitea
+    # -- Gitea's version; the chart appends `-rootless`.
+    tag: "1.27.3"
+    rootless: true
+    # -- The image index of docker.gitea.com/gitea:1.27.3-rootless (linux/amd64,
+    # arm64 and riscv64), read with crane on 2026-10-02.
+    digest: sha256:1c17ecaead42eb3b5391553d8708103a4beb0e86edf5b9ebc1eb269c318845f2
+    pullPolicy: IfNotPresent
+  service:
+    http:
+      # A ClusterIP Service, where the gitea chart's default is headless, so
+      # Gitea's address does not change when its pod is replaced.
+      clusterIP: ""
+      port: 3000
+  ingress:
+    enabled: false
+  persistence:
+    enabled: true
+    # -- StorageClass of Gitea's volume, which holds its database and every
+    # repository; empty uses the cluster's default. On Linode,
+    # `linode-block-storage-retain` keeps the volume when its claim goes.
+    storageClass: ""
+    # -- Size of Gitea's volume. Argo CD renders the default once it adopts the
+    # release, so a larger size goes in the gitops repo's values file as well.
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+    # Kept on uninstall, and never pruned or deleted by Argo CD.
+    annotations:
+      helm.sh/resource-policy: keep
+      argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  gitea:
+    admin:
+      # -- Fixed: the Secret giteaAdmin describes. Gitea reads the admin's
+      # username and password from it.
+      existingSecret: infrared-gitea-admin
+      # -- The admin's username, written to the Secret when the chart generates
+      # it. An underscore keeps it apart from every organization and bot name.
+      username: gitea_admin
+      # Unused while existingSecret is set; the gitea chart's own default is a
+      # well-known password.
+      password: ""
+      # -- The email Gitea creates the admin with, also written to the Secret.
+      email: gitea_admin@gitea.local
+      # The admin's password is reset to the Secret's at every start.
+      passwordMode: keepUpdated
+    config:
+      server:
+        # -- Gitea's own URL: its Service in the release namespace, as
+        # INFRARED_GITEA_URL has it, with a trailing slash. Change it with the
+        # namespace.
+        ROOT_URL: http://gitea-http.infrared.svc.cluster.local:3000/
+        DOMAIN: gitea-http.infrared.svc.cluster.local
+        # Set here, not left to the gitea chart's defaults, which fill it in
+        # only after its Service has rendered with an empty targetPort.
+        HTTP_PORT: 3000
+        DISABLE_SSH: true
+        START_SSH_SERVER: false
+        OFFLINE_MODE: true
+      database:
+        DB_TYPE: sqlite3
+      cache:
+        ADAPTER: memory
+      queue:
+        TYPE: level
+      service:
+        DISABLE_REGISTRATION: true
+        REQUIRE_SIGNIN_VIEW: true
+        # The API mints the bot's tokens over basic auth.
+        ENABLE_BASIC_AUTHENTICATION: true
+      cron.update_checker:
+        ENABLED: false
+  # The gitea chart's databases, caches and test pod: none, with SQLite.
+  postgresql:
+    enabled: false
+  postgresql-ha:
+    enabled: false
+  valkey-cluster:
+    enabled: false
+  valkey:
+    enabled: false
+  test:
+    enabled: false

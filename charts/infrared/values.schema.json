@@ -757,6 +757,81 @@
           "type": "string"
         }
       }
+    },
+    "giteaAdmin": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Secret infrared-gitea-admin, Gitea's site admin, rendered once when gitea.enabled.",
+      "properties": {
+        "existingSecret": {
+          "type": "string",
+          "enum": [
+            "",
+            "infrared-gitea-admin"
+          ],
+          "description": "infrared-gitea-admin when it already exists; the chart then renders none."
+        }
+      }
+    },
+    "gitea": {
+      "type": "object",
+      "description": "Gitea: the gitea chart's own values, preset for one pod. gitea.enabled turns it on.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Run Gitea, and hand its address (INFRARED_GITEA_URL) and admin Secret (INFRARED_GITEA_ADMIN_SECRET) on."
+        },
+        "fullnameOverride": {
+          "const": "gitea",
+          "description": "Fixed: the Service the operator and the API reach is gitea-http."
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "http": {
+              "type": "object",
+              "properties": {
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              }
+            }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "storageClass": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "StorageClass of Gitea's volume; empty uses the cluster's default."
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(Mi|Gi|Ti)$",
+              "description": "Size of Gitea's volume, e.g. 10Gi."
+            }
+          }
+        },
+        "gitea": {
+          "type": "object",
+          "properties": {
+            "admin": {
+              "type": "object",
+              "properties": {
+                "existingSecret": {
+                  "const": "infrared-gitea-admin",
+                  "description": "Fixed: Gitea reads its admin from the Secret giteaAdmin describes."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "required": [

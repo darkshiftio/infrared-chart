@@ -45,6 +45,14 @@ spec:
             - name: INFRARED_METRICS_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- if .Values.gitea.enabled }}
+            # The Gitea this chart runs, and the Secret with its site admin,
+            # which the setup wizard's forge step makes an org's bot user with.
+            - name: INFRARED_GITEA_URL
+              value: {{ include "infrared.giteaURL" . | quote }}
+            - name: INFRARED_GITEA_ADMIN_SECRET
+              value: "infrared-gitea-admin"
+            {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

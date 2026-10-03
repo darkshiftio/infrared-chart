@@ -81,6 +81,12 @@ spec:
             - name: INFRARED_DISABLED_COMPONENTS
               value: {{ toJson . | quote }}
             {{- end }}
+            {{- if .Values.gitea.enabled }}
+            # The Gitea this chart runs: the operator gives an org's GitProvider
+            # its bot's token only when spec.gitea.url is this one.
+            - name: INFRARED_GITEA_URL
+              value: {{ include "infrared.giteaURL" . | quote }}
+            {{- end }}
             - name: INFRARED_RUNNER_IMAGE
               value: {{ include "infrared.image" (dict "root" . "image" .Values.runner.image) | quote }}
             - name: INFRARED_GO_TOOLCHAIN_IMAGE

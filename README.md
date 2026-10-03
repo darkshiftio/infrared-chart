@@ -112,6 +112,7 @@ api:
 | `<fullname>-mcp-token` | `token` | 48 random characters | `mcp.token` | `mcp.existingSecret` |
 | `infrared-api-tokens` | `mcp` | hex sha256 of the MCP token | (derived) | `mcp.existingSecret` |
 | `<fullname>-mcp-access` | `token` | 48 random characters | `mcp.access.token` | `mcp.access.existingSecret` |
+| `infrared-gitea-admin`, only with `gitea.enabled` | `username`, `password`, `email` | `gitea.gitea.admin.username` and `.email`, and 32 random characters | (none) | `giteaAdmin.existingSecret` |
 
 The names `infrared-setup`, `infrared-session` and `infrared-api-tokens` are
 fixed: the API reads them by name from the release namespace. On `helm install`
@@ -128,6 +129,7 @@ on every sync. Once Argo CD adopts the release, the gitops values must carry:
 setup:   { existingSecret: infrared-setup }
 session: { existingSecret: infrared-session }
 mcp:     { existingSecret: infrared-mcp-token, access: { existingSecret: infrared-mcp-access } }
+giteaAdmin: { existingSecret: infrared-gitea-admin }   # with gitea.enabled
 ```
 
 The gitops template's `infrared` Application (sync wave 40) already sets these
@@ -203,6 +205,57 @@ The bucket's key is two tokens, `platformTokens.backupAccessKeyId` and
 from values"). The operator refuses to start on a malformed value and says
 why. After Argo CD adopts the release, the gitops repo's `infrared` Application
 has to carry the three settings, or the operator stops receiving them.
+
+## Gitea
+
+`gitea.enabled: true` runs Gitea in the release namespace as the forge for the
+install's orgs: the chart's one dependency, the gitea chart 12.7.0 with Gitea
+1.27.3 (`docker.gitea.com/gitea:1.27.3-rootless`, by digest). It is off by
+default, and then the chart renders exactly what it rendered before. Everything
+under `gitea:` but `enabled` is the gitea chart's own values, preset for one pod:
+
+| What | Preset |
+|---|---|
+| Names | Deployment `gitea`, Service `gitea-http` (ClusterIP, port 3000), claim `gitea-shared-storage` |
+| Pod | One, replaced with `Recreate`; non-root, no privilege escalation, every capability dropped |
+| Data | SQLite, the repositories and the LevelDB queue on one ReadWriteOnce volume of `gitea.persistence.storageClass` (the cluster's default when empty) and `gitea.persistence.size` (10Gi); an in-memory cache and sessions |
+| Access | No Ingress and no SSH; sign-in required to see anything, no self-registration, basic auth on (the API mints tokens with it); `ROOT_URL` `http://gitea-http.infrared.svc.cluster.local:3000/` |
+| Off | The gitea chart's PostgreSQL, PostgreSQL HA, Valkey, Valkey cluster and test pod |
+
+With it on, the operator and the API get `INFRARED_GITEA_URL`,
+`http://gitea-http.<release namespace>.svc.cluster.local:3000`, and the API
+`INFRARED_GITEA_ADMIN_SECRET: infrared-gitea-admin`. Gitea's site admin is that
+Secret (see "Generated Secrets"): the chart generates it once, Gitea creates the
+admin from it and resets the admin's password to it at every start, and the API
+reads it at the setup wizard's forge step to make an org's bot user. Installed in
+a namespace other than `infrared`, set `gitea.gitea.config.server.ROOT_URL` and
+`.DOMAIN` to match.
+
+```yaml
+gitea:
+  enabled: true
+  persistence:
+    storageClass: linode-block-storage-retain   # on Linode: the volume outlives its claim
+    size: 10Gi
+```
+
+**The volume.** The claim carries `helm.sh/resource-policy: keep` and
+`argocd.argoproj.io/sync-options: Prune=false,Delete=false`: neither uninstalling,
+turning Gitea off nor deleting the Application deletes it, and with a Retain class
+the volume outlives even the claim. Deleting it is a person's decision.
+
+**After Argo CD adopts the release** the gitops template's `infrared`
+Application carries `gitea.enabled`, `giteaAdmin.existingSecret` and, on Linode,
+the volume's class, so Argo CD renders every object of Gitea's exactly as the
+install did (`make verify` compares them) and never a new admin password. It does
+not carry the size: a size other than 10Gi goes in the gitops repo's
+`registry/clusters/<cluster>/values/infrared.yaml` as well, or Argo CD would try
+to shrink the claim, which Kubernetes refuses.
+
+The gitea chart is not committed: `make deps` (`hack/deps.sh`) vendors it into
+`charts/infrared/charts/` with `helm dependency build`, at the version in
+`Chart.lock`, and checks the archive's sha256. `make verify`, `lint`,
+`template` and `package` run it, and so does the publish workflow.
 
 ## Extensions
 
@@ -280,6 +333,10 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
 | `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
 | `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`. Pass them with `--set-file` |
+| `gitea.enabled` | `false` | Run Gitea, the chart's gitea dependency, and hand its address to the operator and the API (`INFRARED_GITEA_URL`) and its admin Secret to the API (`INFRARED_GITEA_ADMIN_SECRET`). See "Gitea" |
+| `gitea.persistence.storageClass` / `.size` | `""` / `10Gi` | StorageClass and size of Gitea's volume; empty uses the cluster's default class |
+| `gitea.*` | one pod, SQLite, no Ingress or SSH | The gitea chart's own values, preset as "Gitea" describes. `gitea.fullnameOverride` (`gitea`) and `gitea.gitea.admin.existingSecret` (`infrared-gitea-admin`) are fixed |
+| `giteaAdmin.existingSecret` | `""` | `infrared-gitea-admin` when it already exists, as under Argo CD; the chart then renders none |
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |
@@ -333,8 +390,11 @@ change it came from.
 ## Development
 
 ```bash
-make verify     # shell checks, helm lint, helm template (9 value sets), assertions, kubeconform
+make deps       # vendor the gitea chart at Chart.lock's version, its sha256 checked
+make verify     # make deps, shell checks, helm lint, helm template (13 value sets), assertions, kubeconform
 make template   # render with defaults
+scripts/compare-render.sh origin/main                  # this tree's renders against another ref's, CRDs aside
+scripts/compare-render.sh origin/main --include-crds   # ...and the CRDs
 ```
 
 CI (`.github/workflows/ci.yml`) runs `make verify` on every PR and on `main`.

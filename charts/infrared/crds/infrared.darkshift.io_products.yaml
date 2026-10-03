@@ -119,6 +119,12 @@ spec:
                                   empty is the domain itself.
                                 pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)?$
                                 type: string
+                              redirect:
+                                description: |-
+                                  Redirect sends visitors to the zone's first address that doesn't
+                                  redirect (a permanent redirect that keeps the path), e.g. www to the
+                                  bare domain.
+                                type: boolean
                             required:
                             - domain
                             type: object

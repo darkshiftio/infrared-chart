@@ -373,6 +373,18 @@ route_rule="$(obj defaults ClusterRole infrared-api | awk '/^  - apiGroups: \["g
 if [[ "$route_rule" == *'resources: ["httproutes"]'* && "$route_rule" == *'verbs: ["get"]'* && "$(grep -c . <<<"$route_rule")" == 3 ]]; then
   ok "the API may get HTTPRoutes"
 else bad "the API's ClusterRole has no rule to get HTTPRoutes"; fi
+# The platform by layer (workspace TODO item 91): the API reads Argo CD's
+# controller, the stores' Postgres and the bucket copy's CronJob. get and list,
+# nothing more.
+api_rules="$(obj defaults ClusterRole infrared-api)"
+for rule in 'apps statefulsets' 'batch cronjobs' 'postgresql.cnpg.io clusters'; do
+  read -r group resource <<<"$rule"
+  # The rule's three lines: its group, its one resource, get and list.
+  if grep -A2 -xF "  - apiGroups: [\"$group\"]" <<<"$api_rules" | grep -A1 -xF "    resources: [\"$resource\"]" |
+       grep -qxF '    verbs: ["get", "list"]'; then
+    ok "the API may get and list $resource ($group), for the platform by layer"
+  else bad "the API's ClusterRole has no rule to get and list $resource ($group)"; fi
+done
 
 step "kubeconform"
 for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted; do

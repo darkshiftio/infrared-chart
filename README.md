@@ -7,18 +7,18 @@ app-of-apps, and from that point Argo CD manages Infrared itself.
 
 | Component | Image | Port | Role |
 |---|---|---|---|
-| operator | `ghcr.io/darkshiftio/infrared-operator` | 8081 (`/healthz`, `/readyz`) | Reconciles `infrared.darkshift.io` resources (Organization, Cluster, GitopsRepo, AgentRole, AgentWorkflow, AgentWorkflowRun, ...) |
-| api | `ghcr.io/darkshiftio/infrared-api` | 8080 | REST API over those resources |
-| ui | `ghcr.io/darkshiftio/infrared-ui` | 8080 | Web UI; proxies `/api` and MCP to the services below. Its Service is the primary one, named `infrared` |
-| mcp | `ghcr.io/darkshiftio/infrared-mcp` | 8080 | MCP server for agents, authenticated to the API with its own token |
+| operator | `<image.registry>/infrared-operator` | 8081 (`/healthz`, `/readyz`) | Reconciles `infrared.darkshift.io` resources (Organization, Cluster, GitopsRepo, AgentRole, AgentWorkflow, AgentWorkflowRun, ...) |
+| api | `<image.registry>/infrared-api` | 8080 | REST API over those resources |
+| ui | `<image.registry>/infrared-ui` | 8080 | Web UI; proxies `/api` and MCP to the services below. Its Service is the primary one, named `infrared` |
+| mcp | `<image.registry>/infrared-mcp` | 8080 | MCP server for agents, authenticated to the API with its own token |
 
-The chart is published as an OCI artifact: `oci://ghcr.io/darkshiftio/charts/infrared`.
+Images come from `image.registry` (today darkshift's ECR registry; ask your darkshift contact for pull access), tagged `v0.1.0-alpha.<n>` and pinned by digest. The chart is published as an OCI artifact: `oci://ghcr.io/darkshiftio/charts/infrared`, versioned `0.1.0-alpha.<n>` until 0.1.0 is released.
 
 ## Install
 
 ```bash
 helm install infrared oci://ghcr.io/darkshiftio/charts/infrared \
-  --version 0.1.0 --namespace infrared --create-namespace \
+  --version 0.1.0-alpha.103 --namespace infrared --create-namespace \
   --set managementCluster.name=infrared-mgmt
 
 # The one-time setup token
@@ -34,7 +34,7 @@ which is exactly `infrared` for that release name, and the gitops template's
 `infrared` Application uses release name `infrared` so that adoption lines up.
 
 Private images: create a `kubernetes.io/dockerconfigjson` Secret in the
-namespace and pass `--set 'imagePullSecrets[0].name=ghcr-pull'`. The first name
+namespace and pass `--set 'imagePullSecrets[0].name=infrared-pull'`. The first name
 is also handed to the operator (`INFRARED_IMAGE_PULL_SECRET`) for the clusters
 it bootstraps.
 
@@ -163,7 +163,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `nameOverride` | `""` | Overrides the chart name in resource names |
 | `fullnameOverride` | `""` | Overrides the resource name prefix (`infrared` for a release named infrared) |
 | `managementCluster.name` | `infrared-mgmt` | Management cluster name (`INFRARED_CLUSTER_NAME`) |
-| `externalURL` | `""` | Public URL, if exposed (`INFRARED_EXTERNAL_URL`, api) |
+| `externalURL` | `""` | The API's public base URL, ending in `/api` (for example `https://infrared.example.com/api`), if exposed (`INFRARED_EXTERNAL_URL`, api). Usually unnecessary: Infrared works it out from the request |
 | `gitops.templateVersion` | `v0.1.9` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). |

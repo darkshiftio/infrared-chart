@@ -11,7 +11,8 @@ managementCluster:
   # -- Name of the management cluster this installation runs on (INFRARED_CLUSTER_NAME).
   name: infrared-mgmt
 
-# -- Public URL of the UI/API, if it is exposed (INFRARED_EXTERNAL_URL). Optional.
+# -- The API's public base URL, ending in /api (e.g. https://infrared.example.com/api), if exposed
+# (INFRARED_EXTERNAL_URL). Optional: Infrared works it out from each request.
 externalURL: ""
 
 gitops:

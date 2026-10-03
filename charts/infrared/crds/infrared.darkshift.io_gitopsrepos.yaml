@@ -249,6 +249,13 @@ spec:
                 - Bootstrapped
                 - Synced
                 type: string
+              restorePoint:
+                description: |-
+                  RestorePoint is the restore point the hydration commit renders, the
+                  stamp of the copy a restore in progress came from; empty when it
+                  renders no restore. A restore that finishes hydrates the repo again,
+                  so the restore's pieces leave the cluster.
+                type: string
               url:
                 description: URL of the repo on the provider.
                 type: string

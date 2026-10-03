@@ -318,8 +318,9 @@ done
 lines() { local o="$1" l; shift; for l in "$@"; do grep -qxF -- "$l" <<<"$o" || { echo "  missing: $l"; return 1; }; done; }
 oc="$(obj copies CronJob infrared-objects-copy)"
 gd="$(obj copies CronJob infrared-gitea-dump)"
-op_image="$(obj copies Deployment infrared-operator | awk '/^ +image: / {print $2; exit}')"
-gitea_image="$(obj copies Deployment gitea | awk '/^ +image: / {print $2; exit}')"
+# Each reader takes its whole input: one that stops early fails the pipe (SIGPIPE).
+op_image="$(obj copies Deployment infrared-operator | awk '/^ +image: / && !n {print $2; n = 1}')"
+gitea_image="$(obj copies Deployment gitea | awk '/^ +image: / && !n {print $2; n = 1}')"
 if lines "$oc" '  schedule: "35 * * * *"' '  timeZone: Etc/UTC' '  concurrencyPolicy: Forbid' '      activeDeadlineSeconds: 900' \
     '          serviceAccountName: infrared-objects-copy' "              image: $op_image" '                - copy-objects' \
     '                - --bucket=infrared-objects' '                - --endpoint=http://seaweedfs-s3.stores.svc:8333' \

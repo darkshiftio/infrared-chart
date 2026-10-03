@@ -314,6 +314,39 @@ spec:
                       - Cancelled
                       - Skipped
                       type: string
+                    published:
+                      description: |-
+                        Published are the images and charts the step pushed to the install's
+                        registry, or tried to, as its runner reported them: a step whose
+                        AgentRole may publish. A Release takes an image from here with
+                        spec.image.fromStep.
+                      items:
+                        description: |-
+                          PublishedArtifact is one image or chart a step pushed to the install's
+                          registry, or tried to.
+                        properties:
+                          kind:
+                            description: Kind is image or chart.
+                            type: string
+                          ref:
+                            description: |-
+                              Ref is what was pushed, by digest: <registry>/<repository>@sha256:<hex>,
+                              e.g. 10.43.0.50:5000/acme/site/web@sha256:... Empty when the push was refused.
+                            type: string
+                          refused:
+                            description: Refused says why the registry refused the
+                              push; empty when it took it.
+                            type: string
+                          tag:
+                            description: Tag is the tag an image was pushed with.
+                            type: string
+                          version:
+                            description: Version is a chart's version.
+                            type: string
+                        required:
+                        - kind
+                        type: object
+                      type: array
                     questions:
                       description: |-
                         Questions are what the agent needs a person to answer before the step

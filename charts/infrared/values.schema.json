@@ -809,6 +809,16 @@
         }
       }
     },
+    "substrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "testActors": {
+          "type": "boolean",
+          "description": "Agent Substrate's test actors, counter-v1 and sandbox-v1. False, with stores.enabled and registry.address, names substrate-test-actors among the components left out (INFRARED_DISABLED_COMPONENTS)."
+        }
+      }
+    },
     "runner": {
       "type": "object",
       "additionalProperties": false,

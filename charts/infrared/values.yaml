@@ -138,6 +138,15 @@ components:
   # out none.
   disabled: []
 
+substrate:
+  # -- Agent Substrate's test actors, counter-v1 and sandbox-v1, which the gitops
+  # template's counter test and fence check run against. sandbox-v1 runs any
+  # command it is sent, so they are off by default: with the stores and a
+  # registry, where the template can run Substrate, the chart names
+  # `substrate-test-actors` among the components the install leaves out
+  # (INFRARED_DISABLED_COMPONENTS) unless this is true.
+  testActors: false
+
 image:
   # -- Registry prefix shared by every component image. Any registry other than
   # this default is handed to the operator with every component's tag and digest

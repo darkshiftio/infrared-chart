@@ -82,10 +82,11 @@ spec:
             - name: INFRARED_BACKUP
               value: {{ . | quote }}
             {{- end }}
-            {{- with .Values.components.disabled }}
-            # The gitops template's components the install leaves out.
+            {{- with include "infrared.disabledComponents" . }}
+            # The gitops template's components the install leaves out, Substrate's
+            # test actors among them unless substrate.testActors is true.
             - name: INFRARED_DISABLED_COMPONENTS
-              value: {{ toJson . | quote }}
+              value: {{ . | quote }}
             {{- end }}
             {{- with include "infrared.copies" . }}
             # The platform's copies: their schedules and retentions, and the

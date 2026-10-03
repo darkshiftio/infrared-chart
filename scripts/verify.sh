@@ -91,7 +91,15 @@ helm template infrared "$chart" -n infrared "${install[@]}" "${copies[@]}" >"$ou
 helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" "${copies[@]}" \
   --set managementCluster.name=ci-install >"$out/copies-adopted.yaml"
 helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${copies[@]}" "${restore[@]}" >"$out/restore.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore"
+# Substrate's test actors turned on: at install, and once the template's
+# Application carries substrate.testActors as well.
+helm template infrared "$chart" -n infrared "${install[@]}" --set substrate.testActors=true >"$out/test-actors.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
+  -f "$chart/ci/stores-adopted-values.yaml" --set substrate.testActors=true >"$out/test-actors-adopted.yaml"
+# The name named by hand as well: listed once.
+helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
+  --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore, test-actors, test-actors-adopted, test-actors-named"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -99,7 +107,8 @@ envs() {
   awk '/^ +- name: [A-Z0-9_]+$/ {n=$3; next} n && /^ +value: / {sub(/^ +value: /, ""); print n "=" $0} {n=""}' \
     "$out/$1.yaml" >"$out/$1.env"
 }
-for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted copies copies-adopted restore; do envs "$f"; done
+for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted copies copies-adopted restore \
+    test-actors test-actors-adopted test-actors-named; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -212,8 +221,18 @@ for f in install stores-adopted; do
   has "$f.env" "$f: the stores on" 'INFRARED_STORES="true"'
   has "$f.env" "$f: the backup bucket, as JSON" \
     'INFRARED_BACKUP="{\"bucket\":\"ci-backup\",\"endpoint\":\"https://backup.example.com\",\"region\":\"us-east-1\"}"'
-  has "$f.env" "$f: the components left out, as JSON" 'INFRARED_DISABLED_COMPONENTS="[\"infisical\"]"'
+  has "$f.env" "$f: the components left out, as JSON, Substrate's test actors among them by default" \
+    'INFRARED_DISABLED_COMPONENTS="[\"infisical\",\"substrate-test-actors\"]"'
 done
+# Substrate's test actors (sandbox-v1 runs any command it is sent) are off
+# unless substrate.testActors is true, at install and after adoption alike;
+# without the stores and a registry the template runs no Substrate, and the
+# chart hands on nothing for them.
+for f in test-actors test-actors-adopted; do
+  has "$f.env" "$f: substrate.testActors leaves only the components named" 'INFRARED_DISABLED_COMPONENTS="[\"infisical\"]"'
+done
+has test-actors-named.env "substrate-test-actors named by hand is handed on once" 'INFRARED_DISABLED_COMPONENTS="[\"substrate-test-actors\"]"'
+check ghcr-adopted.env "no stores and no registry: nothing left out for the test actors" '^INFRARED_DISABLED_COMPONENTS=' 0
 check stores-adopted.yaml "after adoption with the stores, still no Secret" '^kind: Secret$' 0
 check backup-key.yaml "the backup bucket's key alone renders infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check backup-key.yaml "...with no Cloudflare key" 'cloudflare-api-token' 0

@@ -123,6 +123,21 @@ none, and the operator refuses anything else at start.
 {{- end }}
 
 {{/*
+The gitops template's components the install leaves out, as JSON
+(INFRARED_DISABLED_COMPONENTS): components.disabled, and with the stores and a
+registry, where the template can run Agent Substrate, substrate-test-actors,
+Substrate's test actors, unless substrate.testActors is true. Empty when there
+are none, so nothing is handed on.
+*/}}
+{{- define "infrared.disabledComponents" -}}
+{{- $out := .Values.components.disabled | default list }}
+{{- if and .Values.stores.enabled .Values.registry.address (not .Values.substrate.testActors) (not (has "substrate-test-actors" $out)) }}
+{{- $out = append $out "substrate-test-actors" }}
+{{- end }}
+{{- if $out }}{{ toJson $out }}{{ end }}
+{{- end }}
+
+{{/*
 Where the operator, the API and the cluster reach the Gitea this chart runs
 (INFRARED_GITEA_URL): its Service, gitea-http, in the release namespace, without
 a trailing slash. Gitea's ROOT_URL (gitea.gitea.config.server.ROOT_URL) is the

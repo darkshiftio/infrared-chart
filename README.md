@@ -206,6 +206,25 @@ from values"). The operator refuses to start on a malformed value and says
 why. After Argo CD adopts the release, the gitops repo's `infrared` Application
 has to carry the three settings, or the operator stops receiving them.
 
+### Substrate's test actors
+
+With the stores and a registry, the gitops template can run Agent Substrate
+(when the operator's preflight says the cluster can host it). Its two test
+actors, `counter-v1` and `sandbox-v1`, exist only for the template's counter
+test and fence check, and `sandbox-v1` runs any command it is sent. So they are
+off by default: with `stores.enabled` and `registry.address`, the chart adds
+`substrate-test-actors` to the components it hands the operator
+(`INFRARED_DISABLED_COMPONENTS`), and the template leaves them out. Turn them
+on for those checks with:
+
+```yaml
+substrate:
+  testActors: true                   # the template makes counter-v1 and sandbox-v1
+```
+
+The gitops repo's `infrared` Application carries `substrate.testActors: true`
+once the template sees them on, so adoption keeps them.
+
 ## The install's own registry
 
 ```yaml
@@ -421,6 +440,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
 | `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster that copies of the stores go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
+| `substrate.testActors` | `false` | Agent Substrate's test actors, `counter-v1` and `sandbox-v1`, for the gitops template's counter test and fence check. Off, with `stores.enabled` and `registry.address`, adds `substrate-test-actors` to `INFRARED_DISABLED_COMPONENTS`. See "Substrate's test actors" |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
 | `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job |
@@ -511,6 +531,9 @@ CI (`.github/workflows/ci.yml`) runs `make verify` on every PR and on `main`.
 ## Releasing
 
 1. Bump `version` (and `appVersion` if the components moved) in `charts/infrared/Chart.yaml`.
+   A release that takes a new gitops template sets `gitops.templateVersion` to
+   that template's tag in the same change, so the template is tagged first. The
+   default always names a released tag, never a commit.
 2. Merge, then tag `v<version>` (e.g. `v0.1.0`).
 3. `.github/workflows/release.yml` verifies, checks the tag matches the chart
    version, and pushes to `oci://ghcr.io/darkshiftio/charts`.

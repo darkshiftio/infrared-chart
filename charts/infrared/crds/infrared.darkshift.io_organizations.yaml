@@ -142,6 +142,11 @@ spec:
                       have cost this much, as a decimal string. Empty means $5.
                     pattern: ^[0-9]+(\.[0-9]{1,2})?$
                     type: string
+                  timeZone:
+                    description: |-
+                      TimeZone is the IANA zone a video's greeting uses for the day and time
+                      of day the Change finished, e.g. "America/New_York" (the default).
+                    type: string
                 type: object
               teams:
                 description: |-

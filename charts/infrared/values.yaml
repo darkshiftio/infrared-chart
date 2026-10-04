@@ -110,9 +110,9 @@ summaryvideo:
     # -- Repository under image.registry: the pipeline and its reusable clips.
     repository: infrared-summaryvideo
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.125
+    tag: v0.1.0-alpha.127
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:f9dff4abbe2c58565151c93c8c6a87d07e98797e9353acd0911b10f2ef229c2e"
+    digest: "sha256:df75b80676599d3346603a91b22ebf020ac5eba52ea66bfd3855e3cecf5453e8"
   # -- Runs the pipeline's Node steps with Puppeteer and Chromium. Pinned by digest.
   browserImage: "docker.io/zenika/alpine-chrome@sha256:ee10e24217aa27443e6b58da628f3b09ea9b814459915b8b62fe15a555f9692a"
   # -- Joins the clips and scenes. Pinned by digest.

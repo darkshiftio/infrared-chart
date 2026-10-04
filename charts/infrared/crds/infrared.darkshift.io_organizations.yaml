@@ -96,6 +96,18 @@ spec:
               displayName:
                 minLength: 1
                 type: string
+              modelTiers:
+                description: |-
+                  ModelTiers overrides the Installation's tier-to-model mapping for this
+                  org. Unset fields use the Installation's.
+                properties:
+                  balanced:
+                    type: string
+                  fast:
+                    type: string
+                  frontier:
+                    type: string
+                type: object
               platform:
                 description: Platform marks the org that administers the control plane.
                 type: boolean

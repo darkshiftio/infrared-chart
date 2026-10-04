@@ -299,6 +299,13 @@ spec:
                       type: string
                     message:
                       type: string
+                    model:
+                      description: |-
+                        Model is the model the step was started with, and ModelTier its tier
+                        ("" for a model ID no tier maps to).
+                      type: string
+                    modelTier:
+                      type: string
                     name:
                       type: string
                     phase:
@@ -375,7 +382,39 @@ spec:
                       description: Usage is token and cost accounting for a step or
                         a run.
                       properties:
+                        byModel:
+                          description: |-
+                            ByModel splits the usage by the model that served it, as the Agent SDK
+                            reports it.
+                          items:
+                            description: ModelUsage is one model's share of a step's
+                              usage.
+                            properties:
+                              cacheReadTokens:
+                                format: int64
+                                type: integer
+                              cacheWriteTokens:
+                                format: int64
+                                type: integer
+                              costUSD:
+                                description: CostUSD as a decimal string.
+                                type: string
+                              inputTokens:
+                                format: int64
+                                type: integer
+                              model:
+                                type: string
+                              outputTokens:
+                                format: int64
+                                type: integer
+                            required:
+                            - model
+                            type: object
+                          type: array
                         cacheReadTokens:
+                          format: int64
+                          type: integer
+                        cacheWriteTokens:
                           format: int64
                           type: integer
                         costUSD:
@@ -410,7 +449,38 @@ spec:
               usage:
                 description: Usage is token and cost accounting for a step or a run.
                 properties:
+                  byModel:
+                    description: |-
+                      ByModel splits the usage by the model that served it, as the Agent SDK
+                      reports it.
+                    items:
+                      description: ModelUsage is one model's share of a step's usage.
+                      properties:
+                        cacheReadTokens:
+                          format: int64
+                          type: integer
+                        cacheWriteTokens:
+                          format: int64
+                          type: integer
+                        costUSD:
+                          description: CostUSD as a decimal string.
+                          type: string
+                        inputTokens:
+                          format: int64
+                          type: integer
+                        model:
+                          type: string
+                        outputTokens:
+                          format: int64
+                          type: integer
+                      required:
+                      - model
+                      type: object
+                    type: array
                   cacheReadTokens:
+                    format: int64
+                    type: integer
+                  cacheWriteTokens:
                     format: int64
                     type: integer
                   costUSD:

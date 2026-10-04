@@ -110,9 +110,9 @@ summaryvideo:
     # -- Repository under image.registry: the pipeline and its reusable clips.
     repository: infrared-summaryvideo
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.120
+    tag: v0.1.0-alpha.121
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:06896e72a002316680d416812b5f37944f76f78f565ff4f00398d32ccb2eaf4a"
+    digest: "sha256:bb66d783d5988a8d2fa01451a2129f33b6d4461499fa2ee4422ddda6e9133106"
   # -- Runs the pipeline's Node steps with Puppeteer and Chromium. Pinned by digest.
   browserImage: "docker.io/zenika/alpine-chrome@sha256:ee10e24217aa27443e6b58da628f3b09ea9b814459915b8b62fe15a555f9692a"
   # -- Joins the clips and scenes. Pinned by digest.
@@ -131,9 +131,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.117
+    tag: v0.1.0-alpha.121
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:290ea01ea9b8b70078d9e2e8c18efa3f84c602f3b7ecddc9281f5c7369f3a599"
+    digest: "sha256:ae6af34576290ac75c801536fa74d7f36dd2bc6cf0721db5ab6317a152bbe37f"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -161,8 +161,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.119
-    digest: "sha256:238107c717521f3ddc7a6a2d370998ebbb146e2a700b818a8ed9bcdeedf7b559"
+    tag: v0.1.0-alpha.121
+    digest: "sha256:913d87d29bd0a0dd600484ff10ba6a78f637111f4b382ccc8d449a9b07979731"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -185,8 +185,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.118
-    digest: "sha256:52e57ffaf29827e1e4fbb5a3a3ff1f73e788ffa8bcdee662689f943526ec49b7"
+    tag: v0.1.0-alpha.121
+    digest: "sha256:105b7ae96d88dd9ce8eb7b1d3cafa670bbce6cc2eff522646be53b6287ba068e"
   replicas: 1
   extraArgs: []
   extraEnv: []

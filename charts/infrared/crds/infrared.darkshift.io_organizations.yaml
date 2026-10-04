@@ -126,11 +126,44 @@ spec:
                 required:
                 - enabled
                 type: object
+              slack:
+                description: |-
+                  Slack is the org's Slack workspace connection: the workspace, and the
+                  channel product announcements and summary videos go to. The bot token
+                  lives in Secret SlackBotSecret in the org's namespace.
+                properties:
+                  channelID:
+                    description: ChannelID and ChannelName are where product announcements
+                      go.
+                    type: string
+                  channelName:
+                    type: string
+                  connectedAt:
+                    format: date-time
+                    type: string
+                  connectedBy:
+                    description: ConnectedBy is who connected the workspace, and ConnectedAt
+                      when.
+                    type: string
+                  postVideos:
+                    description: |-
+                      PostVideos posts each new summary video and announcement to the channel.
+                      Omitted means on once a channel is chosen.
+                    type: boolean
+                  teamID:
+                    description: TeamID and TeamName are the connected workspace.
+                    type: string
+                  teamName:
+                    type: string
+                required:
+                - teamID
+                - teamName
+                type: object
               summaryVideos:
                 description: |-
                   SummaryVideos turns on a short summary video for each Change that
-                  finishes or stops (a presenter, a narrated scene per step). Off by
-                  default: each video spends a few cents of model credit.
+                  finishes or stops (a narrated title card, a scene per step, a sign-off
+                  card). Off by default: each video spends a few cents of model credit.
                 properties:
                   enabled:
                     description: Enabled makes a summary video for each Change that
@@ -142,6 +175,35 @@ spec:
                       have cost this much, as a decimal string. Empty means $5.
                     pattern: ^[0-9]+(\.[0-9]{1,2})?$
                     type: string
+                  owner:
+                    description: |-
+                      Owner is the product owner a product owner announcement opens with:
+                      their image is kept by the API (never at a public URL), with consent.
+                    properties:
+                      consentAt:
+                        format: date-time
+                        type: string
+                      consentBy:
+                        description: |-
+                          ConsentBy is who confirmed they are this person or have their
+                          permission to animate the image, and ConsentAt when.
+                        type: string
+                      contentType:
+                        description: 'ContentType is the image''s type: image/png
+                          or image/jpeg.'
+                        type: string
+                      name:
+                        description: Name and Title go on the announcement's lower
+                          third.
+                        type: string
+                      title:
+                        type: string
+                    required:
+                    - consentAt
+                    - consentBy
+                    - contentType
+                    - name
+                    type: object
                   timeZone:
                     description: |-
                       TimeZone is the IANA zone a video's greeting uses for the day and time

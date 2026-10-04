@@ -2,21 +2,56 @@
 The platform's tokens, in one Secret with a fixed name: the gitops template's
 External Secrets component reads `infrared-platform-tokens` in this namespace
 through the ClusterSecretStore `infrared-platform`, and copies each key to the
-namespace that uses it. Rendered when a token is set and existingSecret is not,
-with a key for each token that is set; the backup bucket's two keys go together.
+namespace that uses it. Rendered when a token is set, or with codeIndex.enabled
+the code index's record, and existingSecret is not, with a key for each token
+that is set; the backup bucket's two keys go together, and the code index's
+GitHub App's three.
+
+With codeIndex.enabled the Secret also holds the code index's five keys, which
+the template copies to the namespace code-index: its record,
+code-index-knowledge-url and code-index-knowledge-ref (to the Secret
+code-index-settings), and its GitHub App, code-index-github-app-id,
+code-index-github-app-installation-id and code-index-github-app-private-key (to
+the Secret code-index-credentials). Without an App the three are written empty,
+which the code index reads as no credential: public repositories only. So the
+template's copies always find their keys.
+
 Kept on uninstall, and when the values stop carrying the tokens (Argo CD renders
-the chart without them after adoption), like the generated Secrets.
+the chart without them after adoption, and with existingSecret once the
+template's `infrared` Application carries the code index), like the generated
+Secrets.
 */}}
 {{- $t := .Values.platformTokens }}
 {{- $cloudflare := trim (default "" $t.cloudflareApiToken) }}
 {{- $backupID := trim (default "" $t.backupAccessKeyId) }}
 {{- $backupSecret := trim (default "" $t.backupSecretAccessKey) }}
+{{- $appID := trim (default "" $t.codeIndexGithubAppId) }}
+{{- $appInstallation := trim (default "" $t.codeIndexGithubAppInstallationId) }}
+{{- $appKey := trim (default "" $t.codeIndexGithubAppPrivateKey) }}
+{{- $codeIndex := .Values.codeIndex.enabled }}
+{{- $knowledge := .Values.codeIndex.knowledge | default dict }}
+{{- $knowledgeURL := trim (default "" $knowledge.url) }}
+{{- $knowledgeRef := trim (default "" $knowledge.ref) | default "main" }}
 {{- if or $backupID $backupSecret }}
 {{- if not (and $backupID $backupSecret) }}
 {{- fail "platformTokens.backupAccessKeyId and platformTokens.backupSecretAccessKey go together: pass both with --set-file" }}
 {{- end }}
 {{- end }}
-{{- if and (or $cloudflare $backupID) (not $t.existingSecret) }}
+{{- if or $appID $appInstallation $appKey }}
+{{- if not (and $appID $appInstallation $appKey) }}
+{{- fail "platformTokens.codeIndexGithubAppId, platformTokens.codeIndexGithubAppInstallationId and platformTokens.codeIndexGithubAppPrivateKey go together, the code index's GitHub App: pass all three with --set-file" }}
+{{- end }}
+{{- if not $codeIndex }}
+{{- fail "platformTokens.codeIndexGithubAppId, platformTokens.codeIndexGithubAppInstallationId and platformTokens.codeIndexGithubAppPrivateKey are the code index's credential: they need codeIndex.enabled" }}
+{{- end }}
+{{- if not (and (regexMatch "^[0-9]+$" $appID) (regexMatch "^[0-9]+$" $appInstallation)) }}
+{{- fail "platformTokens.codeIndexGithubAppId and platformTokens.codeIndexGithubAppInstallationId are numbers: the App's ID and its installation's" }}
+{{- end }}
+{{- end }}
+{{- if and (or $cloudflare $backupID $appKey (and $codeIndex $knowledgeURL)) (not $t.existingSecret) }}
+{{- if and $codeIndex (not $knowledgeURL) }}
+{{- fail "codeIndex.enabled needs codeIndex.knowledge.url, the record the code index reads: infrared-platform-tokens carries it to the gitops template, which copies it to code-index/code-index-settings" }}
+{{- end }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -36,5 +71,12 @@ data:
   {{- end }}
   {{- with $backupSecret }}
   backup-secret-access-key: {{ . | b64enc | quote }}
+  {{- end }}
+  {{- if $codeIndex }}
+  code-index-knowledge-url: {{ $knowledgeURL | b64enc | quote }}
+  code-index-knowledge-ref: {{ $knowledgeRef | b64enc | quote }}
+  code-index-github-app-id: {{ $appID | b64enc | quote }}
+  code-index-github-app-installation-id: {{ $appInstallation | b64enc | quote }}
+  code-index-github-app-private-key: {{ $appKey | b64enc | quote }}
   {{- end }}
 {{- end }}

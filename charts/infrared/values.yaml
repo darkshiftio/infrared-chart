@@ -154,9 +154,24 @@ codeIndex:
   # its image to the operator among Infrared's own (INFRARED_IMAGES, code-index),
   # and the template runs it; that needs image.registry to name the registry its
   # image is in (ghcr.io/darkshiftio), since the template names the image by it.
-  # Its record (a ConfigMap) and its credential for private repositories (a
-  # Secret) are the install's: see "The code index".
+  # Its record (knowledge, below) and its credential for private repositories
+  # (the GitHub App in platformTokens) go into infrared-platform-tokens at the
+  # install, and the template copies them to the namespace code-index: see
+  # "The code index".
   enabled: false
+  # The code index's record: the knowledge repository it reads its manifest of
+  # repositories and its repo cards from. With codeIndex.enabled, the install
+  # writes both into infrared-platform-tokens (keys code-index-knowledge-url and
+  # code-index-knowledge-ref), which the gitops template copies to the Secret
+  # code-index/code-index-settings. Argo CD's render never writes them again, so
+  # a later change goes into that Secret, as a token's does.
+  knowledge:
+    # -- The knowledge repository's URL, https:// or http://, e.g.
+    # `https://github.com/darkshiftio/knowledge.git`. Required with
+    # codeIndex.enabled wherever the chart renders infrared-platform-tokens.
+    url: ""
+    # -- The branch, tag or commit the code index reads it at. Empty: `main`.
+    ref: ""
   image:
     # -- The image <image.registry>/infrared-codeindex, by tag and digest: a
     # one-install-<short sha> build of darkshiftio/infrared-codeindex, from its
@@ -215,10 +230,11 @@ session:
 # `infrared-platform-tokens`, in the release namespace. The gitops template's
 # External Secrets component reads it through the ClusterSecretStore
 # `infrared-platform` and copies each token to the namespace that uses it. The
-# Secret is rendered when a token is set. Pass each token with --set-file so it is
-# never in a values file; surrounding whitespace is trimmed. It is kept on
-# uninstall and when the values stop carrying the token, as under Argo CD after
-# adoption.
+# Secret is rendered when a token is set, or with codeIndex.enabled the code
+# index's record, which it then holds as well. Pass each token with --set-file
+# so it is never in a values file; surrounding whitespace is trimmed. It is kept
+# on uninstall and when the values stop carrying the token, as under Argo CD
+# after adoption.
 platformTokens:
   # -- Cloudflare API token (key `cloudflare-api-token`), for the edge's DNS
   # records and origin certificates.
@@ -229,8 +245,20 @@ platformTokens:
   # -- Secret access key of the backup bucket's key (key `backup-secret-access-key`);
   # required with the access key ID.
   backupSecretAccessKey: ""
+  # -- The code index's GitHub App, which it mints read-only installation tokens
+  # from to read private repositories: the App's ID (key
+  # `code-index-github-app-id`), a number. All three or none, and only with
+  # codeIndex.enabled; with none the code index reads public repositories only,
+  # and the three keys are written empty.
+  codeIndexGithubAppId: ""
+  # -- The ID of the App's installation (key
+  # `code-index-github-app-installation-id`), a number.
+  codeIndexGithubAppInstallationId: ""
+  # -- The App's private key, PEM (key `code-index-github-app-private-key`).
+  codeIndexGithubAppPrivateKey: ""
   # -- `infrared-platform-tokens` when that Secret already exists; the chart then
-  # renders none. The name is fixed: the template reads it.
+  # renders none. The name is fixed: the template reads it. With
+  # codeIndex.enabled, that Secret holds the code index's five keys too.
   existingSecret: ""
 
 # Gitea's site admin, in the Secret `infrared-gitea-admin` (keys username,

@@ -167,7 +167,7 @@
     "platformTokens": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Secret infrared-platform-tokens, rendered when a token is set.",
+      "description": "Secret infrared-platform-tokens, rendered when a token is set, or with codeIndex.enabled the code index's record.",
       "properties": {
         "cloudflareApiToken": {
           "type": "string",
@@ -180,6 +180,18 @@
         "backupSecretAccessKey": {
           "type": "string",
           "description": "Key backup-secret-access-key, with backupAccessKeyId. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "codeIndexGithubAppId": {
+          "type": "string",
+          "description": "Key code-index-github-app-id: the code index's GitHub App's ID, a number, with codeIndexGithubAppInstallationId and codeIndexGithubAppPrivateKey, and only with codeIndex.enabled. Pass it with --set-file or --set-string; surrounding whitespace is trimmed."
+        },
+        "codeIndexGithubAppInstallationId": {
+          "type": "string",
+          "description": "Key code-index-github-app-installation-id: the ID of that App's installation, a number, with the other two. Pass it with --set-file or --set-string; surrounding whitespace is trimmed."
+        },
+        "codeIndexGithubAppPrivateKey": {
+          "type": "string",
+          "description": "Key code-index-github-app-private-key: that App's private key, PEM, with the other two. Pass it with --set-file; surrounding whitespace is trimmed."
         },
         "existingSecret": {
           "type": "string",
@@ -826,6 +838,23 @@
         "enabled": {
           "type": "boolean",
           "description": "Infrared's code index, which the gitops template runs in the namespace code-index. On, its image is handed to the operator among Infrared's own (INFRARED_IMAGES, code-index); it needs image.registry other than the default."
+        },
+        "knowledge": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The code index's record, which the install writes into infrared-platform-tokens with codeIndex.enabled (keys code-index-knowledge-url and code-index-knowledge-ref) and the gitops template copies to code-index/code-index-settings.",
+          "properties": {
+            "url": {
+              "type": "string",
+              "pattern": "^(https?://[^\\s]+)?$",
+              "description": "The knowledge repository's URL, https:// or http://. Required with codeIndex.enabled wherever the chart renders infrared-platform-tokens."
+            },
+            "ref": {
+              "type": "string",
+              "pattern": "^([^\\s:^~?*\\[\\\\-][^\\s:^~?*\\[\\\\]*)?$",
+              "description": "The branch, tag or commit to read it at; empty means main. No leading -, and none of whitespace, : ^ ~ ? * [ or \\, which the code index refuses."
+            }
+          }
         },
         "image": {
           "type": "object",

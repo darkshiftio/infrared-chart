@@ -176,9 +176,9 @@ codeIndex:
     # -- The image <image.registry>/infrared-codeindex, by tag and digest: a
     # one-install-<short sha> build of darkshiftio/infrared-codeindex, from its
     # publish-image workflow.
-    tag: one-install-4362b7d
+    tag: one-install-34162bc
     # -- Its digest, sha256:...; empty pins by the tag alone.
-    digest: sha256:8fba2e14469262819857ee651dbdaa629521a2aab64386a91cb609179774246d
+    digest: sha256:ef9dfab51a875f50cc20cbb27e3f551b5b1367a543792a98cb857eb7873fb307
 
 image:
   # -- Registry prefix shared by every component image. Any registry other than

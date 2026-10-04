@@ -255,6 +255,88 @@ spec:
                       description: AgentRole is the AgentRole the step runs, for agentRole
                         steps.
                       type: string
+                    attemptUsage:
+                      description: |-
+                        AttemptUsage is what each attempt of the step spent, oldest first. A
+                        retry, by the step's maxAttempts or by a person, keeps the attempts
+                        before it.
+                      items:
+                        description: AttemptUsage is what one attempt of a step spent,
+                          as its runner reported it.
+                        properties:
+                          attempt:
+                            description: |-
+                              Attempt is the step's attempt number. A person's retry of the step
+                              starts the count again, so Job tells the attempts apart.
+                            format: int32
+                            type: integer
+                          job:
+                            description: |-
+                              Job is the UID of the runner Job the attempt ran as. The operator
+                              records a Job's usage once, however often it reads the Job's result.
+                              Empty for usage an operator recorded before it kept each attempt's.
+                            type: string
+                          usage:
+                            description: Usage is token and cost accounting for a
+                              step or a run.
+                            properties:
+                              byModel:
+                                description: |-
+                                  ByModel splits the usage by the model that served it, as the Agent SDK
+                                  reports it.
+                                items:
+                                  description: ModelUsage is one model's share of
+                                    a step's usage.
+                                  properties:
+                                    cacheReadTokens:
+                                      format: int64
+                                      type: integer
+                                    cacheWriteTokens:
+                                      format: int64
+                                      type: integer
+                                    costUSD:
+                                      description: CostUSD as a decimal string.
+                                      type: string
+                                    inputTokens:
+                                      format: int64
+                                      type: integer
+                                    model:
+                                      type: string
+                                    outputTokens:
+                                      format: int64
+                                      type: integer
+                                  required:
+                                  - model
+                                  type: object
+                                type: array
+                              cacheReadTokens:
+                                format: int64
+                                type: integer
+                              cacheWriteTokens:
+                                format: int64
+                                type: integer
+                              costUSD:
+                                description: CostUSD as a decimal string.
+                                type: string
+                              durationMs:
+                                description: DurationMs is how long the agent ran,
+                                  in milliseconds.
+                                format: int64
+                                type: integer
+                              inputTokens:
+                                format: int64
+                                type: integer
+                              outputTokens:
+                                format: int64
+                                type: integer
+                              turns:
+                                format: int32
+                                type: integer
+                            type: object
+                        required:
+                        - attempt
+                        type: object
+                      type: array
                     attempts:
                       format: int32
                       type: integer
@@ -379,8 +461,9 @@ spec:
                         human, auto, ci or promote.'
                       type: string
                     usage:
-                      description: Usage is token and cost accounting for a step or
-                        a run.
+                      description: |-
+                        Usage is what the step spent: the usage of every attempt in
+                        AttemptUsage, added up.
                       properties:
                         byModel:
                           description: |-
@@ -447,7 +530,8 @@ spec:
                 - name
                 x-kubernetes-list-type: map
               usage:
-                description: Usage is token and cost accounting for a step or a run.
+                description: 'Usage is what the run spent: its steps'' usage, added
+                  up.'
                 properties:
                   byModel:
                     description: |-

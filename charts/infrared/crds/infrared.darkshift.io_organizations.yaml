@@ -239,10 +239,12 @@ spec:
         x-kubernetes-validations:
         - message: org names are at most 56 characters so ir-org-<name> fits a namespace
           rule: size(self.metadata.name) <= 56
-        - message: 'platform and infrared are reserved organization names: the install''s
-            registry keeps users of those names for the platform and for Infrared
-            itself'
-          rule: '!(self.metadata.name in [''platform'', ''infrared''])'
+        - message: 'this name is one of the reserved organization names: Infrared,
+            the platform and the install''s registry use them (ReservedOrgNames)'
+          rule: '!(self.metadata.name in [''platform'', ''infrared'', ''argocd'',
+            ''builds'', ''build-credentials'', ''default'', ''system'', ''admin'',
+            ''root'', ''public'', ''public-docs'', ''cert-manager'', ''kpack'', ''monitoring'',
+            ''products'', ''new''])'
     served: true
     storage: true
     subresources:

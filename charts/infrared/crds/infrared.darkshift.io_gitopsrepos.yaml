@@ -76,6 +76,20 @@ spec:
               defaultBranch:
                 default: main
                 type: string
+              mode:
+                default: management
+                description: |-
+                  Mode is what the repo is for. `management` (the default) is the platform
+                  org's repo: the whole management cluster, hydrated from the template,
+                  with Argo CD bootstrapped from it. `org` is any other org's repo: it
+                  holds only that org's Products. Infrared commits a README, never installs
+                  Argo CD from it, and applies the Applications under
+                  registry/clusters/<cluster>/components itself, each forced into the
+                  org's own AppProject (org-<org>).
+                enum:
+                - management
+                - org
+                type: string
               name:
                 default: gitops
                 description: Name of the repo within the provider's owner.

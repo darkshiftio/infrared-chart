@@ -14,7 +14,6 @@ rules:
   resources:
   - configmaps
   - namespaces
-  - secrets
   verbs:
   - create
   - delete
@@ -39,6 +38,30 @@ rules:
   verbs:
   - get
   - list
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ""
   - events.k8s.io
@@ -70,11 +93,14 @@ rules:
   - argoproj.io
   resources:
   - applications
+  - appprojects
   verbs:
+  - create
   - delete
   - get
   - list
   - patch
+  - update
   - watch
 - apiGroups:
   - batch

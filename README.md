@@ -150,7 +150,7 @@ newline.
 | Secret (namespace = release) | Type, key | From | Read by |
 |---|---|---|---|
 | The name in `imagePullSecrets[0]` | `kubernetes.io/dockerconfigjson`, `.dockerconfigjson`: one entry for `imageCredentials.registry` (default `ghcr.io`) | `imageCredentials.username` and `imageCredentials.password`, both or neither. Neither: the Secret must already exist, as before | The kubelet for every pod; the operator for Argo CD's chart repository Secret and for runner Jobs, which it copies the Secret to |
-| `infrared-platform-tokens` | `Opaque`: `cloudflare-api-token`, `backup-access-key-id` and `backup-secret-access-key`, a key for each token set | `platformTokens.cloudflareApiToken`; `platformTokens.backupAccessKeyId` and `platformTokens.backupSecretAccessKey`, both or neither; `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it |
+| `infrared-platform-tokens` | `Opaque`: `cloudflare-api-token`, `backup-access-key-id` and `backup-secret-access-key`, a key for each token set; with `codeIndex.enabled`, also the code index's five keys (see "The code index") | `platformTokens.cloudflareApiToken`; `platformTokens.backupAccessKeyId` and `platformTokens.backupSecretAccessKey`, both or neither; the code index's record (`codeIndex.knowledge`) and GitHub App (`platformTokens.codeIndexGithubAppId`, `.codeIndexGithubAppInstallationId` and `.codeIndexGithubAppPrivateKey`, all three or none); `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it |
 
 ```bash
 helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <version> \
@@ -163,9 +163,11 @@ helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <versi
 
 with `imagePullSecrets: [{name: ghcr-pull}]` and `imageCredentials.username` in
 `values.yaml`. Write `$HOME`, not `~`: the shell does not expand a `~` after
-`=` in these arguments. Both Secrets carry `helm.sh/resource-policy: keep`. After
-Argo CD adopts the release it renders the chart without these values, so it
-renders neither Secret, and the ones from the install stay in place.
+`=` in these arguments. A token kept elsewhere, such as in SSM, goes in on a
+pipe, so it is never in a file: `--set-file key=<(command that prints it)`.
+Both Secrets carry `helm.sh/resource-policy: keep`. After Argo CD adopts the
+release it renders the chart without these values, so it renders neither
+Secret, and the ones from the install stay in place.
 
 ## The Installation's edge and previews
 
@@ -230,6 +232,9 @@ once the template sees them on, so adoption keeps them.
 ```yaml
 codeIndex:
   enabled: true                      # INFRARED_IMAGES gains code-index: the gitops template runs the code index
+  knowledge:                         # its record, which the install writes into infrared-platform-tokens
+    url: https://github.com/example-org/knowledge.git
+    ref: main                        # empty: main
   image:                             # the chart's own pin by default
     tag: one-install-<short sha>     # a build of darkshiftio/infrared-codeindex
     digest: sha256:...
@@ -246,13 +251,43 @@ the operator is handed (`ghcr.io/darkshiftio`, where the image is published),
 and a tag or a digest: the chart refuses to render without either. Off, the
 default, changes nothing.
 
-Its settings are the install's, never values: the ConfigMap `code-index` in the
-namespace `code-index` names its record (the manifest of repositories and the
-repo cards), and the Secret `code-index-credentials` there, when it exists,
-holds the credential it reads private repositories with; without one it reads
-public repositories only. As with the stores, the gitops repo's `infrared`
-Application carries `codeIndex` once the template sees it on, so adoption keeps
-it.
+Its record and its credential come from the install, through the platform's
+tokens, so a fresh install or a restore brings the code index up with both and
+no step by hand. With `codeIndex.enabled`, `infrared-platform-tokens` holds five
+keys more, which the gitops template copies into the namespace `code-index`
+through the ClusterSecretStore `infrared-platform`:
+
+| Key | From | Copied to |
+|---|---|---|
+| `code-index-knowledge-url`, `code-index-knowledge-ref` | `codeIndex.knowledge.url` and `.ref` (empty: `main`): the knowledge repository the code index reads its manifest of repositories and its repo cards from | Secret `code-index-settings`, keys `knowledge-url` and `knowledge-ref` |
+| `code-index-github-app-id`, `code-index-github-app-installation-id`, `code-index-github-app-private-key` | `platformTokens.codeIndexGithubAppId`, `.codeIndexGithubAppInstallationId` and `.codeIndexGithubAppPrivateKey`: a GitHub App whose installation may read the private repositories, from which the code index mints read-only installation tokens | Secret `code-index-credentials`, keys `github-app-id`, `github-app-installation-id` and `github-app-private-key` |
+
+The App's three go together, need `codeIndex.enabled`, and are passed with
+`--set-file` (the IDs also with `--set-string`); from SSM, on a pipe:
+
+```bash
+ssm() { aws ssm get-parameter --profile <profile> --name "$1" --with-decryption --query Parameter.Value --output text; }
+helm install ... \
+  --set-file platformTokens.codeIndexGithubAppId=<(ssm /path/to/app-id) \
+  --set-file platformTokens.codeIndexGithubAppInstallationId=<(ssm /path/to/installation-id) \
+  --set-file platformTokens.codeIndexGithubAppPrivateKey=<(ssm /path/to/private-key)
+```
+
+Without an App the three keys are written empty, and the code index reads
+public repositories only, so a private knowledge repository is out of its reach
+too. Wherever the
+chart renders the Secret with the code index on, it refuses a missing
+`codeIndex.knowledge.url`; the record alone, with no token, renders it too. With
+`platformTokens.existingSecret`, the Secret made by hand holds the five keys,
+the App's three empty for none.
+
+The chart writes the record and the App only at the install. Once Argo CD
+adopts the release, the gitops repo's `infrared` Application carries `codeIndex`
+and `platformTokens.existingSecret: infrared-platform-tokens`, so Argo CD's
+render never makes the Secret again, even with the record in the org's values
+file. A later change to the record or the App goes into the Secret, as a
+token's does: External Secrets copies it within the hour, and the code index
+reads its record again every hour and its credential at every use.
 
 ## The install's own registry
 
@@ -470,6 +505,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster that copies of the stores go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
 | `codeIndex.enabled` | `false` | Infrared's code index, which the gitops template runs in the namespace `code-index`: its image is handed to the operator among Infrared's own (`INFRARED_IMAGES`, `code-index`). Needs an `image.registry` other than the default, and a pin. See "The code index" |
+| `codeIndex.knowledge.url` / `.ref` | `""` / `""` | The code index's record: the knowledge repository's URL (`https://` or `http://`) and the branch, tag or commit to read it at (empty: `main`). With `codeIndex.enabled`, written into `infrared-platform-tokens` at the install, and required wherever the chart renders that Secret. See "The code index" |
 | `codeIndex.image.tag` / `.digest` | `one-install-4362b7d` / `sha256:8fba2e14…` | The image `<image.registry>/infrared-codeindex`: a `one-install-<short sha>` build of darkshiftio/infrared-codeindex, and its `sha256:` digest |
 | `substrate.testActors` | `false` | Agent Substrate's test actors, `counter-v1` and `sandbox-v1`, for the gitops template's counter test and fence check. Off, with `stores.enabled` and `registry.address`, adds `substrate-test-actors` to `INFRARED_DISABLED_COMPONENTS`. See "Substrate's test actors" |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
@@ -478,6 +514,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
 | `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
 | `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`. Pass them with `--set-file` |
+| `platformTokens.codeIndexGithubAppId` / `.codeIndexGithubAppInstallationId` / `.codeIndexGithubAppPrivateKey` | `""` | The code index's GitHub App, all three or none and only with `codeIndex.enabled`: its ID and its installation's (numbers) and its private key (PEM), rendered into `infrared-platform-tokens`, keys `code-index-github-app-id`, `-installation-id` and `-private-key`; empty for none. Pass them with `--set-file` |
 | `gitea.enabled` | `false` | Run Gitea, the chart's gitea dependency, and hand its address to the operator and the API (`INFRARED_GITEA_URL`) and its admin Secret to the API (`INFRARED_GITEA_ADMIN_SECRET`). See "Gitea" |
 | `gitea.persistence.storageClass` / `.size` | `""` / `10Gi` | StorageClass and size of Gitea's volume; empty uses the cluster's default class |
 | `gitea.*` | one pod, SQLite, no Ingress or SSH | The gitea chart's own values, preset as "Gitea" describes. `gitea.fullnameOverride` (`gitea`) and `gitea.gitea.admin.existingSecret` (`infrared-gitea-admin`) are fixed |

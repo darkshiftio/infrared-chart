@@ -1,0 +1,9 @@
+# CI: Infrared's code index on, at a pin, with the ghcr registry
+# (ci/ghcr-values.yaml): the chart hands its image to the operator among
+# Infrared's own (INFRARED_IMAGES, code-index), and the gitops template runs it.
+# The template's `infrared` Application carries the same values after adoption.
+codeIndex:
+  enabled: true
+  image:
+    tag: one-install-0000006
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000026

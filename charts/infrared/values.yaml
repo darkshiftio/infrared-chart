@@ -147,6 +147,24 @@ substrate:
   # (INFRARED_DISABLED_COMPONENTS) unless this is true.
   testActors: false
 
+codeIndex:
+  # -- Infrared's code index: Zoekt and the code service, which the gitops
+  # template runs in the namespace code-index, reached by infrared-api alone at
+  # http://code-index.code-index.svc:8080. Off by default. On, the chart hands
+  # its image to the operator among Infrared's own (INFRARED_IMAGES, code-index),
+  # and the template runs it; that needs image.registry to name the registry its
+  # image is in (ghcr.io/darkshiftio), since the template names the image by it.
+  # Its record (a ConfigMap) and its credential for private repositories (a
+  # Secret) are the install's: see "The code index".
+  enabled: false
+  image:
+    # -- The image <image.registry>/infrared-codeindex, by tag and digest: a
+    # one-install-<short sha> build of darkshiftio/infrared-codeindex, from its
+    # publish-image workflow.
+    tag: one-install-4362b7d
+    # -- Its digest, sha256:...; empty pins by the tag alone.
+    digest: sha256:8fba2e14469262819857ee651dbdaa629521a2aab64386a91cb609179774246d
+
 image:
   # -- Registry prefix shared by every component image. Any registry other than
   # this default is handed to the operator with every component's tag and digest

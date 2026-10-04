@@ -99,7 +99,9 @@ carries the same registry, so the operator keeps receiving it.
 {{/*
 Every component's pin as JSON (INFRARED_IMAGES): {"<component>": {"tag", "digest"}}
 for operator, api, ui, mcp and runner. The tag is the one the chart renders (the
-appVersion when empty); the digest is empty when the image is not pinned.
+appVersion when empty); the digest is empty when the image is not pinned. With
+codeIndex.enabled, the code index's too, as code-index: the gitops template runs
+it only while that pin is there.
 */}}
 {{- define "infrared.imagePins" -}}
 {{- $pins := dict }}
@@ -107,7 +109,27 @@ appVersion when empty); the digest is empty when the image is not pinned.
 {{- $img := (index $.Values $c).image }}
 {{- $_ := set $pins $c (dict "tag" (default $.Chart.AppVersion $img.tag) "digest" (default "" $img.digest)) }}
 {{- end }}
+{{- if .Values.codeIndex.enabled }}
+{{- $ci := .Values.codeIndex.image }}
+{{- $_ := set $pins "code-index" (dict "tag" (default "" $ci.tag) "digest" (default "" $ci.digest)) }}
+{{- end }}
 {{- toJson $pins }}
+{{- end }}
+
+{{/*
+What codeIndex.enabled needs, checked at every render: an image registry other
+than the default, which the operator hands to the gitops template with the
+pins (the template names the code index's image by it), and a pin.
+*/}}
+{{- define "infrared.codeIndexCheck" -}}
+{{- if .Values.codeIndex.enabled }}
+{{- if not (include "infrared.handedRegistry" .) }}
+{{- fail "codeIndex.enabled needs image.registry to name the registry the code index's image is in, such as ghcr.io/darkshiftio: the gitops template names the image by it, and the default registry is never handed on" }}
+{{- end }}
+{{- if not (or .Values.codeIndex.image.tag .Values.codeIndex.image.digest) }}
+{{- fail "codeIndex.enabled needs codeIndex.image.tag or codeIndex.image.digest: a build of darkshiftio/infrared-codeindex" }}
+{{- end }}
+{{- end }}
 {{- end }}
 
 {{/*

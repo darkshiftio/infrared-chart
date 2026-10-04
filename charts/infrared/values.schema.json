@@ -819,6 +819,32 @@
         }
       }
     },
+    "codeIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Infrared's code index, which the gitops template runs in the namespace code-index. On, its image is handed to the operator among Infrared's own (INFRARED_IMAGES, code-index); it needs image.registry other than the default."
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tag": {
+              "type": "string",
+              "pattern": "^([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$",
+              "description": "The tag of <image.registry>/infrared-codeindex, e.g. one-install-<short sha>."
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^(sha256:[0-9a-f]{64})?$",
+              "description": "Its digest, sha256:...; empty pins by the tag alone."
+            }
+          }
+        }
+      }
+    },
     "runner": {
       "type": "object",
       "additionalProperties": false,

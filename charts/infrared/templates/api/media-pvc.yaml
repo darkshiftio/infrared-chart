@@ -1,0 +1,21 @@
+{{- if .Values.summaryvideo.enabled }}
+{{- /* Summary videos the API keeps (summaryvideo.enabled). */}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "infrared.componentName" (dict "root" . "component" "media") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "c" .Values.api "component" "media") | nindent 4 }}
+  annotations:
+    # Keep the videos when the release is uninstalled.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.summaryvideo.storage.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.summaryvideo.storage.size }}
+{{- end }}

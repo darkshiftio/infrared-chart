@@ -121,6 +121,18 @@ spec:
             - name: INFRARED_GITEA_URL
               value: {{ include "infrared.giteaURL" . | quote }}
             {{- end }}
+            {{- if .Values.summaryvideo.enabled }}
+            - name: INFRARED_SUMMARY_VIDEO_IMAGE
+              value: {{ include "infrared.image" (dict "root" . "image" .Values.summaryvideo.image) | quote }}
+            - name: INFRARED_SUMMARY_VIDEO_BROWSER_IMAGE
+              value: {{ .Values.summaryvideo.browserImage | quote }}
+            - name: INFRARED_SUMMARY_VIDEO_FFMPEG_IMAGE
+              value: {{ .Values.summaryvideo.ffmpegImage | quote }}
+            - name: INFRARED_SUMMARY_VIDEO_GEMINI_SECRET
+              value: {{ .Values.summaryvideo.geminiSecret | quote }}
+            - name: INFRARED_UI_URL
+              value: {{ printf "http://%s.%s.svc:%d" (include "infrared.fullname" .) .Release.Namespace (int .Values.ui.service.port) | quote }}
+            {{- end }}
             - name: INFRARED_RUNNER_IMAGE
               value: {{ include "infrared.image" (dict "root" . "image" .Values.runner.image) | quote }}
             - name: INFRARED_GO_TOOLCHAIN_IMAGE

@@ -320,14 +320,40 @@ runner:
     # Enterprise Server: a list of CIDRs.
     extraEgressCIDRs: []
 
+summaryvideo:
+  # -- Make a short summary video of each Change that finishes or stops, in orgs
+  # that turn summary videos on (Settings): a presenter, a narrated scene per step.
+  # Off: no reconciler, no Job and no media volume. The pipeline and its clips are
+  # in github.com/darkshiftio/infrared-summary-video.
+  enabled: false
+  image:
+    # -- Repository under image.registry: the pipeline and its reusable clips.
+    repository: infrared-summaryvideo
+    # -- Tag; empty means the chart appVersion.
+    tag: v0.1.0-alpha.118
+    # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
+    digest: "sha256:14ca07d91e75c585ecd0d47254fcc5374431c3e54a0ea61331d0daa174671c25"
+  # -- Runs the pipeline's Node steps with Puppeteer and Chromium. Pinned by digest.
+  browserImage: "docker.io/zenika/alpine-chrome@sha256:ee10e24217aa27443e6b58da628f3b09ea9b814459915b8b62fe15a555f9692a"
+  # -- Joins the clips and scenes. Pinned by digest.
+  ffmpegImage: "docker.io/jrottenberg/ffmpeg@sha256:8ec1ee1f6a0fcd37c97725827b6b7832795c9596e3439b8da56d7700d61ae778"
+  # -- Secret in the release namespace with the platform Gemini key (key api-key)
+  # that voices the narration. Not created by the chart.
+  geminiSecret: gemini-api
+  storage:
+    # -- The API keeps the videos on this volume.
+    size: 5Gi
+    # -- Storage class; empty means the cluster's default.
+    storageClassName: ""
+
 operator:
   image:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.112
+    tag: v0.1.0-alpha.117
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:ecd2e6dc9fefc3056430a1586406faf75cba76236a67e801ef666e1521916505"
+    digest: "sha256:290ea01ea9b8b70078d9e2e8c18efa3f84c602f3b7ecddc9281f5c7369f3a599"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -355,8 +381,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.112
-    digest: "sha256:137fd961fec2b7daed181cbb6a49535cafb01b1e24ba9d2e4e089f8a07ae3d2f"
+    tag: v0.1.0-alpha.119
+    digest: "sha256:238107c717521f3ddc7a6a2d370998ebbb146e2a700b818a8ed9bcdeedf7b559"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -379,8 +405,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.115
-    digest: "sha256:1f1adc666d1a89f4cd437008017512fbb055eafaf025ffcf98d56f91198f1bfb"
+    tag: v0.1.0-alpha.118
+    digest: "sha256:52e57ffaf29827e1e4fbb5a3a3ff1f73e788ffa8bcdee662689f943526ec49b7"
   replicas: 1
   extraArgs: []
   extraEnv: []

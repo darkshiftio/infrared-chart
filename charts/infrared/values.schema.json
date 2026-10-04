@@ -565,6 +565,52 @@
           "type": "string"
         }
       }
+    },
+    "summaryvideo": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Summary videos of Changes.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "digest": {
+              "type": "string"
+            }
+          }
+        },
+        "browserImage": {
+          "type": "string"
+        },
+        "ffmpegImage": {
+          "type": "string"
+        },
+        "geminiSecret": {
+          "type": "string"
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClassName": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   },
   "required": [

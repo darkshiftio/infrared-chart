@@ -126,6 +126,23 @@ spec:
                 required:
                 - enabled
                 type: object
+              summaryVideos:
+                description: |-
+                  SummaryVideos turns on a short summary video for each Change that
+                  finishes or stops (a presenter, a narrated scene per step). Off by
+                  default: each video spends a few cents of model credit.
+                properties:
+                  enabled:
+                    description: Enabled makes a summary video for each Change that
+                      finishes or stops.
+                    type: boolean
+                  monthlyCapUSD:
+                    description: |-
+                      MonthlyCapUSD stops making videos once this calendar month's videos
+                      have cost this much, as a decimal string. Empty means $5.
+                    pattern: ^[0-9]+(\.[0-9]{1,2})?$
+                    type: string
+                type: object
               teams:
                 description: |-
                   Teams give people access to the org, by GitHub login. The platform

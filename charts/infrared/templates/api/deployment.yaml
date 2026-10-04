@@ -1,5 +1,9 @@
 {{- $c := .Values.api }}
 {{- $ctx := dict "root" . "c" $c "component" "api" }}
+{{- if .Values.summaryvideo.enabled }}
+{{- $_ := set $ctx "volumes" (list (dict "name" "media" "persistentVolumeClaim" (dict "claimName" (include "infrared.componentName" (dict "root" . "component" "media"))))) }}
+{{- $_ := set $ctx "volumeMounts" (list (dict "name" "media" "mountPath" "/var/lib/infrared/media")) }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,6 +44,10 @@ spec:
             {{- with .Values.externalURL }}
             - name: INFRARED_EXTERNAL_URL
               value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.summaryvideo.enabled }}
+            - name: INFRARED_MEDIA_DIR
+              value: /var/lib/infrared/media
             {{- end }}
             {{- with .Values.observability.metricsURL }}
             - name: INFRARED_METRICS_URL

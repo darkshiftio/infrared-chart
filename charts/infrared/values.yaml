@@ -100,6 +100,32 @@ runner:
     # Enterprise Server: a list of CIDRs.
     extraEgressCIDRs: []
 
+summaryvideo:
+  # -- Make a short summary video of each Change that finishes or stops, in orgs
+  # that turn summary videos on (Settings): a presenter, a narrated scene per step.
+  # Off: no reconciler, no Job and no media volume. The pipeline and its clips are
+  # in github.com/darkshiftio/infrared-summary-video.
+  enabled: false
+  image:
+    # -- Repository under image.registry: the pipeline and its reusable clips.
+    repository: infrared-summaryvideo
+    # -- Tag; empty means the chart appVersion.
+    tag: ""
+    # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
+    digest: ""
+  # -- Runs the pipeline's Node steps with Puppeteer and Chromium. Pinned by digest.
+  browserImage: "docker.io/zenika/alpine-chrome@sha256:ee10e24217aa27443e6b58da628f3b09ea9b814459915b8b62fe15a555f9692a"
+  # -- Joins the clips and scenes. Pinned by digest.
+  ffmpegImage: "docker.io/jrottenberg/ffmpeg@sha256:8ec1ee1f6a0fcd37c97725827b6b7832795c9596e3439b8da56d7700d61ae778"
+  # -- Secret in the release namespace with the platform Gemini key (key api-key)
+  # that voices the narration. Not created by the chart.
+  geminiSecret: gemini-api
+  storage:
+    # -- The API keeps the videos on this volume.
+    size: 5Gi
+    # -- Storage class; empty means the cluster's default.
+    storageClassName: ""
+
 operator:
   image:
     # -- Repository under image.registry.

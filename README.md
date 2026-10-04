@@ -121,6 +121,19 @@ tokens the API adds to `infrared-api-tokens` are preserved across upgrades. Ever
 generated Secret carries `helm.sh/resource-policy: keep`, so neither uninstalling
 nor switching to `existingSecret` deletes a live credential.
 
+infrared-mcp gets its two tokens both ways. `<fullname>-mcp-token` and
+`<fullname>-mcp-access`, or the `existingSecret` each names, are mounted
+read-only at `/var/run/infrared/api-token/token` (`INFRARED_API_TOKEN_FILE`) and
+`/var/run/infrared/mcp-access/token` (`INFRARED_MCP_TOKEN_FILE`), and infrared-mcp
+`640546c` and later reads each file again at every use, in place of its variable.
+A new value counts within the kubelet's sync period, about a minute, with no
+restart: a rotation, and a restore, which writes the saved tokens back after
+`helm install` has started the pod. The same Secrets also set
+`INFRARED_API_TOKEN` and `INFRARED_MCP_TOKEN`, as before, for an image from
+before the files, mid-roll, pinned by an older Application or after a rollback:
+it reads those, keeps the tokens it started with until it restarts, and still
+asks for a token on `/mcp`.
+
 **Argo CD adoption.** Argo CD renders charts with `helm template`, where `lookup`
 returns nothing, so a chart that relied on `lookup` would regenerate every Secret
 on every sync. Once Argo CD adopts the release, the gitops values must carry:

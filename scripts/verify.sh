@@ -76,6 +76,9 @@ step "helm template"
 helm template infrared "$chart" -n infrared --include-crds >"$out/defaults.yaml"
 helm template infrared "$chart" -n infrared --include-crds -f "$chart/ci/digests-values.yaml" >"$out/digests.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/adopted-values.yaml" >"$out/adopted.yaml"
+# The MCP Secrets under names of a person's own choosing.
+helm template infrared "$chart" -n infrared --set mcp.existingSecret=ci-mcp-token,mcp.access.existingSecret=ci-mcp-access \
+  >"$out/mcp-existing.yaml"
 helm template other "$chart" -n ir-test >"$out/other.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" >"$out/extensions.yaml"
@@ -127,7 +130,7 @@ helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" \
 # The name named by hand as well: listed once.
 helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
   --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -178,10 +181,7 @@ check digests.yaml "first pull secret handed to the operator" 'value: "ghcr-pull
 check digests.yaml "extra operator rule appended" '^  - ci.example.com$' 1
 check digests.yaml "external URL passed to the api" 'value: "https://infrared.example.com"' 1
 check adopted.yaml "adoption renders no Secrets" '^kind: Secret$' 0
-check adopted.yaml "mcp reads the existing token Secret" '^                  name: infrared-mcp-token$' 1
-check adopted.yaml "mcp enforces the existing access Secret" '^                  name: infrared-mcp-access$' 1
 check defaults.yaml "mcp access Secret generated" '^  name: infrared-mcp-access$' 1
-check defaults.yaml "mcp enforces a bearer token" '^            - name: INFRARED_MCP_TOKEN$' 1
 check ecr.yaml "ECR registry prefixes every image" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):' 4
 check ecr.yaml "ECR pinned operator renders tag@digest" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-operator:v0\.1\.0@sha256:[0-9a-f]{64}$' 1
 check ecr.yaml "ECR values need no pull secret" 'imagePullSecrets:' 0
@@ -422,6 +422,66 @@ for f in defaults ghcr install ghcr-adopted stores-adopted; do
   if [[ "$(objn "$f" Service infrared-mcp '^    - name: ')" == 1 ]]; then ok "$f: infrared-mcp's Service has its one public port"
   else bad "$f: infrared-mcp's Service has more than its public port"; fi
 done
+# infrared-mcp gets its two tokens both ways (workspace TODO 156). As files
+# from the Secrets' volumes, mounted read-only and never through a subPath,
+# which the kubelet does not update: infrared-mcp 640546c and later reads each
+# again at every use, in place of its variable, so a rotation, or a restore
+# writing the saved tokens back, needs no restart. And as the two secretKeyRef
+# variables, exactly as before, so that an image from before the files still
+# asks for a token and never serves /mcp open. The Secrets are the chart's,
+# under the release's names, or the existingSecret each names in their place,
+# which the chart then does not render. None is optional: without its Secret or
+# its key the pod does not start.
+mcp_token_files() { # mcp_token_files <render> <Deployment> <token Secret> <access Secret>
+  local d
+  d="$(obj "$1" Deployment "$2")"
+  [[ "$(grep -A4 -xF '            - name: INFRARED_API_TOKEN' <<<"$d")" == "            - name: INFRARED_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: $3
+                  key: token" ]] &&
+    [[ "$(grep -A4 -xF '            - name: INFRARED_MCP_TOKEN' <<<"$d")" == "            - name: INFRARED_MCP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: $4
+                  key: token" ]] &&
+    [[ "$(grep -A1 -xF '            - name: INFRARED_API_TOKEN_FILE' <<<"$d")" == '            - name: INFRARED_API_TOKEN_FILE
+              value: "/var/run/infrared/api-token/token"' ]] &&
+    [[ "$(grep -A1 -xF '            - name: INFRARED_MCP_TOKEN_FILE' <<<"$d")" == '            - name: INFRARED_MCP_TOKEN_FILE
+              value: "/var/run/infrared/mcp-access/token"' ]] &&
+    [[ "$d" == *"        - name: api-token
+          secret:
+            items:
+            - key: token
+              path: token
+            secretName: $3
+        - name: mcp-access
+          secret:
+            items:
+            - key: token
+              path: token
+            secretName: $4
+      containers:"* ]] &&
+    [[ "$d" == *"            - mountPath: /var/run/infrared/api-token
+              name: api-token
+              readOnly: true
+            - mountPath: /var/run/infrared/mcp-access
+              name: mcp-access
+              readOnly: true
+          args:"* ]] &&
+    ! grep -qE 'subPath|optional:' <<<"$d"
+}
+for c in "defaults infrared-mcp infrared-mcp-token infrared-mcp-access" \
+    "adopted infrared-mcp infrared-mcp-token infrared-mcp-access" \
+    "mcp-existing infrared-mcp ci-mcp-token ci-mcp-access" \
+    "other other-infrared-mcp other-infrared-mcp-token other-infrared-mcp-access"; do
+  read -r f d token access <<<"$c"
+  if mcp_token_files "$f" "$d" "$token" "$access"; then
+    ok "$f: $d gets its tokens from $token and $access as the two variables and as files, mounted read-only"
+  else bad "$f: $d does not get its tokens from $token and $access as the two variables and as files, mounted read-only without a subPath"; fi
+done
+check mcp-existing.yaml "mcp-existing: the chart renders neither MCP Secret nor infrared-api-tokens" \
+  '^  name: (infrared-mcp-token|infrared-mcp-access|infrared-api-tokens|ci-mcp-token|ci-mcp-access)$' 0
 
 # The copies: none by default, so every render above is what it was. With a
 # recipient, two CronJobs run the operator's copy-objects and put modes, on the

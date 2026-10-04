@@ -96,10 +96,15 @@ helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${cop
 helm template infrared "$chart" -n infrared "${install[@]}" --set substrate.testActors=true >"$out/test-actors.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
   -f "$chart/ci/stores-adopted-values.yaml" --set substrate.testActors=true >"$out/test-actors-adopted.yaml"
+# Infrared's code index on: at install, and once the template's Application
+# carries codeIndex as well.
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" >"$out/code-index.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
+  -f "$chart/ci/stores-adopted-values.yaml" -f "$chart/ci/code-index-values.yaml" >"$out/code-index-adopted.yaml"
 # The name named by hand as well: listed once.
 helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
   --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore, test-actors, test-actors-adopted, test-actors-named"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-adopted"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -108,7 +113,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted copies copies-adopted restore \
-    test-actors test-actors-adopted test-actors-named; do envs "$f"; done
+    test-actors test-actors-adopted test-actors-named code-index code-index-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -317,6 +322,50 @@ else cat "$out/gitea-adoption.diff"; bad "Argo CD's render of Gitea differs from
 check other.yaml "other release names its UI Service <release>-infrared" '^  name: other-infrared$'
 check other.yaml "other release proxies to its own api" 'value: "http://other-infrared-api:8080"'
 
+# Infrared's code index: off by default, so no render above names it; on, its
+# pin joins the images handed to the operator, at install and after adoption,
+# and the chart renders nothing more of its own: the gitops template runs it.
+for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted; do
+  check "$f.env" "$f: no code index handed on" 'code-index' 0
+done
+ci_pins='{\"api\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000022\",\"tag\":\"one-install-0000002\"},\"code-index\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000026\",\"tag\":\"one-install-0000006\"},\"mcp\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000024\",\"tag\":\"one-install-0000004\"},\"operator\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000021\",\"tag\":\"one-install-0000001\"},\"runner\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000025\",\"tag\":\"one-install-0000005\"},\"ui\":{\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000023\",\"tag\":\"one-install-0000003\"}}'
+for f in code-index code-index-adopted; do
+  has "$f.env" "$f: the code index's pin handed to the operator among the images, as code-index" "INFRARED_IMAGES=\"$ci_pins\""
+  has "$f.env" "$f: with the registry it is named by" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
+done
+check code-index.yaml "the code index adds no object of the chart's own: four Deployments" '^kind: Deployment$' 4
+# The chart's own pin, by default: enabled alone runs the image it names.
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" --set codeIndex.enabled=true >"$out/code-index-default.yaml"
+envs code-index-default
+if grep -qF '\"code-index\":{\"digest\":\"sha256:'"$(awk '/^codeIndex:/ {f = 1} f && /^    digest:/ {print $2; exit}' "$chart/values.yaml" | sed 's/^sha256://')"'\",\"tag\":\"'"$(awk '/^codeIndex:/ {f = 1} f && /^    tag:/ {print $2; exit}' "$chart/values.yaml")"'\"}' "$out/code-index-default.env" &&
+   grep -qE '^    tag: one-install-[0-9a-f]{7}$' <(sed -n '/^codeIndex:/,/^[a-z]/p' "$chart/values.yaml") &&
+   grep -qE '^    digest: sha256:[0-9a-f]{64}$' <(sed -n '/^codeIndex:/,/^[a-z]/p' "$chart/values.yaml"); then
+  ok "codeIndex.enabled alone hands on the chart's own pin, a one-install build by digest"
+else bad "codeIndex.enabled alone does not hand on the chart's pin by digest"; fi
+# objects <render>: each object's kind and name, sorted.
+objects() { awk '/^---/ {k = ""} /^kind: / {k = $2} /^  name: / && k {print k "/" $2; k = ""}' "$out/$1.yaml" | sort; }
+if diff <(objects stores-adopted) <(objects code-index-adopted) >"$out/code-index.diff"; then
+  ok "after adoption the code index renders the same objects as without it"
+else cat "$out/code-index.diff"; bad "the code index adds or drops objects of the chart's own"; fi
+# Agent steps get Infrared's MCP server, with the code tools, at its in-cluster
+# listener, only while the code index runs; without it the API's code endpoints
+# answer 501 (INFRARED_CODE_INDEX_URL=off).
+for f in code-index code-index-adopted; do
+  has "$f.env" "$f: steps reach the MCP server's in-cluster listener" 'INFRARED_MCP_URL="http://infrared-mcp.infrared.svc:8081/mcp"'
+  has "$f.env" "$f: the runner's proxy holds the MCP access Secret's token" 'INFRARED_MCP_ACCESS_SECRET="infrared-mcp-access"'
+  check "$f.env" "$f: the API reaches the code index at its default address" '^INFRARED_CODE_INDEX_URL=' 0
+  if [[ "$(objn "$f" Service infrared-mcp '^    - name: (http|code)$')" == 2 && "$(objn "$f" Service infrared-mcp '^      port: 8081$')" == 1 ]] &&
+     [[ "$(objn "$f" Deployment infrared-mcp '^              containerPort: 8081$')" == 1 ]]; then
+    ok "$f: infrared-mcp listens for steps on 8081 (code), its Service with it"
+  else bad "$f: infrared-mcp has no in-cluster listener on 8081"; fi
+done
+for f in defaults ghcr install ghcr-adopted stores-adopted; do
+  has "$f.env" "$f: no code index, so the API's code endpoints answer 501" 'INFRARED_CODE_INDEX_URL="off"'
+  check "$f.env" "$f: no MCP server for steps without the code index" '^INFRARED_MCP_(URL|ACCESS_SECRET)=' 0
+  if [[ "$(objn "$f" Service infrared-mcp '^    - name: ')" == 1 ]]; then ok "$f: infrared-mcp's Service has its one public port"
+  else bad "$f: infrared-mcp's Service has more than its public port"; fi
+done
+
 # The copies: none by default, so every render above is what it was. With a
 # recipient, two CronJobs run the operator's copy-objects and put modes, on the
 # schedules set, and the settings reach the operator for the gitops template;
@@ -485,6 +534,12 @@ refuse "a restore time that is not UTC fails" "at '/restore/from'" --set restore
 refuse "a restore without the stores fails" "restore.enabled needs stores.enabled" --set restore.enabled=true
 refuse "a restore without a backup bucket fails" "restore.enabled needs backup.bucket" --set restore.enabled=true,stores.enabled=true
 refuse "a restore with Gitea running fails" "needs --set gitea.replicaCount=0" -f "$chart/ci/install-values.yaml" -f "$chart/ci/gitea-values.yaml" --set restore.enabled=true
+refuse "the code index on the default registry fails" "codeIndex.enabled needs image.registry" -f "$chart/ci/code-index-values.yaml"
+refuse "the code index without a pin fails" "codeIndex.enabled needs codeIndex.image.tag or codeIndex.image.digest" \
+  -f "$chart/ci/ghcr-values.yaml" --set codeIndex.enabled=true,codeIndex.image.tag=,codeIndex.image.digest=
+refuse "a code index digest that is not sha256 fails" "at '/codeIndex/image/digest'" \
+  -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" --set codeIndex.image.digest=sha256:abc
+refuse "codeIndex.enabled as a string fails" "at '/codeIndex/enabled'" --set-string codeIndex.enabled=true
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
@@ -512,7 +567,7 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted copies copies-nogitea copies-adopted restore; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted copies copies-nogitea copies-adopted restore code-index; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

@@ -173,10 +173,23 @@ spec:
                     minimum: 1
                     type: integer
                   model:
+                    description: Model is a model ID. It wins over Tier.
                     type: string
                   providerRef:
                     description: ProviderRef names a model provider configured for
                       the org.
+                    type: string
+                  reason:
+                    description: Reason says why the role uses its tier.
+                    type: string
+                  tier:
+                    description: |-
+                      Tier picks the model by tier (frontier, balanced or fast), mapped to a
+                      model ID by the org or the Installation. Omitted means frontier.
+                    enum:
+                    - frontier
+                    - balanced
+                    - fast
                     type: string
                 type: object
               opinions:

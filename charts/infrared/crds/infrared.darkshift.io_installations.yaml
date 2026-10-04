@@ -106,6 +106,46 @@ spec:
               managementCluster:
                 description: ManagementCluster is the Cluster Infrared runs on.
                 type: string
+              models:
+                description: |-
+                  Models maps model tiers to model IDs and holds the price table cost
+                  estimates use.
+                properties:
+                  prices:
+                    description: |-
+                      Prices replace DefaultModelPrices for cost estimates when set. Spend
+                      itself is what the Agent SDK reports for each step.
+                    items:
+                      description: |-
+                        ModelPrice is a model's list price in USD per million tokens, as decimal
+                        strings. CacheWriteUSD is the 5-minute cache write.
+                      properties:
+                        cacheReadUSD:
+                          type: string
+                        cacheWriteUSD:
+                          type: string
+                        inputUSD:
+                          type: string
+                        model:
+                          minLength: 1
+                          type: string
+                        outputUSD:
+                          type: string
+                      required:
+                      - model
+                      type: object
+                    type: array
+                  tiers:
+                    description: Tiers maps tiers to model IDs. Unset fields use DefaultModelTiers.
+                    properties:
+                      balanced:
+                        type: string
+                      fast:
+                        type: string
+                      frontier:
+                        type: string
+                    type: object
+                type: object
               platformOrg:
                 description: PlatformOrg is the Organization that administers this
                   control plane.

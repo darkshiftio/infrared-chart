@@ -164,6 +164,11 @@ spec:
                       - resolve
                       - report
                       type: string
+                    model:
+                      description: |-
+                        Model overrides the AgentRole's model for this step: a tier (frontier,
+                        balanced, fast) or a model ID. Only for agentRole steps.
+                      type: string
                     name:
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string

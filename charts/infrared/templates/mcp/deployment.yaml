@@ -52,4 +52,12 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- if .Values.codeIndex.enabled }}
+            # Every tool, the code index's among them, for agent steps inside the
+            # cluster (INFRARED_MCP_CODE_LISTEN, :8081 by default). Never routed
+            # outside it: /mcp on the public name stays on http, without them.
+            - name: code
+              containerPort: 8081
+              protocol: TCP
+            {{- end }}
           {{- include "infrared.probes" (dict "port" "http") | nindent 10 }}

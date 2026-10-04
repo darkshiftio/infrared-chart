@@ -1,3 +1,4 @@
+{{- include "infrared.codeIndexCheck" . }}
 {{- $c := .Values.operator }}
 {{- $ctx := dict "root" . "c" $c "component" "operator" }}
 apiVersion: apps/v1
@@ -98,6 +99,15 @@ spec:
             # Zot's garbage collection and retention, for the gitops template.
             - name: INFRARED_REGISTRY_RETENTION
               value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.codeIndex.enabled }}
+            # Agent steps get Infrared's MCP server, the code tools among its
+            # tools, at its in-cluster listener, with the access Secret's token
+            # behind the runner's proxy: only while the code index runs.
+            - name: INFRARED_MCP_URL
+              value: {{ printf "http://%s.%s.svc:8081/mcp" (include "infrared.componentName" (dict "root" . "component" "mcp")) .Release.Namespace | quote }}
+            - name: INFRARED_MCP_ACCESS_SECRET
+              value: {{ include "infrared.mcpAccessSecret" . | quote }}
             {{- end }}
             {{- with include "infrared.restore" . }}
             # This install is a restore: the operator starts no controller

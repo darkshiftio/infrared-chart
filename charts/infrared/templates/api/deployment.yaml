@@ -58,6 +58,13 @@ spec:
             - name: INFRARED_GITEA_ADMIN_SECRET
               value: "infrared-gitea-admin"
             {{- end }}
+            {{- if not .Values.codeIndex.enabled }}
+            # No code index runs (codeIndex.enabled is false): the code
+            # endpoints answer 501. On, the API reaches it at its default,
+            # http://code-index.code-index.svc:8080.
+            - name: INFRARED_CODE_INDEX_URL
+              value: "off"
+            {{- end }}
             {{- with include "infrared.restore" . }}
             # This install is a restore: the API refuses the setup wizard and
             # every run's start until the restore is complete.

@@ -185,8 +185,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.121
-    digest: "sha256:105b7ae96d88dd9ce8eb7b1d3cafa670bbce6cc2eff522646be53b6287ba068e"
+    tag: v0.1.0-alpha.126
+    digest: "sha256:5eb9ab0ec543ccca3ff5ff63fa70ede4a36b50ee7700d3e119cccb16c85f6290"
   replicas: 1
   extraArgs: []
   extraEnv: []

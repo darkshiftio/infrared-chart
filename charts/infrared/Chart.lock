@@ -1,0 +1,6 @@
+dependencies:
+- name: gitea
+  repository: oci://docker.gitea.com/charts
+  version: 12.7.0
+digest: sha256:20a4859af310b585d366f0b9cd47f5744ac7423d5b80aa11c1d02e51990bd014
+generated: "2026-10-02T17:13:18.059956-06:00"

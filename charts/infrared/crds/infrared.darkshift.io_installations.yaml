@@ -81,6 +81,18 @@ spec:
                 - email
                 - passwordSecretRef
                 type: object
+              edge:
+                description: |-
+                  Edge is how traffic reaches Infrared and its zones: traefik, through
+                  Traefik Ingresses as before, or gateway, through one shared Gateway run
+                  by Envoy Gateway. Empty means traefik. The gitops template installs the
+                  edge it names. The operator fills it from INFRARED_EDGE while it is
+                  empty, and never overwrites a value someone set.
+                enum:
+                - ""
+                - traefik
+                - gateway
+                type: string
               gitProviderRef:
                 description: GitProviderRef is the platform org's git provider.
                 properties:
@@ -111,8 +123,9 @@ spec:
                   control plane.
                 type: string
               previews:
-                description: Previews give pre-release zones a URL behind Infrared
-                  sign-in.
+                description: |-
+                  Previews give pre-release zones a URL behind Infrared sign-in. The
+                  operator fills it from INFRARED_PREVIEWS while it is unset.
                 properties:
                   cloudflareTokenSecret:
                     description: |-
@@ -233,6 +246,16 @@ spec:
                 - AwaitingGitopsRepo
                 - Syncing
                 - Ready
+                type: string
+              postgresServerName:
+                description: |-
+                  PostgresServerName is the server name the platform's Postgres archives
+                  under in the backup bucket, chosen once and never changed for the life
+                  of the install: postgres-<stamp of when the operator chose it> on a
+                  fresh install, the restore's new name on a restore, or postgres on an
+                  install that archived before the field existed. Empty until the
+                  operator has chosen.
+                pattern: ^[a-z][A-Za-z0-9._-]{0,62}$
                 type: string
               version:
                 description: Version of the Infrared control plane.

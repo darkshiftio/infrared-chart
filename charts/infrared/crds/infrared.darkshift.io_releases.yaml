@@ -67,6 +67,39 @@ spec:
                   Empty means the branch's head when the Release starts.
                 pattern: ^([0-9a-f]{40})?$
                 type: string
+              image:
+                description: |-
+                  Image says where the released image comes from. Empty means kpack's
+                  build of the commit, as before.
+                properties:
+                  fromStep:
+                    description: |-
+                      FromStep releases an image that an AgentWorkflowRun step published to
+                      the install's registry, in place of kpack's build: Infrared takes its
+                      digest from the step's status.published, tags it with the version and
+                      promotes it as it would a build.
+                    properties:
+                      ref:
+                        description: |-
+                          Ref is the image as the step's status.published lists it,
+                          <registry>/<repository>@sha256:<hex>. Its repository alone also names
+                          it when the step published one image there; empty means the step's one
+                          image.
+                        type: string
+                      run:
+                        description: Run is the AgentWorkflowRun, in the Release's
+                          namespace.
+                        minLength: 1
+                        type: string
+                      step:
+                        description: Step is the run's step that published the image.
+                        minLength: 1
+                        type: string
+                    required:
+                    - run
+                    - step
+                    type: object
+                type: object
               notes:
                 description: |-
                   Notes for the GitHub release; empty means the commits since the
@@ -111,7 +144,9 @@ spec:
                 format: int32
                 type: integer
               build:
-                description: Build is the kpack Build that produced the image.
+                description: |-
+                  Build is the kpack Build that produced the image, or for an image a
+                  step published, step <step> of AgentWorkflowRun <run>.
                 type: string
               builtAt:
                 description: BuiltAt is when the build was ready and its digest tagged

@@ -1,0 +1,144 @@
+{{- /*
+The hourly copy of Infrared's own objects: the operator's image, in its
+copy-objects mode, reads the twelve Infrared kinds with their status, the
+Secrets the cluster cannot make again and the ConfigMaps they own, encrypts
+them with age to copies.recipients, and writes <UTC>.tar.gz.age and its
+manifest <UTC>.json to SeaweedFS's bucket infrared-objects, as the S3 identity
+objects-copy (its keys: the Secret objects-copy-s3, which the gitops template
+copies here). The hourly mirror carries the bucket outside. Rendered only with
+a recipient, so no install changes until a person makes the key. Its names are
+fixed: the restore and the drills read them.
+*/}}
+{{- if .Values.copies.recipients }}
+{{- $o := .Values.copies.objects | default dict }}
+{{- $ctx := dict "root" . "component" "objects-copy" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infrared-objects-copy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+---
+# Read only: Infrared's kinds, and the namespaces, Secrets and ConfigMaps the
+# copy keeps. No write of any kind.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: infrared-objects-copy
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: ["infrared.darkshift.io"]
+    resources: ["*"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["namespaces", "secrets", "configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: infrared-objects-copy
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: infrared-objects-copy
+subjects:
+  - kind: ServiceAccount
+    name: infrared-objects-copy
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: infrared-objects-copy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+spec:
+  # Before Gitea's dump and the mirror, so a restore pairs a dump with a copy
+  # of the objects a few minutes older.
+  schedule: {{ default "5 * * * *" $o.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      # A mistake in the flags or the environment (exit 2) is never retried.
+      podFailurePolicy:
+        rules:
+          - action: FailJob
+            onExitCodes:
+              operator: In
+              values: [2]
+      template:
+        metadata:
+          labels:
+            {{- include "infrared.componentLabels" $ctx | nindent 12 }}
+        spec:
+          serviceAccountName: infrared-objects-copy
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: copy
+              image: {{ include "infrared.operatorImage" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              args:
+                - copy-objects
+                - --bucket=infrared-objects
+                - --endpoint={{ include "infrared.copiesEndpoint" . }}
+                - --retention={{ default "7d" $o.retention }}
+                {{- range .Values.copies.recipients }}
+                - --recipient={{ . }}
+                {{- end }}
+              env:
+                - name: INFRARED_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: INFRARED_CLUSTER_NAME
+                  value: {{ .Values.managementCluster.name | quote }}
+                # The copy's manifest names the version, as the operator's does.
+                - name: INFRARED_VERSION
+                  value: {{ .Chart.AppVersion | quote }}
+                # SeaweedFS ignores the region; S3's signature needs one.
+                - name: AWS_REGION
+                  value: us-east-1
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: objects-copy-s3
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: objects-copy-s3
+                      key: AWS_SECRET_ACCESS_KEY
+              securityContext:
+                {{- toYaml .Values.containerSecurityContext | nindent 16 }}
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi
+{{- end }}

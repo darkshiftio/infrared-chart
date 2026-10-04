@@ -45,6 +45,32 @@ spec:
             - name: INFRARED_METRICS_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.registry.address }}
+            # The install's own registry, where steps publish and Releases take images from.
+            - name: INFRARED_REGISTRY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.gitea.enabled }}
+            # The Gitea this chart runs, and the Secret with its site admin,
+            # which the setup wizard's forge step makes an org's bot user with.
+            - name: INFRARED_GITEA_URL
+              value: {{ include "infrared.giteaURL" . | quote }}
+            - name: INFRARED_GITEA_ADMIN_SECRET
+              value: "infrared-gitea-admin"
+            {{- end }}
+            {{- if not .Values.codeIndex.enabled }}
+            # No code index runs (codeIndex.enabled is false): the code
+            # endpoints answer 501. On, the API reaches it at its default,
+            # http://code-index.code-index.svc:8080.
+            - name: INFRARED_CODE_INDEX_URL
+              value: "off"
+            {{- end }}
+            {{- with include "infrared.restore" . }}
+            # This install is a restore: the API refuses the setup wizard and
+            # every run's start until the restore is complete.
+            - name: INFRARED_RESTORE
+              value: {{ . | quote }}
+            {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

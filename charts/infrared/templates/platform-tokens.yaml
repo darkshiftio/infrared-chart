@@ -1,0 +1,40 @@
+{{- /*
+The platform's tokens, in one Secret with a fixed name: the gitops template's
+External Secrets component reads `infrared-platform-tokens` in this namespace
+through the ClusterSecretStore `infrared-platform`, and copies each key to the
+namespace that uses it. Rendered when a token is set and existingSecret is not,
+with a key for each token that is set; the backup bucket's two keys go together.
+Kept on uninstall, and when the values stop carrying the tokens (Argo CD renders
+the chart without them after adoption), like the generated Secrets.
+*/}}
+{{- $t := .Values.platformTokens }}
+{{- $cloudflare := trim (default "" $t.cloudflareApiToken) }}
+{{- $backupID := trim (default "" $t.backupAccessKeyId) }}
+{{- $backupSecret := trim (default "" $t.backupSecretAccessKey) }}
+{{- if or $backupID $backupSecret }}
+{{- if not (and $backupID $backupSecret) }}
+{{- fail "platformTokens.backupAccessKeyId and platformTokens.backupSecretAccessKey go together: pass both with --set-file" }}
+{{- end }}
+{{- end }}
+{{- if and (or $cloudflare $backupID) (not $t.existingSecret) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: infrared-platform-tokens
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  {{- with $cloudflare }}
+  cloudflare-api-token: {{ . | b64enc | quote }}
+  {{- end }}
+  {{- with $backupID }}
+  backup-access-key-id: {{ . | b64enc | quote }}
+  {{- end }}
+  {{- with $backupSecret }}
+  backup-secret-access-key: {{ . | b64enc | quote }}
+  {{- end }}
+{{- end }}

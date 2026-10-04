@@ -98,7 +98,8 @@ spec:
                     description: Repo is the template's git URL.
                     type: string
                   version:
-                    description: Version is a tag of the template repo.
+                    description: Version is a tag, or a full 40-character commit SHA,
+                      of the template repo.
                     minLength: 1
                     type: string
                 required:
@@ -128,6 +129,50 @@ spec:
               commit:
                 description: Commit is the SHA of the last hydration commit.
                 type: string
+              components:
+                description: |-
+                  Components lists the template's components as the hydration commit
+                  renders them, by name: each Application in the cluster's registry, each
+                  component the template left out with its reason, and the backups. Only
+                  the operator knows why a component was left out. Recorded at each
+                  hydration; empty until an operator that records them hydrates the repo.
+                items:
+                  description: |-
+                    ComponentStatus is one component of the template as the last hydration
+                    rendered it: an Application the registry deploys, or a file of comments that
+                    says why the template left the component out.
+                  properties:
+                    message:
+                      description: |-
+                        Message is the template's own comment on a component it left out, in one
+                        line; for Agent Substrate, the preflight's answer follows it.
+                      type: string
+                    name:
+                      description: |-
+                        Name is the Application's name. For a component the template left out,
+                        it is the name of its file in registry/clusters/<cluster>/components,
+                        which the template names after the Application.
+                      minLength: 1
+                      type: string
+                    reason:
+                      description: Reason says why the template rendered no Application.
+                        Empty when Rendered.
+                      enum:
+                      - Disabled
+                      - NotApplicable
+                      type: string
+                    rendered:
+                      description: Rendered is true when the hydration commit holds
+                        the Application.
+                      type: boolean
+                  required:
+                  - name
+                  - rendered
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -203,6 +248,13 @@ spec:
                 - Hydrated
                 - Bootstrapped
                 - Synced
+                type: string
+              restorePoint:
+                description: |-
+                  RestorePoint is the restore point the hydration commit renders, the
+                  stamp of the copy a restore in progress came from; empty when it
+                  renders no restore. A restore that finishes hydrates the repo again,
+                  so the restore's pieces leave the cluster.
                 type: string
               url:
                 description: URL of the repo on the provider.

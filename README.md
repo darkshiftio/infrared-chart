@@ -34,9 +34,11 @@ which is exactly `infrared` for that release name, and the gitops template's
 `infrared` Application uses release name `infrared` so that adoption lines up.
 
 Private images: create a `kubernetes.io/dockerconfigjson` Secret in the
-namespace and pass `--set 'imagePullSecrets[0].name=infrared-pull'`. The first name
+namespace, or let the chart render it from `imageCredentials` ("Secrets from
+values"), and pass `--set 'imagePullSecrets[0].name=infrared-pull'`. The first name
 is also handed to the operator (`INFRARED_IMAGE_PULL_SECRET`) for the clusters
-it bootstraps.
+it bootstraps, and for runner Jobs: the operator copies the Secret into each
+org namespace and sets it on every Job, so the runner image pulls with it too.
 
 **darkshift's own builds are in ECR.** kpack on darkshift-build pushes every
 component to `977456087177.dkr.ecr.us-east-1.amazonaws.com/infrared-<component>`
@@ -58,6 +60,40 @@ operator:
 credential provider need a dockerconfigjson Secret holding an ECR token, which
 expires after 12 hours; use the credential provider instead.
 
+**Clusters outside AWS pull from ghcr.** They cannot reach that ECR registry, so
+every component, the runner included, comes from `ghcr.io/darkshiftio` pinned by
+digest, with one read-only dockerconfigjson Secret for all of them:
+
+```yaml
+image:
+  registry: ghcr.io/darkshiftio
+imagePullSecrets:
+  - name: ghcr-pull        # kubernetes.io/dockerconfigjson, in the release namespace
+operator:
+  image:
+    tag: one-install-1a2b3c4
+    digest: sha256:...     # from the image workflow's run summary
+runner:
+  image:
+    tag: one-install-1a2b3c4
+    digest: sha256:...
+# api, ui and mcp the same way
+```
+
+(`ci/ghcr-values.yaml` renders exactly this in `make verify`.) The registry and
+the digests have to reach the gitops repo's `infrared` values too, or Argo CD
+renders the defaults again once it adopts the release. So for any registry other
+than the default, the chart hands the registry and every component's pin to the
+operator (`INFRARED_IMAGE_REGISTRY`, and `INFRARED_IMAGES` as JSON:
+`{"operator": {"tag": "...", "digest": "sha256:..."}, "api": ..., "ui": ...,
+"mcp": ..., "runner": ...}`), and the operator hands them to the gitops template,
+which writes them into the `infrared` Application. The Application then carries
+the same registry, so the operator keeps receiving them after adoption. On the
+default registry neither is set, and the chart version's own pins apply.
+
+The pull Secret itself can come from values, so a fresh install needs nothing
+made by hand; see "Secrets from values".
+
 Pinned images, as a pull request sets them (`repo:tag@sha256:...`):
 
 ```yaml
@@ -76,6 +112,7 @@ api:
 | `<fullname>-mcp-token` | `token` | 48 random characters | `mcp.token` | `mcp.existingSecret` |
 | `infrared-api-tokens` | `mcp` | hex sha256 of the MCP token | (derived) | `mcp.existingSecret` |
 | `<fullname>-mcp-access` | `token` | 48 random characters | `mcp.access.token` | `mcp.access.existingSecret` |
+| `infrared-gitea-admin`, only with `gitea.enabled` | `username`, `password`, `email` | `gitea.gitea.admin.username` and `.email`, and 32 random characters | (none) | `giteaAdmin.existingSecret` |
 
 The names `infrared-setup`, `infrared-session` and `infrared-api-tokens` are
 fixed: the API reads them by name from the release namespace. On `helm install`
@@ -92,6 +129,7 @@ on every sync. Once Argo CD adopts the release, the gitops values must carry:
 setup:   { existingSecret: infrared-setup }
 session: { existingSecret: infrared-session }
 mcp:     { existingSecret: infrared-mcp-token, access: { existingSecret: infrared-mcp-access } }
+giteaAdmin: { existingSecret: infrared-gitea-admin }   # with gitea.enabled
 ```
 
 The gitops template's `infrared` Application (sync wave 40) already sets these
@@ -100,6 +138,258 @@ no `infrared-mcp-access` Secret yet: create it once (key `token`, 48 random
 characters) before the pull request that moves to alpha.6 and adds the value.
 With them set, the chart renders no Secret at all and the ones from the first
 `helm install` stay in place.
+
+## Secrets from values
+
+Two Secrets that a person used to make by hand before `helm install` can come from
+values. Each is rendered only when its value is set, so by default the chart
+renders neither. Pass the values with `--set-file`, so they are never written into
+a values file; the chart trims surrounding whitespace, such as a file's final
+newline.
+
+| Secret (namespace = release) | Type, key | From | Read by |
+|---|---|---|---|
+| The name in `imagePullSecrets[0]` | `kubernetes.io/dockerconfigjson`, `.dockerconfigjson`: one entry for `imageCredentials.registry` (default `ghcr.io`) | `imageCredentials.username` and `imageCredentials.password`, both or neither. Neither: the Secret must already exist, as before | The kubelet for every pod; the operator for Argo CD's chart repository Secret and for runner Jobs, which it copies the Secret to |
+| `infrared-platform-tokens` | `Opaque`: `cloudflare-api-token`, `backup-access-key-id` and `backup-secret-access-key`, a key for each token set | `platformTokens.cloudflareApiToken`; `platformTokens.backupAccessKeyId` and `platformTokens.backupSecretAccessKey`, both or neither; `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it |
+
+```bash
+helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <version> \
+  -n infrared --create-namespace -f values.yaml \
+  --set-file imageCredentials.password="$HOME/path/to/registry-token" \
+  --set-file platformTokens.cloudflareApiToken="$HOME/path/to/cloudflare-token" \
+  --set-file platformTokens.backupAccessKeyId="$HOME/path/to/backup-key-id" \
+  --set-file platformTokens.backupSecretAccessKey="$HOME/path/to/backup-key-secret"
+```
+
+with `imagePullSecrets: [{name: ghcr-pull}]` and `imageCredentials.username` in
+`values.yaml`. Write `$HOME`, not `~`: the shell does not expand a `~` after
+`=` in these arguments. Both Secrets carry `helm.sh/resource-policy: keep`. After
+Argo CD adopts the release it renders the chart without these values, so it
+renders neither Secret, and the ones from the install stay in place.
+
+## The Installation's edge and previews
+
+The operator writes `installation.edge` and `installation.previews` to the
+Installation when it starts (`INFRARED_EDGE`, and `INFRARED_PREVIEWS` as JSON), each
+only while the Installation's field is empty, and never overwrites one. So a
+fresh install needs no patch afterwards, and a person's later change stands. Both
+are empty by default, and then the chart renders exactly what it rendered before.
+
+```yaml
+installation:
+  edge: gateway                      # or traefik; empty means traefik
+  previews:
+    domain: preview.example.com      # zone z answers at https://<z>.preview.example.com
+    signInURL: https://infrared.example.com
+```
+
+## The stores, the backup bucket and the components left out
+
+Three settings the operator hands to the gitops template, which installs what
+they name. All are empty by default, and then the chart renders exactly what it
+rendered before.
+
+```yaml
+stores:
+  enabled: true                      # INFRARED_STORES: one Postgres and one object store in the cluster
+backup:                              # INFRARED_BACKUP, as JSON: all three, or none
+  bucket: example-backup
+  endpoint: https://s3.example.com
+  region: us-east-1                  # the region S3 requests are signed for
+components:
+  disabled: [infisical]              # INFRARED_DISABLED_COMPONENTS, as JSON
+```
+
+The bucket's key is two tokens, `platformTokens.backupAccessKeyId` and
+`platformTokens.backupSecretAccessKey`, passed with `--set-file` (see "Secrets
+from values"). The operator refuses to start on a malformed value and says
+why. After Argo CD adopts the release, the gitops repo's `infrared` Application
+has to carry the three settings, or the operator stops receiving them.
+
+### Substrate's test actors
+
+With the stores and a registry, the gitops template can run Agent Substrate
+(when the operator's preflight says the cluster can host it). Its two test
+actors, `counter-v1` and `sandbox-v1`, exist only for the template's counter
+test and fence check, and `sandbox-v1` runs any command it is sent. So they are
+off by default: with `stores.enabled` and `registry.address`, the chart adds
+`substrate-test-actors` to the components it hands the operator
+(`INFRARED_DISABLED_COMPONENTS`), and the template leaves them out. Turn them
+on for those checks with:
+
+```yaml
+substrate:
+  testActors: true                   # the template makes counter-v1 and sandbox-v1
+```
+
+The gitops repo's `infrared` Application carries `substrate.testActors: true`
+once the template sees them on, so adoption keeps them.
+
+## The code index
+
+```yaml
+codeIndex:
+  enabled: true                      # INFRARED_IMAGES gains code-index: the gitops template runs the code index
+  image:                             # the chart's own pin by default
+    tag: one-install-<short sha>     # a build of darkshiftio/infrared-codeindex
+    digest: sha256:...
+```
+
+Infrared's code index: Zoekt and the code service, behind infrared-api's code
+endpoints. The chart renders nothing of it. On, it hands the code index's image
+to the operator among Infrared's own (`INFRARED_IMAGES`, key `code-index`), and
+the gitops template runs it in the namespace `code-index`, at
+`http://code-index.code-index.svc:8080`, which only infrared-api's pods reach.
+The template names the image `<image.registry>/infrared-codeindex`, so the
+code index needs an `image.registry` other than the default, which is the one
+the operator is handed (`ghcr.io/darkshiftio`, where the image is published),
+and a tag or a digest: the chart refuses to render without either. Off, the
+default, changes nothing.
+
+Its settings are the install's, never values: the ConfigMap `code-index` in the
+namespace `code-index` names its record (the manifest of repositories and the
+repo cards), and the Secret `code-index-credentials` there, when it exists,
+holds the credential it reads private repositories with; without one it reads
+public repositories only. As with the stores, the gitops repo's `infrared`
+Application carries `codeIndex` once the template sees it on, so adoption keeps
+it.
+
+## The install's own registry
+
+```yaml
+registry:
+  address: 10.43.0.50:5000           # INFRARED_REGISTRY, operator and API: host and port, no scheme
+```
+
+The registry inside the cluster (Zot), as builds and nodes reach it. The
+operator then keeps a registry user, rule and push credential per
+organization, builds each organization's Products as its own builder, lets a
+step whose AgentRole may publish push under `<org>/<product>`, and hands the
+address to the gitops template, which runs the registry. Empty, the default,
+renders nothing and changes nothing. As with the stores, the gitops repo's
+`infrared` Application has to carry it once Argo CD adopts the release.
+
+## The copies
+
+`copies` sets when the platform's copies are made and how long each is kept, and
+`copies.recipients` the age recipients the two encrypted ones go to. Every field is
+empty by default, which keeps its default, so an install that sets nothing renders
+exactly what it rendered before. Schedules are UTC and retentions whole days.
+
+```yaml
+copies:
+  recipients: [age1...]              # public keys only; empty makes no encrypted copy
+  postgres: {schedule: "0 0 3 * * *", retention: 7d}   # seconds first
+  mirror:   {schedule: "17 * * * *",  retention: 7d}
+  objects:  {schedule: "5 * * * *",   retention: 7d}
+  gitea:    {schedule: "10 * * * *",  retention: 7d}
+registry:
+  retention: {untaggedAfter: 24h, keepTags: ["^v[0-9]"], keepNewest: 10, gcInterval: 1h, gcDelay: 1h}
+```
+
+Postgres's archive and the mirror are the gitops template's: the chart hands
+`copies` (`INFRARED_COPIES`) and `registry.retention`
+(`INFRARED_REGISTRY_RETENTION`) to the operator as JSON, and the template carries
+both in its `infrared` Application, so they survive Argo CD's adoption. With a
+recipient, the chart runs two CronJobs of its own in the release namespace, each
+the operator's image in one of its modes, and the template makes their buckets:
+
+| CronJob | When | What |
+|---|---|---|
+| `infrared-objects-copy` | `5 * * * *` | `copy-objects`: Infrared's own objects with their status, the Secrets the cluster cannot make again and the ConfigMaps they own, as the ServiceAccount `infrared-objects-copy`, which may read and nothing more |
+| `infrared-gitea-dump` (with `gitea.enabled`) | `10 * * * *` | on Gitea's node, as Gitea's user, Gitea's own image runs `gitea dump --type tar.gz --skip-log --skip-index`; then `put` encrypts and uploads it. The dump holds `app.ini`'s security keys, so it is encrypted too |
+
+Each copy is encrypted with age to every recipient, written to its bucket in the
+platform's object store (`infrared-objects`, `gitea-dumps`) as `<UTC>.tar.gz.age`
+with a clear manifest `<UTC>.json`, and older ones go after the retention. The
+hourly mirror then carries both buckets outside. Both run with `Forbid` and a
+15-minute deadline; their keys are the Secrets `objects-copy-s3` and
+`gitea-dump-s3`, which the gitops template copies here. Any one recipient's
+private key opens both copies, and a restore needs both, so one key is enough.
+The private key is never a value: see "Restore at install".
+
+## Restore at install
+
+An install restores itself from the backup bucket's copies, made by an install of
+the same name, before anything acts on them. The person who holds the age key
+makes its Secret first, then installs with the usual values:
+
+```bash
+kubectl create namespace infrared
+kubectl -n infrared create secret generic infrared-backup-identity \
+  --from-file=identity="$HOME/path/to/age-identity"
+helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <version> \
+  -n infrared -f values.yaml <the usual --set-file tokens> \
+  --set restore.enabled=true --set gitea.replicaCount=0   # [--set restore.from=2026-10-03T05:00:00Z]
+```
+
+The identity is a Secret, never a value: Helm keeps every value in its release
+record, which outlives the restore. `restore.enabled` needs `stores.enabled` and a
+backup bucket, and with Gitea `gitea.replicaCount=0`: the chart refuses the install
+without them. It then renders:
+
+| What | Name | Does |
+|---|---|---|
+| `INFRARED_RESTORE` (`{"from": ...}` or `{}`) | the operator, the API | the operator starts no controller and the API no setup wizard and no run until the restore allows |
+| Job | `infrared-restore`, ServiceAccount, ClusterRole and ClusterRoleBinding of the same name | the operator's `restore` mode: picks the copies, writes the ConfigMap `infrared-restore` (phase `Planned`), waits for Gitea's restore, starts Gitea, restores Infrared's objects (phase `ObjectsRestored`) |
+| Job (with Gitea) | `infrared-gitea-restore`, ServiceAccount, Role and RoleBinding of the same name | the operator's `gitea-restore` mode: fills Gitea's empty volume from the Gitea dump the plan names, as Gitea's user, reading the plan alone |
+
+The operator finishes the restore (phase `Complete`) once the gitops template has
+brought the stores back, and then deletes the Secret `infrared-backup-identity`,
+both Jobs and both bindings, so no restore right outlives it. The ClusterRole and
+the ServiceAccounts stay, inert. Argo CD's render carries no `restore`, so it
+renders none of this.
+
+## Gitea
+
+`gitea.enabled: true` runs Gitea in the release namespace as the forge for the
+install's orgs: the chart's one dependency, the gitea chart 12.7.0 with Gitea
+1.27.3 (`docker.gitea.com/gitea:1.27.3-rootless`, by digest). It is off by
+default, and then the chart renders exactly what it rendered before. Everything
+under `gitea:` but `enabled` is the gitea chart's own values, preset for one pod:
+
+| What | Preset |
+|---|---|
+| Names | Deployment `gitea`, Service `gitea-http` (ClusterIP, port 3000), claim `gitea-shared-storage` |
+| Pod | One, replaced with `Recreate`; non-root, no privilege escalation, every capability dropped |
+| Data | SQLite, the repositories and the LevelDB queue on one ReadWriteOnce volume of `gitea.persistence.storageClass` (the cluster's default when empty) and `gitea.persistence.size` (10Gi); an in-memory cache and sessions |
+| Access | No Ingress and no SSH; sign-in required to see anything, no self-registration, basic auth on (the API mints tokens with it); `ROOT_URL` `http://gitea-http.infrared.svc.cluster.local:3000/` |
+| Off | The gitea chart's PostgreSQL, PostgreSQL HA, Valkey, Valkey cluster and test pod |
+
+With it on, the operator and the API get `INFRARED_GITEA_URL`,
+`http://gitea-http.<release namespace>.svc.cluster.local:3000`, and the API
+`INFRARED_GITEA_ADMIN_SECRET: infrared-gitea-admin`. Gitea's site admin is that
+Secret (see "Generated Secrets"): the chart generates it once, Gitea creates the
+admin from it and resets the admin's password to it at every start, and the API
+reads it at the setup wizard's forge step to make an org's bot user. Installed in
+a namespace other than `infrared`, set `gitea.gitea.config.server.ROOT_URL` and
+`.DOMAIN` to match.
+
+```yaml
+gitea:
+  enabled: true
+  persistence:
+    storageClass: linode-block-storage-retain   # on Linode: the volume outlives its claim
+    size: 10Gi
+```
+
+**The volume.** The claim carries `helm.sh/resource-policy: keep` and
+`argocd.argoproj.io/sync-options: Prune=false,Delete=false`: neither uninstalling,
+turning Gitea off nor deleting the Application deletes it, and with a Retain class
+the volume outlives even the claim. Deleting it is a person's decision.
+
+**After Argo CD adopts the release** the gitops template's `infrared`
+Application carries `gitea.enabled`, `giteaAdmin.existingSecret` and, on Linode,
+the volume's class, so Argo CD renders every object of Gitea's exactly as the
+install did (`make verify` compares them) and never a new admin password. It does
+not carry the size: a size other than 10Gi goes in the gitops repo's
+`registry/clusters/<cluster>/values/infrared.yaml` as well, or Argo CD would try
+to shrink the claim, which Kubernetes refuses.
+
+The gitea chart is not committed: `make deps` (`hack/deps.sh`) vendors it into
+`charts/infrared/charts/` with `helm dependency build`, at the version in
+`Chart.lock`, and checks the archive's sha256. `make verify`, `lint`,
+`template` and `package` run it, and so does the publish workflow.
 
 ## Extensions
 
@@ -164,11 +454,34 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `fullnameOverride` | `""` | Overrides the resource name prefix (`infrared` for a release named infrared) |
 | `managementCluster.name` | `infrared-mgmt` | Management cluster name (`INFRARED_CLUSTER_NAME`) |
 | `externalURL` | `""` | The API's public base URL, ending in `/api` (for example `https://infrared.example.com/api`), if exposed (`INFRARED_EXTERNAL_URL`, api). Usually unnecessary: Infrared works it out from the request |
-| `gitops.templateVersion` | `v0.1.9` | infrared-gitops-template tag the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
+| `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
+| `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
+| `gitops.templateVersion` | `v0.1.10` | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
-| `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). |
+| `registry.address` | `""` | The install's own registry, host and port with no scheme (`INFRARED_REGISTRY`, operator and API). See "The install's own registry" |
+| `registry.retention.untaggedAfter` / `.keepTags` / `.keepNewest` / `.gcInterval` / `.gcDelay` | `""` / `[]` / `0` / `""` / `""` | Zot's retention and garbage collection (`INFRARED_REGISTRY_RETENTION`, operator, JSON); each empty one keeps the gitops template's: `24h`, `["^v[0-9]"]`, `10`, `1h`, `1h`. See "The copies" |
+| `copies.recipients` | `[]` | age recipients (`age1...`, public keys) the copies of Infrared's objects and of Gitea are encrypted to; empty makes neither. See "The copies" |
+| `copies.postgres.schedule` / `.retention` | `""` / `""` | Postgres's base backup, six cron fields, seconds first, and how long its archive is kept, whole days; empty: `0 0 3 * * *`, `7d` (`INFRARED_COPIES`, operator, JSON) |
+| `copies.mirror.schedule` / `.retention` | `""` / `""` | The buckets' copy to the backup bucket; empty: `17 * * * *`, `7d` |
+| `copies.objects.schedule` / `.retention` | `""` / `""` | The CronJob `infrared-objects-copy`; empty: `5 * * * *`, `7d` |
+| `copies.gitea.schedule` / `.retention` | `""` / `""` | The CronJob `infrared-gitea-dump`, with `gitea.enabled`; empty: `10 * * * *`, `7d` |
+| `restore.enabled` / `.from` | `false` / `""` | Restore this install from the backup bucket's copies at install (`INFRARED_RESTORE`, operator and API), the newest at or before `from` (RFC 3339, UTC), the newest when empty. See "Restore at install" |
+| `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
+| `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster that copies of the stores go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
+| `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
+| `codeIndex.enabled` | `false` | Infrared's code index, which the gitops template runs in the namespace `code-index`: its image is handed to the operator among Infrared's own (`INFRARED_IMAGES`, `code-index`). Needs an `image.registry` other than the default, and a pin. See "The code index" |
+| `codeIndex.image.tag` / `.digest` | `one-install-4362b7d` / `sha256:8fba2e14…` | The image `<image.registry>/infrared-codeindex`: a `one-install-<short sha>` build of darkshiftio/infrared-codeindex, and its `sha256:` digest |
+| `substrate.testActors` | `false` | Agent Substrate's test actors, `counter-v1` and `sandbox-v1`, for the gitops template's counter test and fence check. Off, with `stores.enabled` and `registry.address`, adds `substrate-test-actors` to `INFRARED_DISABLED_COMPONENTS`. See "Substrate's test actors" |
+| `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
-| `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET` |
+| `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job |
+| `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
+| `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
+| `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`. Pass them with `--set-file` |
+| `gitea.enabled` | `false` | Run Gitea, the chart's gitea dependency, and hand its address to the operator and the API (`INFRARED_GITEA_URL`) and its admin Secret to the API (`INFRARED_GITEA_ADMIN_SECRET`). See "Gitea" |
+| `gitea.persistence.storageClass` / `.size` | `""` / `10Gi` | StorageClass and size of Gitea's volume; empty uses the cluster's default class |
+| `gitea.*` | one pod, SQLite, no Ingress or SSH | The gitea chart's own values, preset as "Gitea" describes. `gitea.fullnameOverride` (`gitea`) and `gitea.gitea.admin.existingSecret` (`infrared-gitea-admin`) are fixed |
+| `giteaAdmin.existingSecret` | `""` | `infrared-gitea-admin` when it already exists, as under Argo CD; the chart then renders none |
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |
@@ -202,15 +515,31 @@ them on every sync (the gitops template syncs the `infrared` Application with
   `config/rbac/role.yaml` (kubebuilder markers), plus a Role for leader election
   in the release namespace.
 - **api**: ClusterRole over every `infrared.darkshift.io` resource and status;
-  namespaces get/list/create (organizations live in `ir-org-*` namespaces);
+  zones' Ingresses get/list and, on a Gateway edge, their HTTPRoutes get (a
+  zone's links); Deployments, StatefulSets, CronJobs and CloudNativePG
+  Clusters and Backups get/list (the platform by layer: Infrared's own
+  Deployments, Gitea, Argo CD's controller and repo server, the stores'
+  Postgres and its backups, and the CronJob that copies the buckets); namespaces get/list/create (organizations live in `ir-org-*` namespaces);
   secrets get/list/create/update/patch. The secrets rule is cluster-wide in this
   skeleton; P2 narrows it to the release namespace and the `ir-org-*` namespaces.
 - **ui**, **mcp**: no Kubernetes API access (no token is mounted).
+- **infrared-objects-copy** (with `copies.recipients`): ClusterRole that may get
+  and list every `infrared.darkshift.io` resource, namespaces, Secrets and
+  ConfigMaps, and nothing else. `infrared-gitea-dump` mounts no token.
+- **infrared-restore** (with `restore.enabled`): ClusterRole that may get, list,
+  watch, create, update and patch every `infrared.darkshift.io` resource,
+  namespaces, Secrets and ConfigMaps, create events, and, by name, scale the
+  Deployment `gitea` and read the Job `infrared-gitea-restore`; it deletes
+  nothing. Every right is in the one ClusterRoleBinding `infrared-restore`,
+  which the operator deletes when the restore is complete.
+  **infrared-gitea-restore**: a Role that may get the ConfigMap
+  `infrared-restore`, and nothing else.
 
 ## Keeping the chart in step with the operator
 
 ```bash
 make sync-operator   # hack/sync-operator.sh [../infrared-operator]
+INFRARED_OPERATOR_DIR=<another checkout> make sync-operator   # e.g. a branch's worktree
 ```
 
 copies `config/crd/bases/*.yaml` into `charts/infrared/crds/` and replaces the
@@ -221,8 +550,11 @@ change it came from.
 ## Development
 
 ```bash
-make verify     # shell checks, helm lint, helm template (6 value sets), assertions, kubeconform
+make deps       # vendor the gitea chart at Chart.lock's version, its sha256 checked
+make verify     # make deps, shell checks, helm lint, helm template (13 value sets), assertions, kubeconform
 make template   # render with defaults
+scripts/compare-render.sh origin/main                  # this tree's renders against another ref's, CRDs aside
+scripts/compare-render.sh origin/main --include-crds   # ...and the CRDs
 ```
 
 CI (`.github/workflows/ci.yml`) runs `make verify` on every PR and on `main`.
@@ -230,12 +562,31 @@ CI (`.github/workflows/ci.yml`) runs `make verify` on every PR and on `main`.
 ## Releasing
 
 1. Bump `version` (and `appVersion` if the components moved) in `charts/infrared/Chart.yaml`.
+   A release that takes a new gitops template sets `gitops.templateVersion` to
+   that template's tag in the same change, so the template is tagged first. The
+   default always names a released tag, never a commit.
 2. Merge, then tag `v<version>` (e.g. `v0.1.0`).
 3. `.github/workflows/release.yml` verifies, checks the tag matches the chart
    version, and pushes to `oci://ghcr.io/darkshiftio/charts`.
 
 Component images are not built here: kpack builds them on darkshift-build
 (darkshiftio/gitops) and `scripts/release-tag.sh` there produces the pins.
+
+### Pre-releases from a branch
+
+`.github/workflows/publish-prerelease.yml` publishes the chart of a branch,
+on demand, as `<version>.oneinstall.<run number>`: for `0.1.0-alpha.92` in
+`Chart.yaml`, run 7 publishes `0.1.0-alpha.92.oneinstall.7`. Semver puts that
+above `0.1.0-alpha.92` and below the next release, so successive runs sort
+upward, a cluster whose gitops repo pins the base version or an older one moves
+up to it, and no pre-release ever outranks a later release for `--devel`. It
+never pushes a tag, so `release.yml` never fires. Install it by its exact
+version:
+
+```bash
+gh workflow run publish-prerelease.yml -R darkshiftio/infrared-chart --ref <branch>
+helm template infrared oci://ghcr.io/darkshiftio/charts/infrared --version 0.1.0-alpha.92.oneinstall.7 -n infrared
+```
 
 ## License
 

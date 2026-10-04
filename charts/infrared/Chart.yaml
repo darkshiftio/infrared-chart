@@ -16,3 +16,11 @@ keywords:
 maintainers:
   - name: darkshift
     url: https://github.com/darkshiftio
+dependencies:
+  # Gitea, the forge an install may run for its orgs' repos: off unless
+  # gitea.enabled. hack/deps.sh (make deps) vendors it at Chart.lock's version and
+  # checks the archive's sha256; values.yaml presets it for one pod.
+  - name: gitea
+    version: 12.7.0
+    repository: oci://docker.gitea.com/charts
+    condition: gitea.enabled

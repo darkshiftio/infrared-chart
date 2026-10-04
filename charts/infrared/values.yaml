@@ -15,8 +15,26 @@ managementCluster:
 # (INFRARED_EXTERNAL_URL). Optional: Infrared works it out from each request.
 externalURL: ""
 
+# What the operator writes to the Installation when it starts, so nobody patches
+# it after the install. It writes each field only while that field is empty, and
+# never overwrites one.
+installation:
+  # -- The edge the gitops template routes through (INFRARED_EDGE, operator):
+  # `traefik`, an Ingress per route as before, or `gateway`, routes on the shared
+  # Envoy Gateway. Empty means traefik. Written to the Installation's `spec.edge`.
+  edge: ""
+  # -- Preview settings (INFRARED_PREVIEWS, operator, as JSON): `domain` and
+  # `signInURL`, and optionally `ingressHost`, `ingressIP`, `managedRoots` and
+  # `cloudflareTokenSecret`. Written to the Installation's `spec.previews`.
+  # Empty leaves previews to a person, as before.
+  previews: {}
+  #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
+  #   signInURL: https://infrared.example.com  # where preview visitors sign in
+
 gitops:
-  # -- Version (git tag) of infrared-gitops-template the API asks the operator to render.
+  # -- Version of infrared-gitops-template the API asks the operator to render
+  # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
+  # to install from a branch of the template.
   templateVersion: v0.1.10
 
 builds:
@@ -25,16 +43,157 @@ builds:
   # Empty leaves the gitops template's builds component out.
   registry: ""
 
+registry:
+  # -- The install's own registry, as builds and nodes reach it: host and port,
+  # no scheme, e.g. `10.43.0.50:5000` (Zot, over plain HTTP inside the
+  # cluster; INFRARED_REGISTRY, operator and API). The operator keeps a
+  # registry user, rule and push credential per organization, builds as each
+  # organization's builder, lets steps whose AgentRole may publish push to it,
+  # and hands it to the gitops template (its `Registry`). Empty: none of them.
+  address: ""
+  # Zot's garbage collection and retention (INFRARED_REGISTRY_RETENTION,
+  # operator, as JSON, for the gitops template's Zot). Each empty field keeps
+  # the template's default, shown with it.
+  retention:
+    # -- An untagged image goes this long after it was untagged, e.g. `48h`. Empty: `24h`.
+    untaggedAfter: ""
+    # -- Every tag that matches one of these regular expressions is kept, e.g. `["^v[0-9]"]`. Empty: `["^v[0-9]"]`.
+    keepTags: []
+    # -- Besides those, each repository keeps its this many newest tags, 1 to 1000. 0: `10`.
+    keepNewest: 0
+    # -- How often garbage is collected, e.g. `1h`. Empty: `1h`.
+    gcInterval: ""
+    # -- How long a blob stays after its last use before it may be collected, e.g. `1h`. Empty: `1h`.
+    gcDelay: ""
+
+stores:
+  # -- Install the platform's stores through the gitops template: one Postgres
+  # and one object store in the cluster (INFRARED_STORES, operator). Off leaves
+  # them out, as before.
+  enabled: false
+
+# The bucket outside the cluster that copies of the stores go to (INFRARED_BACKUP,
+# operator, as JSON): all three, or none. Empty means no copies. The bucket's key
+# comes from platformTokens.
+backup:
+  # -- Bucket name.
+  bucket: ""
+  # -- The bucket's S3 endpoint: https:// and a host, e.g. `https://s3.example.com`.
+  endpoint: ""
+  # -- The region S3 requests are signed for, e.g. `us-east-1`.
+  region: ""
+
+# The platform's copies (INFRARED_COPIES, operator, as JSON; the gitops template
+# carries it into its infrared Application). Every field is empty by default,
+# which keeps the default beside it, so an install that sets nothing renders
+# what it rendered before. Schedules are UTC; retentions are whole days, e.g. 7d.
+copies:
+  # -- age recipients (public keys, `age1...`) the hourly copies of Infrared's
+  # objects and of Gitea are encrypted to: one or more, and any one of their
+  # private keys restores both. Empty (the default) makes neither copy, and the
+  # gitops template makes neither bucket, so nothing changes until a person
+  # makes the key. Only the public half is ever in values.
+  recipients: []
+  postgres:
+    # -- Postgres's base backup: six cron fields, seconds first. Empty: `0 0 3 * * *`.
+    schedule: ""
+    # -- How long Postgres's archive is kept. Empty: `7d`.
+    retention: ""
+  mirror:
+    # -- The buckets' copy to the backup bucket: five cron fields. Empty: `17 * * * *`.
+    schedule: ""
+    # -- How long what a copy replaced or deleted is kept. Empty: `7d`.
+    retention: ""
+  objects:
+    # -- The copy of Infrared's objects (CronJob infrared-objects-copy): five cron fields. Empty: `5 * * * *`.
+    schedule: ""
+    # -- How long each copy is kept. Empty: `7d`.
+    retention: ""
+  gitea:
+    # -- Gitea's dump (CronJob infrared-gitea-dump, with gitea.enabled): five cron fields. Empty: `10 * * * *`.
+    schedule: ""
+    # -- How long each dump is kept. Empty: `7d`.
+    retention: ""
+
+# Restore at install: this install comes back from the backup bucket's copies,
+# made by an install of the same name, before anything acts on them. Give the
+# install's usual values with restore.enabled, and, with Gitea,
+# gitea.replicaCount=0: Gitea starts once its data is back. The age identity
+# that opens the copies is the Secret infrared-backup-identity (key identity),
+# made with kubectl before helm install, never a value: Helm keeps every value
+# in its release record, which outlives the restore. The operator deletes that
+# Secret once the restore is complete. Argo CD never renders any of this.
+restore:
+  # -- Restore this install from the backup bucket's copies (INFRARED_RESTORE,
+  # operator and API): the Jobs infrared-restore and, with Gitea,
+  # infrared-gitea-restore. Needs stores.enabled and a backup bucket.
+  enabled: false
+  # -- Restore the newest copies at or before this time, RFC 3339 in UTC, e.g.
+  # `2026-10-03T05:00:00Z`. Empty: the newest.
+  from: ""
+
+components:
+  # -- The gitops template's components the install leaves out, by name, e.g.
+  # `[infisical]` (INFRARED_DISABLED_COMPONENTS, operator, as JSON). Empty leaves
+  # out none.
+  disabled: []
+
+substrate:
+  # -- Agent Substrate's test actors, counter-v1 and sandbox-v1, which the gitops
+  # template's counter test and fence check run against. sandbox-v1 runs any
+  # command it is sent, so they are off by default: with the stores and a
+  # registry, where the template can run Substrate, the chart names
+  # `substrate-test-actors` among the components the install leaves out
+  # (INFRARED_DISABLED_COMPONENTS) unless this is true.
+  testActors: false
+
+codeIndex:
+  # -- Infrared's code index: Zoekt and the code service, which the gitops
+  # template runs in the namespace code-index, reached by infrared-api alone at
+  # http://code-index.code-index.svc:8080. Off by default. On, the chart hands
+  # its image to the operator among Infrared's own (INFRARED_IMAGES, code-index),
+  # and the template runs it; that needs image.registry to name the registry its
+  # image is in (ghcr.io/darkshiftio), since the template names the image by it.
+  # Its record (a ConfigMap) and its credential for private repositories (a
+  # Secret) are the install's: see "The code index".
+  enabled: false
+  image:
+    # -- The image <image.registry>/infrared-codeindex, by tag and digest: a
+    # one-install-<short sha> build of darkshiftio/infrared-codeindex, from its
+    # publish-image workflow.
+    tag: one-install-4362b7d
+    # -- Its digest, sha256:...; empty pins by the tag alone.
+    digest: sha256:8fba2e14469262819857ee651dbdaa629521a2aab64386a91cb609179774246d
+
 image:
-  # -- Registry prefix shared by every component image.
+  # -- Registry prefix shared by every component image. Any registry other than
+  # this default is handed to the operator with every component's tag and digest
+  # (INFRARED_IMAGE_REGISTRY, INFRARED_IMAGES), so the gitops template writes them
+  # into the `infrared` Application and Argo CD keeps them when it adopts the release.
   registry: 977456087177.dkr.ecr.us-east-1.amazonaws.com
   # -- Pull policy for every component image.
   pullPolicy: IfNotPresent
 
 # -- Image pull secrets for every pod, e.g. `[{name: ghcr-pull}]`. The first
 # name is also handed to the operator (INFRARED_IMAGE_PULL_SECRET) for the
-# clusters it bootstraps.
+# clusters it bootstraps and for runner Jobs: it copies the Secret into each org
+# namespace and sets it on every Job.
 imagePullSecrets: []
+
+# The Secret named by imagePullSecrets[0], a kubernetes.io/dockerconfigjson for
+# one registry, rendered when a username and password are set. Empty (the
+# default) renders none, and that Secret must already exist in the release
+# namespace. Pass the password with --set-file so it is never in a values file;
+# surrounding whitespace is trimmed. The Secret is kept on uninstall and when the
+# values stop carrying the password, as under Argo CD after adoption.
+imageCredentials:
+  # -- Registry host the credential is for. The operator also reads it for the
+  # chart repository on ghcr.io.
+  registry: ghcr.io
+  # -- Username; required with a password.
+  username: ""
+  # -- Password or token, e.g. a token that may only read packages; required with a username.
+  password: ""
 
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is
 # generated once and kept across upgrades (looked up with `lookup`). Under
@@ -50,6 +209,39 @@ session:
   # -- Session signing key (Secret `infrared-session`, key `key`). Empty generates 64 random characters.
   key: ""
   # -- Name of an existing Secret with key `key`; when set, the chart renders no session Secret.
+  existingSecret: ""
+
+# Tokens the platform's own components use, kept in one Secret,
+# `infrared-platform-tokens`, in the release namespace. The gitops template's
+# External Secrets component reads it through the ClusterSecretStore
+# `infrared-platform` and copies each token to the namespace that uses it. The
+# Secret is rendered when a token is set. Pass each token with --set-file so it is
+# never in a values file; surrounding whitespace is trimmed. It is kept on
+# uninstall and when the values stop carrying the token, as under Argo CD after
+# adoption.
+platformTokens:
+  # -- Cloudflare API token (key `cloudflare-api-token`), for the edge's DNS
+  # records and origin certificates.
+  cloudflareApiToken: ""
+  # -- Access key ID of the backup bucket's key (key `backup-access-key-id`);
+  # required with the secret access key.
+  backupAccessKeyId: ""
+  # -- Secret access key of the backup bucket's key (key `backup-secret-access-key`);
+  # required with the access key ID.
+  backupSecretAccessKey: ""
+  # -- `infrared-platform-tokens` when that Secret already exists; the chart then
+  # renders none. The name is fixed: the template reads it.
+  existingSecret: ""
+
+# Gitea's site admin, in the Secret `infrared-gitea-admin` (keys username,
+# password and email), when gitea.enabled. The chart generates it once, with a
+# random password, and keeps it: on upgrades, on uninstall, and once Argo CD
+# adopts the release. Gitea reads the username and password from it and resets
+# the admin's password to it at every start; the API reads it
+# (INFRARED_GITEA_ADMIN_SECRET) to make an org's bot user. Never printed.
+giteaAdmin:
+  # -- `infrared-gitea-admin` when that Secret already exists; the chart then
+  # renders none, as under Argo CD (the gitops template sets it). The name is fixed.
   existingSecret: ""
 
 # Pod-level defaults shared by every component; each component may override.
@@ -235,3 +427,121 @@ mcp:
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+
+# Gitea, the forge an install may run for its orgs' repos: the chart's `gitea`
+# dependency (gitea chart 12.7.0, Gitea 1.27.3), off by default. Every key below
+# but `enabled` is the gitea chart's own (https://gitea.com/gitea/helm-gitea),
+# preset for one pod: SQLite on one volume, an in-memory cache, a LevelDB queue,
+# no ingress and no SSH, sign-in required and no self-registration. The operator
+# and the API reach it at http://gitea-http.<release namespace>.svc.cluster.local:3000
+# (INFRARED_GITEA_URL), and its site admin is the Secret giteaAdmin describes.
+gitea:
+  # -- Run Gitea in the release namespace, and hand its address to the operator
+  # and the API (INFRARED_GITEA_URL) and its admin Secret to the API
+  # (INFRARED_GITEA_ADMIN_SECRET).
+  enabled: false
+  # -- Fixed: the Deployment is `gitea` and its Service `gitea-http`.
+  fullnameOverride: gitea
+  replicaCount: 1
+  # One pod on a ReadWriteOnce volume: the old pod lets go of it before the new
+  # one starts.
+  strategy:
+    type: Recreate
+  image:
+    registry: docker.gitea.com
+    repository: gitea
+    # -- Gitea's version; the chart appends `-rootless`.
+    tag: "1.27.3"
+    rootless: true
+    # -- The image index of docker.gitea.com/gitea:1.27.3-rootless (linux/amd64,
+    # arm64 and riscv64), read with crane on 2026-10-02.
+    digest: sha256:1c17ecaead42eb3b5391553d8708103a4beb0e86edf5b9ebc1eb269c318845f2
+    pullPolicy: IfNotPresent
+  service:
+    http:
+      # A ClusterIP Service, where the gitea chart's default is headless, so
+      # Gitea's address does not change when its pod is replaced.
+      clusterIP: ""
+      port: 3000
+  ingress:
+    enabled: false
+  persistence:
+    enabled: true
+    # -- StorageClass of Gitea's volume, which holds its database and every
+    # repository; empty uses the cluster's default. On Linode,
+    # `linode-block-storage-retain` keeps the volume when its claim goes.
+    storageClass: ""
+    # -- Size of Gitea's volume. Argo CD renders the default once it adopts the
+    # release, so a larger size goes in the gitops repo's values file as well.
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+    # Kept on uninstall, and never pruned or deleted by Argo CD.
+    annotations:
+      helm.sh/resource-policy: keep
+      argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  gitea:
+    admin:
+      # -- Fixed: the Secret giteaAdmin describes. Gitea reads the admin's
+      # username and password from it.
+      existingSecret: infrared-gitea-admin
+      # -- The admin's username, written to the Secret when the chart generates
+      # it. An underscore keeps it apart from every organization and bot name.
+      username: gitea_admin
+      # Unused while existingSecret is set; the gitea chart's own default is a
+      # well-known password.
+      password: ""
+      # -- The email Gitea creates the admin with, also written to the Secret.
+      email: gitea_admin@gitea.local
+      # The admin's password is reset to the Secret's at every start.
+      passwordMode: keepUpdated
+    config:
+      server:
+        # -- Gitea's own URL: its Service in the release namespace, as
+        # INFRARED_GITEA_URL has it, with a trailing slash. Change it with the
+        # namespace.
+        ROOT_URL: http://gitea-http.infrared.svc.cluster.local:3000/
+        DOMAIN: gitea-http.infrared.svc.cluster.local
+        # Set here, not left to the gitea chart's defaults, which fill it in
+        # only after its Service has rendered with an empty targetPort.
+        HTTP_PORT: 3000
+        DISABLE_SSH: true
+        START_SSH_SERVER: false
+        OFFLINE_MODE: true
+      database:
+        DB_TYPE: sqlite3
+      cache:
+        ADAPTER: memory
+      queue:
+        TYPE: level
+      service:
+        DISABLE_REGISTRATION: true
+        REQUIRE_SIGNIN_VIEW: true
+        # The API mints the bot's tokens over basic auth.
+        ENABLE_BASIC_AUTHENTICATION: true
+      cron.update_checker:
+        ENABLED: false
+  # The gitea chart's databases, caches and test pod: none, with SQLite.
+  postgresql:
+    enabled: false
+  postgresql-ha:
+    enabled: false
+  valkey-cluster:
+    enabled: false
+  valkey:
+    enabled: false
+  test:
+    enabled: false

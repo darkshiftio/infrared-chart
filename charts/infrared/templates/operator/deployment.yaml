@@ -1,3 +1,4 @@
+{{- include "infrared.codeIndexCheck" . }}
 {{- $c := .Values.operator }}
 {{- $ctx := dict "root" . "c" $c "component" "operator" }}
 apiVersion: apps/v1
@@ -40,14 +41,86 @@ spec:
                   fieldPath: metadata.namespace
             - name: INFRARED_CLUSTER_NAME
               value: {{ .Values.managementCluster.name | quote }}
+            {{- with .Values.installation.edge }}
+            # The Installation's spec.edge, written while it is empty.
+            - name: INFRARED_EDGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.installation.previews }}
+            # The Installation's spec.previews, written while it is empty.
+            - name: INFRARED_PREVIEWS
+              value: {{ toJson . | quote }}
+            {{- end }}
             - name: INFRARED_VERSION
               value: {{ .Chart.AppVersion | quote }}
             - name: INFRARED_CHART_VERSION
               value: {{ .Chart.Version | quote }}
             - name: INFRARED_IMAGE_PULL_SECRET
               value: {{ include "infrared.firstPullSecret" . | quote }}
+            {{- with include "infrared.handedRegistry" . }}
+            # Images from a registry other than the default: the operator hands
+            # the registry and every pin to the gitops template.
+            - name: INFRARED_IMAGE_REGISTRY
+              value: {{ . | quote }}
+            - name: INFRARED_IMAGES
+              value: {{ include "infrared.imagePins" $ | quote }}
+            {{- end }}
             - name: INFRARED_BUILD_REGISTRY
               value: {{ .Values.builds.registry | quote }}
+            {{- with .Values.registry.address }}
+            # The install's own registry: a user, rule and push credential per
+            # organization, steps that publish, and the gitops template's Registry.
+            - name: INFRARED_REGISTRY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.stores.enabled }}
+            # The platform's stores, which the gitops template installs.
+            - name: INFRARED_STORES
+              value: "true"
+            {{- end }}
+            {{- with include "infrared.backup" . }}
+            # The bucket outside the cluster that copies of the stores go to.
+            - name: INFRARED_BACKUP
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "infrared.disabledComponents" . }}
+            # The gitops template's components the install leaves out, Substrate's
+            # test actors among them unless substrate.testActors is true.
+            - name: INFRARED_DISABLED_COMPONENTS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "infrared.copies" . }}
+            # The platform's copies: their schedules and retentions, and the
+            # age recipients of the encrypted ones, for the gitops template.
+            - name: INFRARED_COPIES
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "infrared.registryRetention" . }}
+            # Zot's garbage collection and retention, for the gitops template.
+            - name: INFRARED_REGISTRY_RETENTION
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.codeIndex.enabled }}
+            # Agent steps get Infrared's MCP server, the code tools among its
+            # tools, at its in-cluster listener, with the access Secret's token
+            # behind the runner's proxy: only while the code index runs.
+            - name: INFRARED_MCP_URL
+              value: {{ printf "http://%s.%s.svc:8081/mcp" (include "infrared.componentName" (dict "root" . "component" "mcp")) .Release.Namespace | quote }}
+            - name: INFRARED_MCP_ACCESS_SECRET
+              value: {{ include "infrared.mcpAccessSecret" . | quote }}
+            {{- end }}
+            {{- with include "infrared.restore" . }}
+            # This install is a restore: the operator starts no controller
+            # until the Job infrared-restore has restored Infrared's objects.
+            - name: INFRARED_RESTORE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.gitea.enabled }}
+            # The Gitea this chart runs: the operator gives an org's GitProvider
+            # its bot's token only when spec.gitea.url is this one.
+            - name: INFRARED_GITEA_URL
+              value: {{ include "infrared.giteaURL" . | quote }}
+            {{- end }}
             - name: INFRARED_RUNNER_IMAGE
               value: {{ include "infrared.image" (dict "root" . "image" .Values.runner.image) | quote }}
             - name: INFRARED_GO_TOOLCHAIN_IMAGE

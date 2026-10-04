@@ -31,13 +31,78 @@
       "type": "string",
       "pattern": "^(https?://.+)?$"
     },
+    "installation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the operator writes to the Installation while each field is empty.",
+      "properties": {
+        "edge": {
+          "type": "string",
+          "enum": [
+            "",
+            "traefik",
+            "gateway"
+          ],
+          "description": "spec.edge (INFRARED_EDGE); empty means traefik."
+        },
+        "previews": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "spec.previews (INFRARED_PREVIEWS, as JSON); empty leaves previews to a person.",
+          "properties": {
+            "domain": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Zone z answers at https://<z>.<domain>."
+            },
+            "signInURL": {
+              "type": "string",
+              "pattern": "^https://",
+              "description": "Infrared's public URL, where preview visitors sign in."
+            },
+            "ingressHost": {
+              "type": "string",
+              "description": "The name customers point their own domains at with a CNAME."
+            },
+            "ingressIP": {
+              "type": "string",
+              "description": "The ingress's public address, for A records on root domains."
+            },
+            "managedRoots": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Domains Infrared manages in Cloudflare, under which any org can claim a subdomain."
+            },
+            "cloudflareTokenSecret": {
+              "type": "string",
+              "description": "A Secret in the release namespace whose api-token key may edit DNS for the managed roots."
+            }
+          },
+          "anyOf": [
+            {
+              "maxProperties": 0
+            },
+            {
+              "required": [
+                "domain",
+                "signInURL"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "gitops": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "templateVersion": {
           "type": "string",
-          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+.*$"
+          "pattern": "^(v[0-9]+\\.[0-9]+\\.[0-9]+.*|[0-9a-f]{40})$",
+          "description": "A tag of infrared-gitops-template, or a full 40-character commit SHA."
         }
       },
       "required": [
@@ -78,6 +143,52 @@
         "required": [
           "name"
         ]
+      }
+    },
+    "imageCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The Secret named by imagePullSecrets[0], rendered when username and password are set.",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]+)?$",
+          "description": "Registry host the credential is for."
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string",
+          "description": "Pass it with --set-file; surrounding whitespace is trimmed."
+        }
+      }
+    },
+    "platformTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Secret infrared-platform-tokens, rendered when a token is set.",
+      "properties": {
+        "cloudflareApiToken": {
+          "type": "string",
+          "description": "Key cloudflare-api-token. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "backupAccessKeyId": {
+          "type": "string",
+          "description": "Key backup-access-key-id, with backupSecretAccessKey. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "backupSecretAccessKey": {
+          "type": "string",
+          "description": "Key backup-secret-access-key, with backupAccessKeyId. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "existingSecret": {
+          "type": "string",
+          "enum": [
+            "",
+            "infrared-platform-tokens"
+          ],
+          "description": "infrared-platform-tokens when it already exists; the chart then renders none."
+        }
       }
     },
     "setup": {
@@ -522,6 +633,218 @@
         }
       }
     },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The install's own registry (Zot).",
+      "properties": {
+        "address": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?)?$",
+          "description": "Host and port builds and nodes reach the registry at, no scheme (INFRARED_REGISTRY); empty means none."
+        },
+        "retention": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Zot's garbage collection and retention (INFRARED_REGISTRY_RETENTION, as JSON); each empty field keeps the template's default.",
+          "properties": {
+            "untaggedAfter": {
+              "type": "string",
+              "pattern": "^(([0-9]+(h|m|s))+)?$",
+              "description": "An untagged image goes this long after it was untagged, e.g. 48h; empty: 24h."
+            },
+            "keepTags": {
+              "type": "array",
+              "maxItems": 20,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[ -~]{1,200}$"
+              },
+              "description": "Regular expressions; a tag matching one is kept. Empty: [\"^v[0-9]\"]."
+            },
+            "keepNewest": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000,
+              "description": "Each repository's newest tags kept besides; 0: 10."
+            },
+            "gcInterval": {
+              "type": "string",
+              "pattern": "^(([0-9]+(h|m|s))+)?$",
+              "description": "How often garbage is collected; empty: 1h."
+            },
+            "gcDelay": {
+              "type": "string",
+              "pattern": "^(([0-9]+(h|m|s))+)?$",
+              "description": "How long after its last use a blob may be collected; empty: 1h."
+            }
+          }
+        }
+      }
+    },
+    "stores": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Install the platform's stores through the gitops template (INFRARED_STORES)."
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The bucket outside the cluster that copies of the stores go to (INFRARED_BACKUP, as JSON): all three, or none.",
+      "properties": {
+        "bucket": {
+          "type": "string",
+          "pattern": "^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$",
+          "description": "Bucket name: 3 to 63 lowercase letters, digits, dots and hyphens."
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^(https://[^/?#@\\s]+/?)?$",
+          "description": "The bucket's S3 endpoint: https:// and a host, no path."
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$",
+          "description": "The region S3 requests are signed for, e.g. us-east-1."
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "bucket": {
+              "const": ""
+            },
+            "endpoint": {
+              "const": ""
+            },
+            "region": {
+              "const": ""
+            }
+          }
+        },
+        {
+          "properties": {
+            "bucket": {
+              "minLength": 1
+            },
+            "endpoint": {
+              "minLength": 1
+            },
+            "region": {
+              "minLength": 1
+            }
+          },
+          "required": [
+            "bucket",
+            "endpoint",
+            "region"
+          ]
+        }
+      ]
+    },
+    "copies": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The platform's copies (INFRARED_COPIES, as JSON): their schedules and retentions, and the age recipients the copies of Infrared's objects and of Gitea are encrypted to.",
+      "properties": {
+        "recipients": {
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^age1[02-9ac-hj-np-z]{58}$"
+          },
+          "description": "age X25519 recipients (age1...), public keys only. Empty makes no encrypted copy."
+        },
+        "postgres": {
+          "$ref": "#/$defs/copy6"
+        },
+        "mirror": {
+          "$ref": "#/$defs/copy5"
+        },
+        "objects": {
+          "$ref": "#/$defs/copy5"
+        },
+        "gitea": {
+          "$ref": "#/$defs/copy5"
+        }
+      }
+    },
+    "restore": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Restore at install from the backup bucket's copies (INFRARED_RESTORE).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Restore this install; needs stores.enabled and a backup bucket, and with Gitea gitea.replicaCount 0."
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?$",
+          "description": "The newest copies at or before this time are restored, RFC 3339 in UTC; empty: the newest."
+        }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "maxLength": 63
+          },
+          "description": "The gitops template's components the install leaves out, by name (INFRARED_DISABLED_COMPONENTS, as JSON)."
+        }
+      }
+    },
+    "substrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "testActors": {
+          "type": "boolean",
+          "description": "Agent Substrate's test actors, counter-v1 and sandbox-v1. False, with stores.enabled and registry.address, names substrate-test-actors among the components left out (INFRARED_DISABLED_COMPONENTS)."
+        }
+      }
+    },
+    "codeIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Infrared's code index, which the gitops template runs in the namespace code-index. On, its image is handed to the operator among Infrared's own (INFRARED_IMAGES, code-index); it needs image.registry other than the default."
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tag": {
+              "type": "string",
+              "pattern": "^([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$",
+              "description": "The tag of <image.registry>/infrared-codeindex, e.g. one-install-<short sha>."
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^(sha256:[0-9a-f]{64})?$",
+              "description": "Its digest, sha256:...; empty pins by the tag alone."
+            }
+          }
+        }
+      }
+    },
     "runner": {
       "type": "object",
       "additionalProperties": false,
@@ -563,6 +886,87 @@
       "properties": {
         "metricsURL": {
           "type": "string"
+        }
+      }
+    },
+    "giteaAdmin": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Secret infrared-gitea-admin, Gitea's site admin, rendered once when gitea.enabled.",
+      "properties": {
+        "existingSecret": {
+          "type": "string",
+          "enum": [
+            "",
+            "infrared-gitea-admin"
+          ],
+          "description": "infrared-gitea-admin when it already exists; the chart then renders none."
+        }
+      }
+    },
+    "gitea": {
+      "type": "object",
+      "description": "Gitea: the gitea chart's own values, preset for one pod. gitea.enabled turns it on.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Run Gitea, and hand its address (INFRARED_GITEA_URL) and admin Secret (INFRARED_GITEA_ADMIN_SECRET) on."
+        },
+        "fullnameOverride": {
+          "const": "gitea",
+          "description": "Fixed: the Service the operator and the API reach is gitea-http."
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "http": {
+              "type": "object",
+              "properties": {
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              }
+            }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "storageClass": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "StorageClass of Gitea's volume; empty uses the cluster's default."
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(Mi|Gi|Ti)$",
+              "description": "Size of Gitea's volume, e.g. 10Gi."
+            }
+          }
+        },
+        "gitea": {
+          "type": "object",
+          "properties": {
+            "admin": {
+              "type": "object",
+              "properties": {
+                "existingSecret": {
+                  "const": "infrared-gitea-admin",
+                  "description": "Fixed: Gitea reads its admin from the Secret giteaAdmin describes."
+                }
+              }
+            }
+          }
+        },
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "One pod, or none: 0 while a restore fills Gitea's volume."
         }
       }
     }
@@ -706,6 +1110,38 @@
         "resources",
         "service"
       ]
+    },
+    "copy5": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "pattern": "^([0-9A-Za-z*/,?-]+( [0-9A-Za-z*/,?-]+){4})?$",
+          "description": "Five cron fields, UTC; empty keeps the default."
+        },
+        "retention": {
+          "type": "string",
+          "pattern": "^([1-9][0-9]{0,2}d)?$",
+          "description": "How long it is kept, whole days such as 7d; empty keeps 7d."
+        }
+      }
+    },
+    "copy6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "pattern": "^([0-9A-Za-z*/,?-]+( [0-9A-Za-z*/,?-]+){5})?$",
+          "description": "Six cron fields, seconds first, UTC; empty keeps the default."
+        },
+        "retention": {
+          "type": "string",
+          "pattern": "^([1-9][0-9]{0,2}d)?$",
+          "description": "How long it is kept, whole days such as 7d; empty keeps 7d."
+        }
+      }
     }
   }
 }

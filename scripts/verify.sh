@@ -36,6 +36,14 @@ printf 'ci-backup-key-id\n' >"$out/ci-backup-key-id"
 printf 'ci-backup-secret\n' >"$out/ci-backup-secret"
 backup_key=(--set-file "platformTokens.backupAccessKeyId=$out/ci-backup-key-id"
   --set-file "platformTokens.backupSecretAccessKey=$out/ci-backup-secret")
+# The code index's GitHub App: its ID, its installation's and its private key,
+# as an install passes them from SSM.
+printf '5116570\n' >"$out/ci-app-id"
+printf ' 166002914\n' >"$out/ci-app-installation-id"
+printf 'ci-app-key\n\n' >"$out/ci-app-key"
+app_key=(--set-file "platformTokens.codeIndexGithubAppId=$out/ci-app-id"
+  --set-file "platformTokens.codeIndexGithubAppInstallationId=$out/ci-app-installation-id"
+  --set-file "platformTokens.codeIndexGithubAppPrivateKey=$out/ci-app-key")
 install=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set-file "imageCredentials.password=$out/ci-password"
   --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token" "${backup_key[@]}")
@@ -60,6 +68,9 @@ copies=(-f "$chart/ci/copies-values.yaml")
 restore=(-f "$chart/ci/restore-values.yaml")
 if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" "${copies[@]}" "${restore[@]}" >"$out/lint.log" 2>&1; then ok "lint a restore with Gitea and the copies"
 else cat "$out/lint.log"; bad "lint a restore with Gitea and the copies"; fi
+if helm lint --strict "$chart" "${install[@]}" -f "$chart/ci/code-index-values.yaml" "${app_key[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with the code index, its record and its GitHub App"
+else cat "$out/lint.log"; bad "lint install with the code index"; fi
 
 step "helm template"
 helm template infrared "$chart" -n infrared --include-crds >"$out/defaults.yaml"
@@ -96,15 +107,27 @@ helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${cop
 helm template infrared "$chart" -n infrared "${install[@]}" --set substrate.testActors=true >"$out/test-actors.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
   -f "$chart/ci/stores-adopted-values.yaml" --set substrate.testActors=true >"$out/test-actors-adopted.yaml"
-# Infrared's code index on: at install, and once the template's Application
-# carries codeIndex as well.
+# Infrared's code index on: at install with its record alone (no token), with
+# the install's tokens and its GitHub App, and with a record that names no ref;
+# once the template's Application carries codeIndex and
+# platformTokens.existingSecret; as a template from before that carries
+# codeIndex alone; and with the record in values as an org's values file might.
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" >"$out/code-index.yaml"
-helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
-  -f "$chart/ci/stores-adopted-values.yaml" -f "$chart/ci/code-index-values.yaml" >"$out/code-index-adopted.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" -f "$chart/ci/code-index-values.yaml" "${app_key[@]}" \
+  >"$out/code-index-install.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" \
+  --set codeIndex.knowledge.ref= >"$out/code-index-main.yaml"
+code_index_adopted=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml"
+  -f "$chart/ci/stores-adopted-values.yaml" -f "$chart/ci/code-index-adopted-values.yaml")
+helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" >"$out/code-index-adopted.yaml"
+helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" --set platformTokens.existingSecret= \
+  >"$out/code-index-adopted-old.yaml"
+helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" \
+  --set codeIndex.knowledge.url=https://github.com/example-org/knowledge.git >"$out/code-index-adopted-record.yaml"
 # The name named by hand as well: listed once.
 helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
   --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
-ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-adopted"
+ok "rendered defaults, digests, adopted, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, copies, copies-nogitea, copies-adopted, restore, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -113,7 +136,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted copies copies-adopted restore \
-    test-actors test-actors-adopted test-actors-named code-index code-index-adopted; do envs "$f"; done
+    test-actors test-actors-adopted test-actors-named code-index code-index-install code-index-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -347,6 +370,40 @@ objects() { awk '/^---/ {k = ""} /^kind: / {k = $2} /^  name: / && k {print k "/
 if diff <(objects stores-adopted) <(objects code-index-adopted) >"$out/code-index.diff"; then
   ok "after adoption the code index renders the same objects as without it"
 else cat "$out/code-index.diff"; bad "the code index adds or drops objects of the chart's own"; fi
+# Its record and its GitHub App go into infrared-platform-tokens at the install:
+# five keys, which the gitops template copies to code-index (code-index-settings
+# and code-index-credentials). Without an App its three keys are empty, which
+# the code index reads as no credential, so the template's copies always find
+# their keys; the record alone renders the Secret; an empty ref is main.
+# keys <render>: the data keys of infrared-platform-tokens in that render.
+keys() { obj "$1" Secret infrared-platform-tokens | awk '/^data:/ {f = 1; next} f && /^  [a-z]/ {sub(/:.*/, ""); sub(/^  /, ""); print}' | tr '\n' ' ' | sed 's/ $//'; }
+ci_keys="code-index-knowledge-url code-index-knowledge-ref code-index-github-app-id code-index-github-app-installation-id code-index-github-app-private-key"
+if [[ "$(keys code-index-install)" == "cloudflare-api-token backup-access-key-id backup-secret-access-key $ci_keys" &&
+      "$(secret code-index-install infrared-platform-tokens code-index-knowledge-url)" == https://github.com/example-org/knowledge.git &&
+      "$(secret code-index-install infrared-platform-tokens code-index-knowledge-ref)" == release-1 &&
+      "$(secret code-index-install infrared-platform-tokens code-index-github-app-id)" == 5116570 &&
+      "$(secret code-index-install infrared-platform-tokens code-index-github-app-installation-id)" == 166002914 &&
+      "$(secret code-index-install infrared-platform-tokens code-index-github-app-private-key)" == ci-app-key &&
+      "$(secret code-index-install infrared-platform-tokens cloudflare-api-token)" == ci-cloudflare-token ]]; then
+  ok "install: the code index's record and GitHub App in infrared-platform-tokens beside the tokens, trimmed"
+else bad "install: infrared-platform-tokens does not hold the code index's record and App as given"; fi
+if [[ "$(keys code-index)" == "$ci_keys" &&
+      "$(secret code-index infrared-platform-tokens code-index-knowledge-ref)" == release-1 &&
+      -z "$(for k in id installation-id private-key; do secret code-index infrared-platform-tokens "code-index-github-app-$k"; done)" ]]; then
+  ok "the record alone renders infrared-platform-tokens, the App's three keys empty: public repositories only"
+else bad "the code index's record alone does not render its five keys, the App's empty"; fi
+if [[ "$(secret code-index-main infrared-platform-tokens code-index-knowledge-ref)" == main ]]; then
+  ok "a record with no ref reads main"
+else bad "an empty codeIndex.knowledge.ref is not written as main"; fi
+check install.yaml "without the code index, none of its keys" '^  code-index-' 0
+check code-index-install.yaml "every Secret from values is kept, the tokens' with the code index's keys" '^    helm\.sh/resource-policy: keep$' 7
+# Argo CD's render never makes the Secret again: the template's Application
+# carries platformTokens.existingSecret with the code index, so even a record
+# in an org's values file renders none; and a template from before that, which
+# carries codeIndex alone, needs no record and renders none either.
+check code-index-adopted.yaml "after adoption with the code index, no Secret: its record and App stay in the install's" '^kind: Secret$' 0
+check code-index-adopted-record.yaml "platformTokens.existingSecret: no infrared-platform-tokens from Argo CD, even with the record in values" '^kind: Secret$' 0
+check code-index-adopted-old.yaml "a template that carries codeIndex alone renders no Secret and needs no record" '^kind: Secret$' 0
 # Agent steps get Infrared's MCP server, with the code tools, at its in-cluster
 # listener, only while the code index runs; without it the API's code endpoints
 # answer 501 (INFRARED_CODE_INDEX_URL=off).
@@ -540,6 +597,22 @@ refuse "the code index without a pin fails" "codeIndex.enabled needs codeIndex.i
 refuse "a code index digest that is not sha256 fails" "at '/codeIndex/image/digest'" \
   -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" --set codeIndex.image.digest=sha256:abc
 refuse "codeIndex.enabled as a string fails" "at '/codeIndex/enabled'" --set-string codeIndex.enabled=true
+refuse "the code index without its record fails where the tokens render" "codeIndex.enabled needs codeIndex.knowledge.url" \
+  "${install[@]}" -f "$chart/ci/code-index-values.yaml" --set codeIndex.knowledge.url=
+refuse "a knowledge URL that is not https:// or http:// fails" "at '/codeIndex/knowledge/url'" \
+  --set codeIndex.knowledge.url=git@github.com:example-org/knowledge.git
+refuse "a knowledge ref the code index refuses fails" "at '/codeIndex/knowledge/ref'" --set codeIndex.knowledge.ref=-x
+refuse "the code index's App without its private key fails" "go together, the code index's GitHub App" \
+  -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" \
+  --set-file "platformTokens.codeIndexGithubAppId=$out/ci-app-id" --set-file "platformTokens.codeIndexGithubAppInstallationId=$out/ci-app-installation-id"
+refuse "the code index's private key alone fails" "go together, the code index's GitHub App" \
+  -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" --set-file "platformTokens.codeIndexGithubAppPrivateKey=$out/ci-app-key"
+refuse "the code index's App without the code index fails" "they need codeIndex.enabled" "${install[@]}" "${app_key[@]}"
+# (helm applies --set-file after --set-string, so the ID is not passed by file here)
+refuse "an App ID that is not a number fails" "are numbers" \
+  -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" --set-string platformTokens.codeIndexGithubAppId=app \
+  --set-file "platformTokens.codeIndexGithubAppInstallationId=$out/ci-app-installation-id" --set-file "platformTokens.codeIndexGithubAppPrivateKey=$out/ci-app-key"
+refuse "an App ID given as a YAML number fails" "at '/platformTokens/codeIndexGithubAppId'" --set platformTokens.codeIndexGithubAppId=5116570
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
@@ -567,7 +640,7 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted copies copies-nogitea copies-adopted restore code-index; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted copies copies-nogitea copies-adopted restore code-index code-index-install; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

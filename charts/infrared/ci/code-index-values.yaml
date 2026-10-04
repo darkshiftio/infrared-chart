@@ -1,9 +1,16 @@
 # CI: Infrared's code index on, at a pin, with the ghcr registry
-# (ci/ghcr-values.yaml): the chart hands its image to the operator among
-# Infrared's own (INFRARED_IMAGES, code-index), and the gitops template runs it.
-# The template's `infrared` Application carries the same values after adoption.
+# (ci/ghcr-values.yaml), as an install gives it: the chart hands its image to
+# the operator among Infrared's own (INFRARED_IMAGES, code-index), and the
+# gitops template runs it. Its record goes into infrared-platform-tokens, which
+# the template copies to code-index/code-index-settings; scripts/verify.sh
+# passes the GitHub App's three tokens with --set-file, as an install does.
+# ci/code-index-adopted-values.yaml is what the template's `infrared`
+# Application carries after adoption.
 codeIndex:
   enabled: true
+  knowledge:
+    url: https://github.com/example-org/knowledge.git
+    ref: release-1
   image:
     tag: one-install-0000006
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000026

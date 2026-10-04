@@ -269,6 +269,14 @@ spec:
               displayName:
                 minLength: 1
                 type: string
+              humanApprovals:
+                description: |-
+                  HumanApprovals says whether people approve the Product's Changes and
+                  promotions. When false, the human steps of its AgentWorkflowRuns (triage
+                  and approval) and its zones that take Releases after approval approve
+                  themselves. A reviewer's BLOCK, a failed step and a dead-lettered step
+                  still stop and wait for a person. Omitted means true.
+                type: boolean
               logo:
                 description: |-
                   Logo says where the Product's logo lives. Omit it to detect the logo in

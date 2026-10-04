@@ -225,6 +225,35 @@ substrate:
 The gitops repo's `infrared` Application carries `substrate.testActors: true`
 once the template sees them on, so adoption keeps them.
 
+## The code index
+
+```yaml
+codeIndex:
+  enabled: true                      # INFRARED_IMAGES gains code-index: the gitops template runs the code index
+  image:                             # the chart's own pin by default
+    tag: one-install-<short sha>     # a build of darkshiftio/infrared-codeindex
+    digest: sha256:...
+```
+
+Infrared's code index: Zoekt and the code service, behind infrared-api's code
+endpoints. The chart renders nothing of it. On, it hands the code index's image
+to the operator among Infrared's own (`INFRARED_IMAGES`, key `code-index`), and
+the gitops template runs it in the namespace `code-index`, at
+`http://code-index.code-index.svc:8080`, which only infrared-api's pods reach.
+The template names the image `<image.registry>/infrared-codeindex`, so the
+code index needs an `image.registry` other than the default, which is the one
+the operator is handed (`ghcr.io/darkshiftio`, where the image is published),
+and a tag or a digest: the chart refuses to render without either. Off, the
+default, changes nothing.
+
+Its settings are the install's, never values: the ConfigMap `code-index` in the
+namespace `code-index` names its record (the manifest of repositories and the
+repo cards), and the Secret `code-index-credentials` there, when it exists,
+holds the credential it reads private repositories with; without one it reads
+public repositories only. As with the stores, the gitops repo's `infrared`
+Application carries `codeIndex` once the template sees it on, so adoption keeps
+it.
+
 ## The install's own registry
 
 ```yaml
@@ -440,6 +469,8 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
 | `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster that copies of the stores go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
+| `codeIndex.enabled` | `false` | Infrared's code index, which the gitops template runs in the namespace `code-index`: its image is handed to the operator among Infrared's own (`INFRARED_IMAGES`, `code-index`). Needs an `image.registry` other than the default, and a pin. See "The code index" |
+| `codeIndex.image.tag` / `.digest` | `one-install-4362b7d` / `sha256:8fba2e14…` | The image `<image.registry>/infrared-codeindex`: a `one-install-<short sha>` build of darkshiftio/infrared-codeindex, and its `sha256:` digest |
 | `substrate.testActors` | `false` | Agent Substrate's test actors, `counter-v1` and `sandbox-v1`, for the gitops template's counter test and fence check. Off, with `stores.enabled` and `registry.address`, adds `substrate-test-actors` to `INFRARED_DISABLED_COMPONENTS`. See "Substrate's test actors" |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |

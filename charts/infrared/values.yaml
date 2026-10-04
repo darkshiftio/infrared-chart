@@ -82,9 +82,9 @@ runner:
     # -- Repository under image.registry.
     repository: infrared-runner
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.114
+    tag: v0.1.0-alpha.133
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:c56d41a3358b2274d62255415e90ca5289930d3e19fcf3bdfa0dab3ec4896d0e"
+    digest: "sha256:a97f93c75664011b990f72572d77cf0f11722bf09244648f4810de9ca066f393"
   # -- Image an init container copies a Go toolchain from, so agents can build and
   # test Go repos. Pinned by digest.
   goToolchainImage: "golang:1.26@sha256:6c2a5538f964f1c82f97ad14988bf05de100d922d159d0e398b54c7b0ca0c6c9"
@@ -110,9 +110,9 @@ summaryvideo:
     # -- Repository under image.registry: the pipeline and its reusable clips.
     repository: infrared-summaryvideo
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.127
+    tag: v0.1.0-alpha.133
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:df75b80676599d3346603a91b22ebf020ac5eba52ea66bfd3855e3cecf5453e8"
+    digest: "sha256:02572be78facf02f48fe4bb3b040a3620753b76fab50b2af29405935a5387cb6"
   # -- Runs the pipeline's Node steps with Puppeteer and Chromium. Pinned by digest.
   browserImage: "docker.io/zenika/alpine-chrome@sha256:ee10e24217aa27443e6b58da628f3b09ea9b814459915b8b62fe15a555f9692a"
   # -- Joins the clips and scenes. Pinned by digest.
@@ -131,9 +131,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.130
+    tag: v0.1.0-alpha.133
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:be50860130421acecd979ce61a20e9472d1f1f9b00b5ccf77cede20268722d44"
+    digest: "sha256:474f120e01ef39c95479e606559d5b149d80f9a131f0716c9d5cfcfaf43b5814"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -161,8 +161,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.131
-    digest: "sha256:71cfa842fb80fd88de31498fad955fcdd57d3c6c0903aa7055278475005801df"
+    tag: v0.1.0-alpha.133
+    digest: "sha256:adfe7741171ccd0726d8c82ba23e005f97bcb9569914cac6db102ef717e8a364"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -185,8 +185,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.132
-    digest: "sha256:41d9d9a74391d2248ef29567a5509099d156fc44147409040166389bc63fe4a8"
+    tag: v0.1.0-alpha.133
+    digest: "sha256:e57e7330bc6fce624df361f179442104bd0cdfd224771187d14f0396fd589492"
   replicas: 1
   extraArgs: []
   extraEnv: []

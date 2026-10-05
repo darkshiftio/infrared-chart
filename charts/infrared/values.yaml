@@ -110,7 +110,7 @@ summaryvideo:
     # -- Repository under image.registry: the pipeline and its reusable clips.
     repository: infrared-summaryvideo
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.136
+    tag: v0.1.0-alpha.137
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
     digest: "sha256:32c27dcfa484ea75c1857ceaedd5775dc8f73f34fa67de62ae95c40cbf9211c7"
   # -- Runs the pipeline's Node steps with Puppeteer and Chromium. Pinned by digest.

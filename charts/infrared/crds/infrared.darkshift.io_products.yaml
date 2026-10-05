@@ -630,6 +630,45 @@ spec:
                 items:
                   description: ZoneState is what a zone runs now.
                   properties:
+                    addresses:
+                      description: |-
+                        Addresses is what each of the zone's addresses does now: its DNS, its
+                        certificate and whether it serves, checked every few minutes.
+                      items:
+                        description: AddressState is one address of a zone, as seen
+                          from outside and from the cluster.
+                        properties:
+                          certificate:
+                            description: |-
+                              Certificate is the state of the host's TLS certificate: Ready, Pending,
+                              Failed, or empty when there is none yet.
+                            type: string
+                          checkedAt:
+                            description: CheckedAt is when the address was last checked.
+                            format: date-time
+                            type: string
+                          dns:
+                            description: DNS is true when the host resolves to Infrared's
+                              ingress.
+                            type: boolean
+                          host:
+                            description: Host is the address, e.g. shop.example.com.
+                            type: string
+                          message:
+                            description: Message says what is wrong and how to fix
+                              it; empty when all is well.
+                            type: string
+                          serving:
+                            description: |-
+                              Serving is the HTTP status an HTTPS request for the host got through
+                              the cluster's ingress; 0 when it got none.
+                            format: int32
+                            type: integer
+                        required:
+                        - dns
+                        - host
+                        type: object
+                      type: array
                     image:
                       description: Image is the pin the zone runs, repository:tag@sha256:...
                       type: string
@@ -644,6 +683,34 @@ spec:
                       description: Release is the Release that last promoted to the
                         zone.
                       type: string
+                    rollout:
+                      description: |-
+                        Rollout follows the zone's latest change to its gitops values (an address
+                        or access change) until it is live.
+                      properties:
+                        at:
+                          description: At is when it was committed.
+                          format: date-time
+                          type: string
+                        commit:
+                          description: Commit is the gitops commit that made the change.
+                          type: string
+                        commitURL:
+                          description: CommitURL links to it.
+                          type: string
+                        phase:
+                          description: |-
+                            Phase is committed, syncing (Argo CD is applying it), certificate (a
+                            certificate is being issued) or live.
+                          type: string
+                        summary:
+                          description: Summary says what changed, e.g. "public at
+                            hive.football".
+                          type: string
+                      required:
+                      - at
+                      - phase
+                      type: object
                     version:
                       description: Version is the release the zone runs, e.g. v0.1.1.
                       type: string

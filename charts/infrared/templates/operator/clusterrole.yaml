@@ -113,6 +113,14 @@ rules:
   - list
   - watch
 - apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - infrared.darkshift.io
   resources:
   - agentroles

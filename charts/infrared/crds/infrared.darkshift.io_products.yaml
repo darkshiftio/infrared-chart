@@ -150,6 +150,30 @@ spec:
                             Cluster is the Cluster the zone runs on; empty means the gitops repo's
                             management cluster. The Cluster must be on the org's cluster allowlist.
                           type: string
+                        env:
+                          description: |-
+                            Env are the zone's plain environment variables, written to its values
+                            file in the gitops repo (so they're reviewed and versioned like the rest).
+                          items:
+                            description: ZoneEnvVar is one plain environment variable
+                              of a zone.
+                            properties:
+                              name:
+                                description: Name, a C identifier such as API_URL.
+                                maxLength: 128
+                                pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                                type: string
+                              value:
+                                maxLength: 32768
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          maxItems: 100
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - name
+                          x-kubernetes-list-type: map
                         environment:
                           default: pre-release
                           description: Environment is pre-release or release.
@@ -194,6 +218,29 @@ spec:
                               pattern: ^[0-9]+(Mi|Gi)$
                               type: string
                           type: object
+                        secretEnv:
+                          description: |-
+                            SecretEnv names the zone's secret environment variables. Their values
+                            never reach git: they live in the Secret <product>-<zone>-env in the org's
+                            namespace, which Infrared copies into the zone's namespace as
+                            <product>-env, and the app reads them with envFrom.
+                          items:
+                            description: |-
+                              ZoneSecretEnv names one secret environment variable of a zone; its value is
+                              in the zone's env Secret, never in the spec.
+                            properties:
+                              name:
+                                maxLength: 128
+                                pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          maxItems: 100
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - name
+                          x-kubernetes-list-type: map
                         storage:
                           description: |-
                             Storage is persistent volumes mounted into the app. Each zone has its own;
@@ -568,6 +615,11 @@ spec:
                   ZoneFiles reports whether every delivery zone has its files in the
                   gitops repo, and the pull request that added any Infrared scaffolded.
                 properties:
+                  envNotice:
+                    description: |-
+                      EnvNotice says why the Product's chart can't take environment variables
+                      yet: its deployment template was edited, so Infrared won't change it.
+                    type: string
                   message:
                     type: string
                   observedGeneration:

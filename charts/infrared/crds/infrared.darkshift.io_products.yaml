@@ -359,6 +359,23 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              slack:
+                description: |-
+                  Slack is the channel in the org's Slack workspace where Infrared posts
+                  about this Product: announcement drafts, summary videos and GTM drafts.
+                  Omit it to use the org's channel.
+                properties:
+                  channelID:
+                    description: ChannelID is the Slack channel ID, e.g. C0123456789.
+                    minLength: 1
+                    type: string
+                  channelName:
+                    description: 'ChannelName is the channel''s name without the #,
+                      for display.'
+                    type: string
+                required:
+                - channelID
+                type: object
               slos:
                 description: |-
                   SLOs are the Product's service level objectives. Infrared records

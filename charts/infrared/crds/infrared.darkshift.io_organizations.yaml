@@ -133,8 +133,8 @@ spec:
                   lives in Secret SlackBotSecret in the org's namespace.
                 properties:
                   channelID:
-                    description: ChannelID and ChannelName are where product announcements
-                      go.
+                    description: ChannelID and ChannelName are the single-workspace
+                      announcements channel.
                     type: string
                   channelName:
                     type: string
@@ -142,22 +142,86 @@ spec:
                     format: date-time
                     type: string
                   connectedBy:
-                    description: ConnectedBy is who connected the workspace, and ConnectedAt
-                      when.
+                    description: ConnectedBy is who connected the single workspace,
+                      and ConnectedAt when.
                     type: string
+                  destinations:
+                    description: Destinations are where Infrared posts about the org's
+                      Products, and what.
+                    items:
+                      description: SlackDestination is a channel in a connected workspace
+                        and what goes there.
+                      properties:
+                        channelID:
+                          description: ChannelID is the Slack channel ID, e.g. C0123456789.
+                          minLength: 1
+                          type: string
+                        channelName:
+                          description: 'ChannelName is the channel''s name without
+                            the #, for display.'
+                          type: string
+                        kinds:
+                          description: |-
+                            Kinds are what is posted there: summary (summary videos), announcement
+                            (product owner announcements), drafts (announcement and GTM drafts).
+                            Empty means all of them.
+                          items:
+                            type: string
+                          type: array
+                        name:
+                          description: Name is an optional label, e.g. "community".
+                          type: string
+                        teamID:
+                          description: TeamID is the workspace (one of the org's Workspaces).
+                          type: string
+                      required:
+                      - channelID
+                      - teamID
+                      type: object
+                    type: array
                   postVideos:
                     description: |-
-                      PostVideos posts each new summary video and announcement to the channel.
-                      Omitted means on once a channel is chosen.
+                      PostVideos is whether videos went to the single-workspace channel;
+                      omitted means yes.
                     type: boolean
                   teamID:
-                    description: TeamID and TeamName are the connected workspace.
+                    description: |-
+                      TeamID and TeamName are the single-workspace connection (its token in
+                      Secret SlackBotSecret).
                     type: string
                   teamName:
                     type: string
-                required:
-                - teamID
-                - teamName
+                  workspaces:
+                    description: Workspaces are the connected workspaces, each with
+                      its own bot token.
+                    items:
+                      description: SlackWorkspace is one Slack workspace connected
+                        to the installation's app.
+                      properties:
+                        connectedAt:
+                          format: date-time
+                          type: string
+                        connectedBy:
+                          description: ConnectedBy is who connected it, and ConnectedAt
+                            when.
+                          type: string
+                        teamID:
+                          description: TeamID and TeamName identify the workspace.
+                          type: string
+                        teamName:
+                          type: string
+                        tokenSecret:
+                          description: TokenSecret is the Secret in the org's namespace
+                            holding the bot token (key token).
+                          type: string
+                      required:
+                      - teamID
+                      - tokenSecret
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - teamID
+                    x-kubernetes-list-type: map
                 type: object
               summaryVideos:
                 description: |-

@@ -366,15 +366,53 @@ spec:
                   Omit it to use the org's channel.
                 properties:
                   channelID:
-                    description: ChannelID is the Slack channel ID, e.g. C0123456789.
-                    minLength: 1
+                    description: |-
+                      ChannelID and ChannelName are a single-workspace Product channel, which
+                      replaces the org's; read as one destination until next saved.
                     type: string
                   channelName:
-                    description: 'ChannelName is the channel''s name without the #,
-                      for display.'
                     type: string
-                required:
-                - channelID
+                  destinations:
+                    description: Destinations are this Product's own Slack destinations.
+                    items:
+                      description: SlackDestination is a channel in a connected workspace
+                        and what goes there.
+                      properties:
+                        channelID:
+                          description: ChannelID is the Slack channel ID, e.g. C0123456789.
+                          minLength: 1
+                          type: string
+                        channelName:
+                          description: 'ChannelName is the channel''s name without
+                            the #, for display.'
+                          type: string
+                        kinds:
+                          description: |-
+                            Kinds are what is posted there: summary (summary videos), announcement
+                            (product owner announcements), drafts (announcement and GTM drafts).
+                            Empty means all of them.
+                          items:
+                            type: string
+                          type: array
+                        name:
+                          description: Name is an optional label, e.g. "community".
+                          type: string
+                        teamID:
+                          description: TeamID is the workspace (one of the org's Workspaces).
+                          type: string
+                      required:
+                      - channelID
+                      - teamID
+                      type: object
+                    type: array
+                  mode:
+                    description: |-
+                      Mode says whether Destinations add to the org's destinations (add, the
+                      default) or replace them (replace).
+                    enum:
+                    - add
+                    - replace
+                    type: string
                 type: object
               slos:
                 description: |-
@@ -767,10 +805,15 @@ spec:
                         commitURL:
                           description: CommitURL links to it.
                           type: string
+                        liveAt:
+                          description: LiveAt is when it went live; Infrared clears
+                            the rollout a while after.
+                          format: date-time
+                          type: string
                         phase:
                           description: |-
-                            Phase is committed, syncing (Argo CD is applying it), certificate (a
-                            certificate is being issued) or live.
+                            Phase is committed, syncing (Argo CD is applying it and the pods are
+                            rolling), certificate (a certificate is being issued) or live.
                           type: string
                         summary:
                           description: Summary says what changed, e.g. "public at

@@ -126,6 +126,12 @@ restore:
   # -- Restore exactly this backup, by its stamp, e.g. `20261006T010500Z`
   # (what `ir restore --backup-artifact` passes). Not with from.
   point: ""
+  # -- The image of the restore Job's Postgres sidecar, which runs pg_restore
+  # of each consumer database's dump into the platform's Postgres: the same
+  # image the gitops template's Postgres Cluster runs, pinned by digest, so
+  # pg_restore and the server share a major. Change it together with the
+  # template's `components/postgres/cluster.yaml`.
+  postgresImage: "ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:f89a40f4d74aa6e0900917eaf6299b125a6382eb02fd4ee5d46f55bcbf7e5726"
 
 components:
   # -- The gitops template's components the install leaves out, by name, e.g.
@@ -235,7 +241,10 @@ platformTokens:
   # records and origin certificates.
   cloudflareApiToken: ""
   # -- Access key ID of the backup bucket's key (key `backup-access-key-id`);
-  # required with the secret access key.
+  # required with the secret access key. Pass the pair at install only: once
+  # Infrared runs, Settings → Backups writes a new key into these same two
+  # keys, and a later helm upgrade that passes them again overwrites that key
+  # with this one.
   backupAccessKeyId: ""
   # -- Secret access key of the backup bucket's key (key `backup-secret-access-key`);
   # required with the access key ID.

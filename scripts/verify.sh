@@ -570,6 +570,95 @@ if lines "$rj" '      serviceAccountName: infrared-restore' "          image: $o
     '                  name: infrared-platform-tokens' '                  key: backup-access-key-id'; then
   ok "infrared-restore: the operator's restore mode, the identity from a Secret made before the install, read by its group alone"
 else bad "the Job infrared-restore is wrong"; fi
+# The Postgres step (agreed with the operator's restore mode): a native sidecar
+# from the platform's Postgres image shares the memory-backed emptyDir
+# postgres-restore at /restore/postgres with the restore container, as the
+# pod's user (libpq ignores a .pgpass another uid could read); the Job's
+# failure policy reads the restore container's exit code alone.
+pg_image="$(awk '/^  postgresImage: / {gsub(/"/, "", $2); print $2}' "$chart/values.yaml")"
+pg_side="$(awk '/^        - name: postgres$/ {p = 1} p && /^      containers:$/ {exit} p' <<<"$rj")"
+if lines "$pg_side" "          image: \"$pg_image\"" '          restartPolicy: Always' '              value: postgres-rw.stores.svc' \
+      '              value: require' '              value: /restore/postgres/.pgpass' '              mountPath: /restore/postgres' \
+    && lines "$rj" '          containerName: restore' '        - name: postgres-restore' '            medium: Memory' '            sizeLimit: 512Mi' \
+    && [[ "$(grep -c '^              mountPath: /restore/postgres$' <<<"$rj")" == 2 ]] \
+    && ! grep -q 'runAsUser' <<<"$pg_side" \
+    && [[ "$pg_image" == *@sha256:* ]] \
+    && [[ "$(grep -c '^  postgresImage: ' "$chart/values.yaml")" == 1 ]]; then
+  ok "infrared-restore's Postgres sidecar: restore.postgresImage, the shared memory-backed emptyDir at /restore/postgres, the pod's user, the restore container's exit code alone"
+else bad "infrared-restore's Postgres sidecar, its volume or the Job's failure policy is wrong"; fi
+# The sidecar's script, run against fakes of psql and pg_restore: it restores
+# each database listed in ready once, as its role, with the note in the same
+# transaction; a retry finds the note and restores nothing; a database with
+# tables and no note, a ready without a point, or a name it cannot quote is
+# refused with `failed`.
+pg_script="$(awk '/^            - \|$/ {s = 1; next} s && /^              / {sub(/^              /, ""); print; next} s && /^$/ {print; next} s {exit}' <<<"$pg_side")"
+fakes="$out/pg-fakes" && rm -rf "$fakes" && mkdir -p "$fakes/bin"
+cat >"$fakes/bin/psql" <<'FAKE'
+#!/usr/bin/env bash
+# A fake psql over files in $FAKE: note-<db> (the database's comment) and
+# tables-<db> (its count of tables); -f runs a restore, logged in $FAKE/log.
+db="" cmd="" file=""
+while [ $# -gt 0 ]; do
+  case "$1" in --dbname=*) db="${1#--dbname=}" ;; -c) cmd="$2"; shift ;; -f) file="$2"; shift ;; esac
+  shift
+done
+if [ -n "$file" ]; then
+  echo "restore $db: $(head -1 "$file")" >>"$FAKE/log"
+  sed -n "s/^COMMENT ON DATABASE \"$db\" IS '\(.*\)';\$/\1/p" "$file" >"$FAKE/note-$db"
+  echo 1 >"$FAKE/tables-$db"
+  exit 0
+fi
+case "$cmd" in
+  "SELECT 1") echo 1 ;;
+  *shobj_description*) cat "$FAKE/note-$db" 2>/dev/null || true ;;
+  *pg_tables*) cat "$FAKE/tables-$db" 2>/dev/null || echo 0 ;;
+esac
+FAKE
+cat >"$fakes/bin/pg_restore" <<'FAKE'
+#!/usr/bin/env bash
+# A fake pg_restore: the dump's lines as SQL, after the flags it was given.
+out="" args=""
+while [ $# -gt 1 ]; do
+  case "$1" in -f) out="$2"; shift ;; *) args="$args $1" ;; esac
+  shift
+done
+{ echo "-- pg_restore$args"; cat "$1"; } >"$out"
+FAKE
+chmod +x "$fakes/bin/psql" "$fakes/bin/pg_restore"
+# pg_run <case> <ready file's text>: runs the script until it writes done or
+# failed (10 s at most), then stops it; prints which, and the file's text.
+pg_run() {
+  local dir="$fakes/$1" pid
+  mkdir -p "$dir"
+  rm -f "$dir/done" "$dir/failed"
+  printf 'CREATE TABLE runs (id int);\n' >"$dir/substrate.dump"
+  printf '%s\n' "$2" >"$dir/ready"
+  RESTORE_DIR="$dir" FAKE="$fakes" PATH="$fakes/bin:$PATH" sh -ec "$pg_script" >"$dir/log" 2>&1 & pid=$!
+  for _ in $(seq 1 100); do
+    if [ -f "$dir/done" ] || [ -f "$dir/failed" ]; then break; fi
+    sleep 0.1
+  done
+  kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+  if [ -f "$dir/done" ]; then echo "done"; elif [ -f "$dir/failed" ]; then echo "failed: $(cat "$dir/failed")"; else echo none; fi
+}
+rm -f "$fakes"/note-* "$fakes"/tables-* "$fakes/log"
+first="$(pg_run first $'point 20261006T010500Z\nsubstrate substrate')"
+again="$(pg_run again $'point 20261006T010500Z\nsubstrate substrate')"
+pg_log='restore substrate: -- pg_restore --no-owner --no-privileges --no-comments --role=substrate'
+if [[ "$first" == "done" && "$again" == "done" && "$(cat "$fakes/log")" == "$pg_log" ]] \
+    && [[ "$(cat "$fakes/note-substrate")" == "infrared-restore 20261006T010500Z: restored" ]] \
+    && grep -qF 'restored substrate from its dump, as substrate' "$fakes/first/log" && [ ! -e "$fakes/first/substrate.sql" ] \
+    && grep -qF 'was restored for the restore from 20261006T010500Z already' "$fakes/again/log"; then
+  ok "the Postgres sidecar restores each database once, as its role, with the note; a retry restores nothing"
+else bad "the Postgres sidecar's restore is wrong (first: $first; again: $again; log: $(cat "$fakes/log" 2>/dev/null))"; fi
+other="$(pg_run other $'point 20261007T010500Z\nsubstrate substrate')"
+nopoint="$(pg_run nopoint 'substrate substrate')"
+quoted="$(pg_run quoted $'point 20261006T010500Z\nSubstrate substrate')"
+if [[ "$other" == "failed: substrate is not empty (1 tables) and carries no note of the restore from 20261007T010500Z: refusing to restore over it" ]] \
+    && [[ "$nopoint" == failed:*"names no point"* ]] && [[ "$quoted" == failed:*"lowercase names" ]] \
+    && [[ "$(cat "$fakes/log")" == "$pg_log" ]]; then
+  ok "the Postgres sidecar refuses a database with tables and no note of this restore, a ready without a point, and a name it cannot quote"
+else bad "the Postgres sidecar's refusals are wrong (other: $other; no point: $nopoint; quoted: $quoted)"; fi
 if [[ "$(objn restore ClusterRoleBinding infrared-restore '^  name: infrared-restore$')" == 2 ]] \
     && [[ "$(grep -cE '^kind: (Role|RoleBinding)$' <<<"$(obj restore Role infrared-restore; obj restore RoleBinding infrared-restore)" || true)" == 0 ]] \
     && [[ "$(obj restore ClusterRole infrared-restore | grep -cE '"delete"' || true)" == 0 ]]; then

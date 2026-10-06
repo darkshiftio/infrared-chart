@@ -4,7 +4,9 @@ operator's image in its restore mode. It picks the backup to restore from the
 backup bucket (restore.point, restore.from, or the newest), writes it to the
 ConfigMap infrared-restore (phase Planned),
 waits for Gitea's restore with Gitea, then scales Gitea to one, restores
-Infrared's own objects in their order (phase ObjectsRestored) and exits. The
+Infrared's own objects in their order (phase ObjectsRestored), hands each
+consumer database's dump to its Postgres sidecar, marks postgres in
+stores/restore-stores once the sidecar is done, and exits. The
 operator starts no controller until then, and finishes the restore (phase
 Complete), when it deletes this Job, its ClusterRoleBinding and the Secret
 infrared-backup-identity. So every right the Job has is in the one binding,
@@ -79,11 +81,14 @@ spec:
   activeDeadlineSeconds: 10800
   # A mistake in the flags, the environment or the identity (exit 2), or a
   # refusal (exit 3: no backup to restore, no mirror run after it, a checksum
-  # that does not match), is never retried: a person decides.
+  # that does not match, a database that is not empty), is never retried: a
+  # person decides. The restore container's exit code alone: the Postgres
+  # sidecar below never ends on its own.
   podFailurePolicy:
     rules:
       - action: FailJob
         onExitCodes:
+          containerName: restore
           operator: In
           values: [2, 3]
   template:
@@ -106,6 +111,112 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # The Postgres step, a native sidecar (restartPolicy Always): it runs
+        # beside the restore container and is stopped when that one ends, so
+        # the pod's outcome is the restore container's exit code alone. The
+        # restore container decrypts the artifact's postgres/<database>.dump
+        # files into the memory-backed emptyDir postgres-restore, with a
+        # .pgpass for each database's role and then `ready` (its first line
+        # `point <stamp>`, each later line `<database> <role>`). This
+        # container, from the platform's Postgres image so that pg_restore and
+        # the server share a major, restores each database into the empty
+        # Postgres that CloudNativePG made with its roles and databases, as
+        # that database's own role, and writes `done`; the restore container
+        # then marks postgres in stores/restore-stores. The same uid as the
+        # restore container: libpq ignores a .pgpass another uid could read.
+        - name: postgres
+          image: {{ $.Values.restore.postgresImage | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          restartPolicy: Always
+          env:
+            - name: HOME
+              value: /tmp
+            - name: RESTORE_DIR
+              value: /restore/postgres
+            - name: PGHOST
+              value: postgres-rw.stores.svc
+            - name: PGPORT
+              value: "5432"
+            - name: PGSSLMODE
+              value: require
+            - name: PGCONNECT_TIMEOUT
+              value: "10"
+            - name: PGPASSFILE
+              value: /restore/postgres/.pgpass
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              # Each file is written under a temporary name and renamed, so the
+              # restore container never reads a half-written one. On SIGTERM
+              # (the restore container ended) this exits 0, never 2 or 3.
+              trap 'exit 0' TERM INT
+              finish() { # finish <done|failed> <text>: write the file, then wait for the pod to end
+                printf '%s\n' "$2" >"$RESTORE_DIR/$1.tmp"
+                mv "$RESTORE_DIR/$1.tmp" "$RESTORE_DIR/$1"
+                echo "$1: $2"
+                while :; do sleep 10 & wait $!; done
+              }
+              fail() { finish failed "$*"; }
+              until [ -f "$RESTORE_DIR/ready" ]; do
+                echo "waiting for the restore container to write the dumps and $RESTORE_DIR/ready"
+                sleep 5 & wait $!
+              done
+              point="$(awk '$1 == "point" { print $2; exit }' "$RESTORE_DIR/ready")"
+              [ -n "$point" ] || fail "$RESTORE_DIR/ready names no point (first line: point <stamp>)"
+              note="infrared-restore $point: restored"
+              # Each database on its own line, after the point line. The loop
+              # reads the file on descriptor 3: psql takes nothing from stdin.
+              while read -r database role <&3; do
+                case "$database" in point | "") continue ;; esac
+                # Only a lowercase name, which quotes as itself.
+                case "$database$role" in *[![:lower:][:digit:]_]*) fail "$database $role: a database and its role are lowercase names" ;; esac
+                [ -f "$RESTORE_DIR/$database.dump" ] || fail "no dump $RESTORE_DIR/$database.dump for the database $database"
+                # The role's password reaches Postgres a moment after it has
+                # started (its DatabaseRole): sign in until it works.
+                until psql -X -q -At --dbname="$database" --username="$role" -c 'SELECT 1' >/dev/null 2>&1 </dev/null; do
+                  echo "waiting to sign in to Postgres as $role"
+                  sleep 10 & wait $!
+                done
+                # Idempotent: a retry after a pod loss finds the restored
+                # database by the note on it, written in the same transaction.
+                have="$(psql -X -At --dbname="$database" --username="$role" </dev/null \
+                  -c "SELECT coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database WHERE datname = current_database()")"
+                if [ "$have" = "$note" ]; then
+                  echo "$database was restored for the restore from $point already: nothing to do"
+                  continue
+                fi
+                tables="$(psql -X -At --dbname="$database" --username="$role" </dev/null \
+                  -c "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')")"
+                [ "$tables" = 0 ] || fail "$database is not empty ($tables tables) and carries no note of the restore from $point: refusing to restore over it"
+                # The dump as SQL, checked whole before any of it runs; no
+                # owners, privileges or comments, which may name roles or need
+                # rights the fresh Postgres lacks; then the note. All of it in
+                # one transaction, so a failed restore leaves the database empty.
+                sql="$RESTORE_DIR/$database.sql"
+                pg_restore --no-owner --no-privileges --no-comments --role="$role" -f "$sql" "$RESTORE_DIR/$database.dump" ||
+                  fail "pg_restore could not read the dump of $database"
+                printf 'COMMENT ON DATABASE "%s" IS %s;\n' "$database" "'$note'" >>"$sql"
+                psql -X -q -v ON_ERROR_STOP=1 --single-transaction --dbname="$database" --username="$role" -f "$sql" </dev/null ||
+                  fail "the restore of $database into Postgres failed"
+                rm -f "$sql"
+                echo "restored $database from its dump, as $role"
+              done 3<"$RESTORE_DIR/ready"
+              finish done "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: postgres-restore
+              mountPath: /restore/postgres
+            - name: tmp
+              mountPath: /tmp
       containers:
         - name: restore
           image: {{ include "infrared.operatorImage" $ }}
@@ -153,6 +264,8 @@ spec:
             - name: identity
               mountPath: /var/run/infrared/backup-identity
               readOnly: true
+            - name: postgres-restore
+              mountPath: /restore/postgres
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -164,6 +277,12 @@ spec:
             secretName: infrared-backup-identity
             optional: true
             defaultMode: 0440
+        # The decrypted dumps and the .pgpass, shared by the two containers
+        # above, in memory and never on a disk; gone with the pod.
+        - name: postgres-restore
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
         - name: tmp
           emptyDir:
             sizeLimit: 2Gi

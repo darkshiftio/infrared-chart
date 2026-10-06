@@ -182,6 +182,12 @@ Both Secrets carry `helm.sh/resource-policy: keep`. After Argo CD adopts the
 release it renders the chart without these values, so it renders neither
 Secret, and the ones from the install stay in place.
 
+Pass the backup bucket's key at install only. Once Infrared runs, a platform
+admin may set a new key in Settings, Backups, which Infrared writes into the
+same two keys of `infrared-platform-tokens`; a later plain `helm upgrade` that
+passes `platformTokens.backupAccessKeyId` and `.backupSecretAccessKey` again
+overwrites that key with the one from the files.
+
 ## The Installation's edge and previews
 
 The operator writes `installation.edge` and `installation.previews` to the
@@ -386,7 +392,8 @@ before a time; neither, the newest; never both. It then renders:
 | What | Name | Does |
 |---|---|---|
 | `INFRARED_RESTORE` (`{"point": ...}`, `{"from": ...}` or `{}`) | the operator, the API | the operator starts no controller and the API no setup wizard and no run until the restore allows |
-| Job | `infrared-restore`, ServiceAccount, ClusterRole and ClusterRoleBinding of the same name | the operator's `restore` mode: picks the backup, writes the ConfigMap `infrared-restore` (phase `Planned`), waits for Gitea's restore, starts Gitea, restores Infrared's objects (phase `ObjectsRestored`) |
+| Job | `infrared-restore`, ServiceAccount, ClusterRole and ClusterRoleBinding of the same name | the operator's `restore` mode: picks the backup, writes the ConfigMap `infrared-restore` (phase `Planned`), waits for Gitea's restore, starts Gitea, restores Infrared's objects (phase `ObjectsRestored`), then the platform's Postgres (below) and marks `postgres` in the ConfigMap `stores/restore-stores` |
+| Its sidecar `postgres` | a native sidecar of the same pod (an init container with `restartPolicy: Always`), from `restore.postgresImage` | waits for the restore container to decrypt each consumer database's dump into the memory-backed emptyDir `postgres-restore` (`/restore/postgres`: `<database>.dump`, a `.pgpass` and then `ready`, whose first line is `point <stamp>` and each later line `<database> <role>`), then restores each into the empty Postgres at `postgres-rw.stores.svc` as that database's role, `pg_restore --no-owner --role=<role>`, in one transaction with a note on the database, and writes `done` (or `failed`, with the reason). A database that holds tables and no note of this restore is refused; one with the note is left as it is, so a retry restores nothing twice. The pod's outcome is the restore container's exit code alone |
 | Job (with Gitea) | `infrared-gitea-restore`, ServiceAccount, Role and RoleBinding of the same name | the operator's `gitea-restore` mode: fills Gitea's empty volume from the Gitea dump the plan names, as Gitea's user, reading the plan alone |
 
 The operator finishes the restore (phase `Complete`) once the gitops template has
@@ -521,6 +528,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `backup.retention` | `""` | How long each backup, and what the mirror replaced or deleted, is kept, whole days; empty: `7d` (`INFRARED_COPIES`) |
 | `backup.postgres.archive` | `false` | Barman's WAL archive of the platform's Postgres in the backup bucket, besides the dump in each backup (`INFRARED_COPIES`) |
 | `restore.enabled` / `.from` / `.point` | `false` / `""` / `""` | Restore this install from the backup bucket at install (`INFRARED_RESTORE`, operator and API): the backup `point` names by its stamp, or the newest complete one at or before `from` (RFC 3339, UTC), or the newest when both are empty; never both. See "Restore at install" |
+| `restore.postgresImage` | the gitops template's Postgres image, `ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:...` | The restore Job's Postgres sidecar, which restores each consumer database's dump with `pg_restore`: the image the template's Postgres Cluster runs, `name:tag@sha256:digest`, so `pg_restore` and the server share a major; change the two together. See "Restore at install" |
 | `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
 | `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster the backups and the stores' mirror go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |

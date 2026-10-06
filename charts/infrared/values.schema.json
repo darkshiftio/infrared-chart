@@ -844,6 +844,11 @@
           "type": "string",
           "pattern": "^([0-9]{8}T[0-9]{6}Z)?$",
           "description": "Exactly this backup is restored, by its stamp, such as 20261006T010500Z; not with from."
+        },
+        "postgresImage": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._/:-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$",
+          "description": "The restore Job's Postgres sidecar, which restores each consumer database's dump: the image the gitops template's Postgres Cluster runs, as name:tag@sha256:digest."
         }
       }
     },

@@ -34,8 +34,9 @@ installation:
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template.
-  templateVersion: v0.1.10
+  # to install from a branch of the template. Here feat/one-artifact-per-backup's
+  # head, which this branch's operator renders; back to a tag before a release.
+  templateVersion: 7be814b9e0ca97e123afa4bac85421de480383a6
 
 builds:
   # -- Registry prefix product images are built into by kpack, e.g.

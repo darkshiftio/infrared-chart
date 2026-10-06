@@ -205,6 +205,11 @@ ghcr_pins='{\"api\":{\"digest\":\"sha256:000000000000000000000000000000000000000
 # into the `infrared` Application, so Argo CD keeps them once it adopts the release.
 has ghcr.env "registry outside AWS handed to the operator" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
 has ghcr.env "every pin handed to the operator, as JSON" "INFRARED_IMAGES=\"$ghcr_pins\""
+# The operator runs the backup CronJob in its own image, read from here.
+has ghcr.env "the operator's own image handed to it, by tag and digest" \
+  'INFRARED_OPERATOR_IMAGE="ghcr.io/darkshiftio/infrared-operator:one-install-0000001@sha256:0000000000000000000000000000000000000000000000000000000000000021"'
+check defaults.env "the operator's own image handed to it, the default pin" \
+  '^INFRARED_OPERATOR_IMAGE="977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-operator:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
 check ghcr.yaml "no pull Secret without imageCredentials" '^type: kubernetes\.io/dockerconfigjson$' 0
 has ghcr-adopted.env "after adoption the operator still gets the registry" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
 has ghcr-adopted.env "after adoption the operator still gets every pin" "INFRARED_IMAGES=\"$ghcr_pins\""

@@ -55,6 +55,9 @@ spec:
               value: {{ .Chart.AppVersion | quote }}
             - name: INFRARED_CHART_VERSION
               value: {{ .Chart.Version | quote }}
+            # The operator's own image, which the backup CronJob runs.
+            - name: INFRARED_OPERATOR_IMAGE
+              value: {{ include "infrared.operatorImage" . | quote }}
             - name: INFRARED_IMAGE_PULL_SECRET
               value: {{ include "infrared.firstPullSecret" . | quote }}
             {{- with include "infrared.handedRegistry" . }}

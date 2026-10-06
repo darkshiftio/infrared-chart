@@ -518,7 +518,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `externalURL` | `""` | The API's public base URL, ending in `/api` (for example `https://infrared.example.com/api`), if exposed (`INFRARED_EXTERNAL_URL`, api). Usually unnecessary: Infrared works it out from the request |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
-| `gitops.templateVersion` | `v0.1.10` | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
+| `gitops.templateVersion` | `7be814b9…` (feat/one-artifact-per-backup) | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `registry.address` | `""` | The install's own registry, host and port with no scheme (`INFRARED_REGISTRY`, operator and API). See "The install's own registry" |
 | `registry.retention.untaggedAfter` / `.keepTags` / `.keepNewest` / `.gcInterval` / `.gcDelay` | `""` / `[]` / `0` / `""` / `""` | Zot's retention and garbage collection (`INFRARED_REGISTRY_RETENTION`, operator, JSON); each empty one keeps the gitops template's: `24h`, `["^v[0-9]"]`, `10`, `1h`, `1h`. See "Backups" |
@@ -559,7 +559,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `commonLabels` | `{}` | Extra labels on every resource |
 | `<c>.image.repository` | `infrared-<c>` | Repository under `image.registry` (`<c>` = operator, api, ui, mcp) |
 | `<c>.image.tag` | `""` (appVersion) | Image tag |
-| `<c>.image.digest` | `""` | `sha256:...`; renders `repo:tag@digest` |
+| `<c>.image.digest` | `""` | `sha256:...`; renders `repo:tag@digest`. The operator's image is also handed to it (`INFRARED_OPERATOR_IMAGE`), which the backup CronJob runs |
 | `<c>.replicas` | `1` | Replicas (the operator uses leader election, so >1 is safe) |
 | `<c>.extraArgs` / `<c>.extraEnv` | `[]` | Extra container args / env |
 | `<c>.resources` | small requests, memory limits | Container resources |

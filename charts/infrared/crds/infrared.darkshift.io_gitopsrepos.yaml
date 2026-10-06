@@ -134,6 +134,13 @@ spec:
           status:
             description: GitopsRepoStatus is the observed state of the gitops repo.
             properties:
+              backupDigest:
+                description: |-
+                  BackupDigest is a digest of the backup settings the hydration commit
+                  renders, from the Installation's spec.backup: the destination, the
+                  mirror, the recipients and Postgres's archive. Empty when it renders
+                  no backups. A change of spec.backup hydrates the repo again.
+                type: string
               bootstrappedCommit:
                 description: |-
                   BootstrappedCommit is the hydration commit whose Argo CD install and

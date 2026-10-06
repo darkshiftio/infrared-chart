@@ -80,6 +80,12 @@ rules:
   - list
   - watch
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+- apiGroups:
   - argoproj.io
   resources:
   - applications
@@ -114,6 +120,14 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - external-secrets.io
+  resources:
+  - externalsecrets
+  verbs:
+  - get
+  - list
+  - patch
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
@@ -245,6 +259,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - clusters
+  verbs:
+  - get
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:

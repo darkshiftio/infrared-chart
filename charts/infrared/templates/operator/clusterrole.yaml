@@ -234,7 +234,16 @@ rules:
   verbs:
   - get
   - list
+  - patch
   - watch
+- apiGroups:
+  - kpack.io
+  resources:
+  - sourceresolvers
+  verbs:
+  - delete
+  - get
+  - list
 - apiGroups:
   - networking.k8s.io
   resources:

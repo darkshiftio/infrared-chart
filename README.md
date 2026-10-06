@@ -117,7 +117,8 @@ api:
 The names `infrared-setup`, `infrared-session` and `infrared-api-tokens` are
 fixed: the API reads them by name from the release namespace. On `helm install`
 and `helm upgrade` each value is generated once and then kept (via `lookup`);
-tokens the API adds to `infrared-api-tokens` are preserved across upgrades. Every
+tokens the API adds to `infrared-api-tokens`, and the `owner.<name>` key it writes
+beside each with the admin the token was minted for, are preserved across upgrades. Every
 generated Secret carries `helm.sh/resource-policy: keep`, so neither uninstalling
 nor switching to `existingSecret` deletes a live credential.
 

@@ -79,7 +79,8 @@ spec:
               value: "true"
             {{- end }}
             {{- with include "infrared.backup" . }}
-            # The bucket outside the cluster that copies of the stores go to.
+            # The bucket outside the cluster the backups go to, which seeds the
+            # Installation's spec.backup.destination.
             - name: INFRARED_BACKUP
               value: {{ . | quote }}
             {{- end }}
@@ -90,8 +91,9 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- with include "infrared.copies" . }}
-            # The platform's copies: their schedules and retentions, and the
-            # age recipients of the encrypted ones, for the gitops template.
+            # The rest of the install's backups, which seeds the Installation's
+            # spec.backup: the schedules, the retention, the age recipients and
+            # Postgres's archive.
             - name: INFRARED_COPIES
               value: {{ . | quote }}
             {{- end }}

@@ -134,13 +134,17 @@ pins (the template names the code index's image by it), and a pin.
 
 {{/*
 The backup bucket as JSON (INFRARED_BACKUP): {"bucket", "endpoint", "region"},
-or empty when none of the three is set. values.schema.json asks for all three or
-none, and the operator refuses anything else at start.
+and "prefix" when it is set, or empty when none of the three is set. The
+operator seeds the Installation's spec.backup.destination from it, and the
+restore's modes read it. values.schema.json asks for all three or none, and a
+prefix only with them; the operator refuses anything else at start.
 */}}
 {{- define "infrared.backup" -}}
 {{- $b := .Values.backup }}
 {{- if or $b.bucket $b.endpoint $b.region }}
-{{- toJson (dict "bucket" $b.bucket "endpoint" $b.endpoint "region" $b.region) }}
+{{- $out := dict "bucket" $b.bucket "endpoint" $b.endpoint "region" $b.region }}
+{{- with $b.prefix }}{{ $_ := set $out "prefix" . }}{{ end }}
+{{- toJson $out }}
 {{- end }}
 {{- end }}
 
@@ -273,21 +277,20 @@ readinessProbe:
 {{- end }}
 
 {{/*
-The platform's copies as JSON (INFRARED_COPIES): {"recipients", and each of
-"postgres", "mirror", "objects", "gitea" with its "schedule" and "retention"},
-only the fields that are set; empty when none is, so nothing is handed on.
+The rest of the install's backups as JSON (INFRARED_COPIES), as the
+Installation's spec.backup names them: {"schedule", "mirror": {"schedule"},
+"retention", "recipients", "postgres": {"archive": true}}, only the fields that
+are set; empty when none is, so nothing is handed on. The operator seeds
+spec.backup from it, beside the bucket.
 */}}
 {{- define "infrared.copies" -}}
-{{- $c := .Values.copies | default dict }}
+{{- $b := .Values.backup }}
 {{- $out := dict }}
-{{- with $c.recipients }}{{ $_ := set $out "recipients" . }}{{ end }}
-{{- range $k := list "postgres" "mirror" "objects" "gitea" }}
-{{- $s := index $c $k | default dict }}
-{{- $e := dict }}
-{{- with $s.schedule }}{{ $_ := set $e "schedule" . }}{{ end }}
-{{- with $s.retention }}{{ $_ := set $e "retention" . }}{{ end }}
-{{- if $e }}{{ $_ := set $out $k $e }}{{ end }}
-{{- end }}
+{{- with $b.schedule }}{{ $_ := set $out "schedule" . }}{{ end }}
+{{- with ($b.mirror | default dict).schedule }}{{ $_ := set $out "mirror" (dict "schedule" .) }}{{ end }}
+{{- with $b.retention }}{{ $_ := set $out "retention" . }}{{ end }}
+{{- with $b.recipients }}{{ $_ := set $out "recipients" . }}{{ end }}
+{{- if ($b.postgres | default dict).archive }}{{ $_ := set $out "postgres" (dict "archive" true) }}{{ end }}
 {{- if $out }}{{ toJson $out }}{{ end }}
 {{- end }}
 
@@ -307,50 +310,34 @@ set; empty when none is.
 {{- end }}
 
 {{/*
-A restore as JSON (INFRARED_RESTORE): {"from": "<RFC 3339>"}, or {} for the
-newest copies; empty without restore.enabled. The variable's presence is what
+A restore as JSON (INFRARED_RESTORE): {"point": "<stamp>"} for that backup,
+{"from": "<RFC 3339>"} for the newest complete one at or before that time, or {}
+for the newest; empty without restore.enabled. The variable's presence is what
 says the install is a restore. It checks what a restore needs, and fails the
 render without it.
 */}}
 {{- define "infrared.restore" -}}
 {{- if .Values.restore.enabled }}
 {{- if not .Values.stores.enabled }}
-{{- fail "restore.enabled needs stores.enabled: the copies a restore reads are the stores' copies" }}
+{{- fail "restore.enabled needs stores.enabled: the backups a restore reads are the stores' backups" }}
 {{- end }}
 {{- if not .Values.backup.bucket }}
-{{- fail "restore.enabled needs backup.bucket, backup.endpoint and backup.region: the bucket the copies are in" }}
+{{- fail "restore.enabled needs backup.bucket, backup.endpoint and backup.region: the bucket the backups are in" }}
 {{- end }}
 {{- if and .Values.gitea.enabled (ne (int .Values.gitea.replicaCount) 0) }}
 {{- fail "restore.enabled with gitea.enabled needs --set gitea.replicaCount=0: Gitea starts once the restore has filled its volume" }}
 {{- end }}
-{{- if .Values.restore.from }}{{ toJson (dict "from" .Values.restore.from) }}{{ else }}{{ "{}" }}{{ end }}
+{{- if and .Values.restore.point .Values.restore.from }}
+{{- fail "restore.point and restore.from both name the backup to restore: give one" }}
+{{- end }}
+{{- if .Values.restore.point }}{{ toJson (dict "point" .Values.restore.point) }}
+{{- else if .Values.restore.from }}{{ toJson (dict "from" .Values.restore.from) }}
+{{- else }}{{ "{}" }}{{ end }}
 {{- end }}
 {{- end }}
 
-{{/* The operator's image, which also runs the copies' and the restore's modes. */}}
+{{/* The operator's image, which also runs the restore's modes. */}}
 {{- define "infrared.operatorImage" -}}
 {{- include "infrared.image" (dict "root" . "image" .Values.operator.image) }}
 {{- end }}
 
-{{/*
-Gitea's own image, as the gitea chart renders it (its "gitea.image"), for the
-dump, which has to run Gitea's exact version.
-*/}}
-{{- define "infrared.giteaImage" -}}
-{{- $i := .Values.gitea.image }}
-{{- $registry := (.Values.global | default dict).imageRegistry | default $i.registry }}
-{{- $tag := printf "%s%s" (toString $i.tag) (ternary "-rootless" "" (default false $i.rootless)) }}
-{{- $digest := "" }}{{ with $i.digest }}{{ $digest = printf "@%s" (toString .) }}{{ end }}
-{{- if $i.fullOverride }}{{ $i.fullOverride }}
-{{- else if $registry }}{{ printf "%s/%s:%s%s" $registry $i.repository $tag $digest }}
-{{- else }}{{ printf "%s:%s%s" $i.repository $tag $digest }}
-{{- end }}
-{{- end }}
-
-{{/*
-Where the copies of Infrared's objects and of Gitea go: SeaweedFS's S3 gateway,
-which the gitops template runs with the stores (components/seaweedfs).
-*/}}
-{{- define "infrared.copiesEndpoint" -}}
-http://seaweedfs-s3.stores.svc:8333
-{{- end }}

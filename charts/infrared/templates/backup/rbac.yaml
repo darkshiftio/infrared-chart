@@ -1,0 +1,49 @@
+{{- /*
+The backup Job's account. The Infrared operator writes the CronJob
+infrared-backup from the Installation's spec.backup (the chart renders none),
+and each backup, the Job infrared-backup-<stamp>, exports Infrared's own
+objects as this account: read only, the twelve Infrared kinds with their
+status, and the namespaces, Secrets and ConfigMaps a backup keeps. It is
+rendered whether or not backups are on, because the destination and the
+recipients can be set in Infrared after the install. Its name is fixed: the
+operator's CronJob names it.
+*/}}
+{{- $ctx := dict "root" . "component" "backup" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infrared-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+---
+# Read only: Infrared's kinds, and the namespaces, Secrets and ConfigMaps a
+# backup keeps. No write of any kind.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: infrared-backup
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: ["infrared.darkshift.io"]
+    resources: ["*"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["namespaces", "secrets", "configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: infrared-backup
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: infrared-backup
+subjects:
+  - kind: ServiceAccount
+    name: infrared-backup
+    namespace: {{ .Release.Namespace }}

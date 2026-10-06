@@ -1,7 +1,8 @@
 {{- /*
 Restore at install (restore.enabled): the Job infrared-restore runs the
-operator's image in its restore mode. It picks the restore point from the backup
-bucket's copies, writes it to the ConfigMap infrared-restore (phase Planned),
+operator's image in its restore mode. It picks the backup to restore from the
+backup bucket (restore.point, restore.from, or the newest), writes it to the
+ConfigMap infrared-restore (phase Planned),
 waits for Gitea's restore with Gitea, then scales Gitea to one, restores
 Infrared's own objects in their order (phase ObjectsRestored) and exits. The
 operator starts no controller until then, and finishes the restore (phase
@@ -77,8 +78,8 @@ spec:
   backoffLimit: 6
   activeDeadlineSeconds: 10800
   # A mistake in the flags, the environment or the identity (exit 2), or a
-  # refusal (exit 3: no copy to restore, the mirror has not carried it, a
-  # checksum that does not match), is never retried: a person decides.
+  # refusal (exit 3: no backup to restore, no mirror run after it, a checksum
+  # that does not match), is never retried: a person decides.
   podFailurePolicy:
     rules:
       - action: FailJob

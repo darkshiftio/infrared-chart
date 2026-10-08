@@ -1,0 +1,21 @@
+# CI: the install's backups and Zot's retention, every field set, layered on an
+# install's values or, after adoption, on what the gitops repo's `infrared`
+# Application carries, which is these same values. The recipient is age's own
+# example public key.
+backup:
+  prefix: ci-mgmt
+  schedule: "35 * * * *"
+  mirror:
+    schedule: "47 * * * *"
+  retention: 10d
+  recipients:
+    - age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
+  postgres:
+    archive: true
+registry:
+  retention:
+    untaggedAfter: 48h
+    keepTags: ["^v[0-9]", "^release-"]
+    keepNewest: 20
+    gcInterval: 2h
+    gcDelay: 30m

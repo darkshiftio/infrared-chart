@@ -14,6 +14,7 @@ rules:
   resources:
   - configmaps
   - namespaces
+  - serviceaccounts
   verbs:
   - create
   - delete
@@ -46,17 +47,6 @@ rules:
   - create
   - delete
   - deletecollection
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - create
   - get
   - list
   - patch
@@ -113,6 +103,18 @@ rules:
 - apiGroups:
   - batch
   resources:
+  - cronjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
   - jobs
   verbs:
   - create
@@ -127,6 +129,26 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - external-secrets.io
+  resources:
+  - externalsecrets
+  verbs:
+  - get
+  - list
+  - patch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - referencegrants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - infrared.darkshift.io
@@ -222,7 +244,16 @@ rules:
   verbs:
   - get
   - list
+  - patch
   - watch
+- apiGroups:
+  - kpack.io
+  resources:
+  - sourceresolvers
+  verbs:
+  - delete
+  - get
+  - list
 - apiGroups:
   - networking.k8s.io
   resources:
@@ -248,6 +279,20 @@ rules:
   - update
   - watch
 - apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - clusters
+  verbs:
+  - get
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - infrared-restore
+  resources:
+  - clusterrolebindings
+  verbs:
+  - delete
+- apiGroups:
   - rbac.authorization.k8s.io
   resources:
   - clusterroles
@@ -255,6 +300,14 @@ rules:
   verbs:
   - bind
   - escalate
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - infrared-gitea-restore
+  resources:
+  - rolebindings
+  verbs:
+  - delete
 # END GENERATED RULES
 {{- with .Values.operator.rbac.extraRules }}
 {{ toYaml . }}

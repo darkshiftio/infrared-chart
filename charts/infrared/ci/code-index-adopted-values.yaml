@@ -1,0 +1,13 @@
+# CI: the code index as the gitops template's `infrared` Application carries it
+# after Argo CD adopts the release, layered on ghcr-values.yaml,
+# adopted-values.yaml and stores-adopted-values.yaml: on, at the install's pin,
+# and platformTokens.existingSecret, so Argo CD's render never makes
+# infrared-platform-tokens again, whatever an org's values file says. The
+# record and the App stay in the install's Secret.
+codeIndex:
+  enabled: true
+  image:
+    tag: one-install-0000006
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000026
+platformTokens:
+  existingSecret: infrared-platform-tokens

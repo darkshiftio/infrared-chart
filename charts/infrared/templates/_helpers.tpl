@@ -75,6 +75,120 @@ digest is set (a pin).
 {{- with .Values.imagePullSecrets }}{{ (first .).name }}{{ end }}
 {{- end }}
 
+{{/*
+The default image.registry, darkshift's preprod ECR. Every chart version pins its
+own builds there, so a cluster on it upgrades its images with the chart version
+alone. `make verify` fails if values.yaml's default and this one differ.
+*/}}
+{{- define "infrared.defaultRegistry" -}}
+977456087177.dkr.ecr.us-east-1.amazonaws.com
+{{- end }}
+
+{{/*
+The registry to hand to the operator (INFRARED_IMAGE_REGISTRY), or empty for the
+default registry. Images from any other registry are pinned in the values, and
+those pins have to reach the gitops repo's `infrared` Application, or Argo CD
+renders the chart's defaults once it adopts the release. The Application then
+carries the same registry, so the operator keeps receiving it.
+*/}}
+{{- define "infrared.handedRegistry" -}}
+{{- $registry := trimSuffix "/" .Values.image.registry }}
+{{- if and $registry (ne $registry (include "infrared.defaultRegistry" .)) }}{{ $registry }}{{ end }}
+{{- end }}
+
+{{/*
+Every component's pin as JSON (INFRARED_IMAGES): {"<component>": {"tag", "digest"}}
+for operator, api, ui, mcp and runner. The tag is the one the chart renders (the
+appVersion when empty); the digest is empty when the image is not pinned. With
+codeIndex.enabled, the code index's too, as code-index: the gitops template runs
+it only while that pin is there.
+*/}}
+{{- define "infrared.imagePins" -}}
+{{- $pins := dict }}
+{{- range $c := list "operator" "api" "ui" "mcp" "runner" }}
+{{- $img := (index $.Values $c).image }}
+{{- $_ := set $pins $c (dict "tag" (default $.Chart.AppVersion $img.tag) "digest" (default "" $img.digest)) }}
+{{- end }}
+{{- if .Values.codeIndex.enabled }}
+{{- $ci := .Values.codeIndex.image }}
+{{- $_ := set $pins "code-index" (dict "tag" (default "" $ci.tag) "digest" (default "" $ci.digest)) }}
+{{- end }}
+{{- toJson $pins }}
+{{- end }}
+
+{{/*
+What codeIndex.enabled needs, checked at every render: an image registry other
+than the default, which the operator hands to the gitops template with the
+pins (the template names the code index's image by it), and a pin.
+*/}}
+{{- define "infrared.codeIndexCheck" -}}
+{{- if .Values.codeIndex.enabled }}
+{{- if not (include "infrared.handedRegistry" .) }}
+{{- fail "codeIndex.enabled needs image.registry to name the registry the code index's image is in, such as ghcr.io/darkshiftio: the gitops template names the image by it, and the default registry is never handed on" }}
+{{- end }}
+{{- if not (or .Values.codeIndex.image.tag .Values.codeIndex.image.digest) }}
+{{- fail "codeIndex.enabled needs codeIndex.image.tag or codeIndex.image.digest: a build of darkshiftio/infrared-codeindex" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+The backup bucket as JSON (INFRARED_BACKUP): {"bucket", "endpoint", "region"},
+and "prefix" when it is set, or empty when none of the three is set. The
+operator seeds the Installation's spec.backup.destination from it, and the
+restore's modes read it. values.schema.json asks for all three or none, and a
+prefix only with them; the operator refuses anything else at start.
+*/}}
+{{- define "infrared.backup" -}}
+{{- $b := .Values.backup }}
+{{- if or $b.bucket $b.endpoint $b.region }}
+{{- $out := dict "bucket" $b.bucket "endpoint" $b.endpoint "region" $b.region }}
+{{- with $b.prefix }}{{ $_ := set $out "prefix" . }}{{ end }}
+{{- toJson $out }}
+{{- end }}
+{{- end }}
+
+{{/*
+The backup bucket's provider, as the operator derives it from the endpoint's
+host: linode for *.linodeobjects.com, gcs for storage.googleapis.com (Google
+Cloud Storage, reached by the identity of whatever runs: the Jobs'
+ServiceAccounts, granted the bucket's role outside Infrared, and no key), s3
+for any other host, and empty with no bucket. The chart mounts the bucket's key
+only for a provider that takes one, and refuses a key given with gcs.
+*/}}
+{{- define "infrared.backupProvider" -}}
+{{- $b := .Values.backup }}
+{{- if or $b.bucket $b.endpoint $b.region }}
+{{- $host := regexReplaceAll "^https?://([^/:?#]+).*$" (lower $b.endpoint) "${1}" }}
+{{- if hasSuffix ".linodeobjects.com" $host }}linode{{ else if eq $host "storage.googleapis.com" }}gcs{{ else }}s3{{ end }}
+{{- end }}
+{{- end }}
+
+{{/*
+The gitops template's components the install leaves out, as JSON
+(INFRARED_DISABLED_COMPONENTS): components.disabled, and with the stores and a
+registry, where the template can run Agent Substrate, substrate-test-actors,
+Substrate's test actors, unless substrate.testActors is true. Empty when there
+are none, so nothing is handed on.
+*/}}
+{{- define "infrared.disabledComponents" -}}
+{{- $out := .Values.components.disabled | default list }}
+{{- if and .Values.stores.enabled .Values.registry.address (not .Values.substrate.testActors) (not (has "substrate-test-actors" $out)) }}
+{{- $out = append $out "substrate-test-actors" }}
+{{- end }}
+{{- if $out }}{{ toJson $out }}{{ end }}
+{{- end }}
+
+{{/*
+Where the operator, the API and the cluster reach the Gitea this chart runs
+(INFRARED_GITEA_URL): its Service, gitea-http, in the release namespace, without
+a trailing slash. Gitea's ROOT_URL (gitea.gitea.config.server.ROOT_URL) is the
+same with one; `make verify` checks that they agree.
+*/}}
+{{- define "infrared.giteaURL" -}}
+{{- printf "http://%s-http.%s.svc.cluster.local:%d" .Values.gitea.fullnameOverride .Release.Namespace (int .Values.gitea.service.http.port) }}
+{{- end }}
+
 {{/* Name of the MCP token Secret. */}}
 {{- define "infrared.mcpAccessSecret" -}}
 {{- default (printf "%s-mcp-access" (include "infrared.fullname" .)) .Values.mcp.access.existingSecret }}
@@ -177,3 +291,73 @@ readinessProbe:
   periodSeconds: 10
   timeoutSeconds: 3
 {{- end }}
+
+{{/*
+The rest of the install's backups as JSON (INFRARED_COPIES), as the
+Installation's spec.backup names them: {"schedule", "mirror": {"schedule"},
+"retention", "recipients", "postgres": {"archive": true}}, only the fields that
+are set; empty when none is, so nothing is handed on. The operator seeds
+spec.backup from it, beside the bucket.
+*/}}
+{{- define "infrared.copies" -}}
+{{- $b := .Values.backup }}
+{{- $out := dict }}
+{{- with $b.schedule }}{{ $_ := set $out "schedule" . }}{{ end }}
+{{- with ($b.mirror | default dict).schedule }}{{ $_ := set $out "mirror" (dict "schedule" .) }}{{ end }}
+{{- with $b.retention }}{{ $_ := set $out "retention" . }}{{ end }}
+{{- with $b.recipients }}{{ $_ := set $out "recipients" . }}{{ end }}
+{{- if ($b.postgres | default dict).archive }}
+{{- if eq (include "infrared.backupProvider" .) "gcs" }}
+{{- fail "backup.postgres.archive is not offered with Google Cloud Storage yet: Barman writes its WAL archive through S3 with a key, which gcs has none of" }}
+{{- end }}
+{{- $_ := set $out "postgres" (dict "archive" true) }}{{ end }}
+{{- if $out }}{{ toJson $out }}{{ end }}
+{{- end }}
+
+{{/*
+Zot's retention as JSON (INFRARED_REGISTRY_RETENTION): only the fields that are
+set; empty when none is.
+*/}}
+{{- define "infrared.registryRetention" -}}
+{{- $r := .Values.registry.retention | default dict }}
+{{- $out := dict }}
+{{- with $r.untaggedAfter }}{{ $_ := set $out "untaggedAfter" . }}{{ end }}
+{{- with $r.keepTags }}{{ $_ := set $out "keepTags" . }}{{ end }}
+{{- with $r.keepNewest }}{{ $_ := set $out "keepNewest" (int .) }}{{ end }}
+{{- with $r.gcInterval }}{{ $_ := set $out "gcInterval" . }}{{ end }}
+{{- with $r.gcDelay }}{{ $_ := set $out "gcDelay" . }}{{ end }}
+{{- if $out }}{{ toJson $out }}{{ end }}
+{{- end }}
+
+{{/*
+A restore as JSON (INFRARED_RESTORE): {"point": "<stamp>"} for that backup,
+{"from": "<RFC 3339>"} for the newest complete one at or before that time, or {}
+for the newest; empty without restore.enabled. The variable's presence is what
+says the install is a restore. It checks what a restore needs, and fails the
+render without it.
+*/}}
+{{- define "infrared.restore" -}}
+{{- if .Values.restore.enabled }}
+{{- if not .Values.stores.enabled }}
+{{- fail "restore.enabled needs stores.enabled: the backups a restore reads are the stores' backups" }}
+{{- end }}
+{{- if not .Values.backup.bucket }}
+{{- fail "restore.enabled needs backup.bucket, backup.endpoint and backup.region: the bucket the backups are in" }}
+{{- end }}
+{{- if and .Values.gitea.enabled (ne (int .Values.gitea.replicaCount) 0) }}
+{{- fail "restore.enabled with gitea.enabled needs --set gitea.replicaCount=0: Gitea starts once the restore has filled its volume" }}
+{{- end }}
+{{- if and .Values.restore.point .Values.restore.from }}
+{{- fail "restore.point and restore.from both name the backup to restore: give one" }}
+{{- end }}
+{{- if .Values.restore.point }}{{ toJson (dict "point" .Values.restore.point) }}
+{{- else if .Values.restore.from }}{{ toJson (dict "from" .Values.restore.from) }}
+{{- else }}{{ "{}" }}{{ end }}
+{{- end }}
+{{- end }}
+
+{{/* The operator's image, which also runs the restore's modes. */}}
+{{- define "infrared.operatorImage" -}}
+{{- include "infrared.image" (dict "root" . "image" .Values.operator.image) }}
+{{- end }}
+

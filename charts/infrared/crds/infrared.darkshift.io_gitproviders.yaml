@@ -32,7 +32,9 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: GitProvider connects an org to GitHub (GitLab and Gitea later).
+        description: |-
+          GitProvider connects an org to its forge: GitHub through a GitHub App, or
+          Gitea through one bot user (GitLab later).
         properties:
           apiVersion:
             description: |-
@@ -54,6 +56,37 @@ spec:
           spec:
             description: GitProviderSpec connects an org to its git provider.
             properties:
+              gitea:
+                description: Gitea is required for type gitea.
+                properties:
+                  secretRef:
+                    description: |-
+                      SecretRef names the Secret, in the GitProvider's namespace, that holds
+                      the user's username, password, token and read-token.
+                    properties:
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  url:
+                    description: |-
+                      URL is the Gitea server's root, as Infrared and the cluster reach it,
+                      e.g. http://gitea-http.infrared.svc.cluster.local:3000.
+                    pattern: ^https?://[^\s/?#]+(/[^\s?#]*)?$
+                    type: string
+                  user:
+                    description: User is the Gitea user Infrared acts as in spec.owner,
+                      e.g. ir-acme.
+                    maxLength: 40
+                    minLength: 1
+                    type: string
+                required:
+                - secretRef
+                - url
+                - user
+                type: object
               github:
                 description: GitHubAppSpec identifies a GitHub App and its installation
                   on one org.
@@ -109,14 +142,16 @@ spec:
                 - privateKeySecretRef
                 type: object
               owner:
-                description: Owner is the provider org (GitHub organization login)
-                  Infrared manages.
+                description: |-
+                  Owner is the provider org Infrared manages: a GitHub organization login,
+                  or a Gitea organization name (at most 40 characters).
                 minLength: 1
                 type: string
               type:
                 description: GitProviderType names a supported git provider integration.
                 enum:
                 - github-app
+                - gitea
                 type: string
             required:
             - owner
@@ -185,8 +220,10 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               installationVerified:
-                description: InstallationVerified is True when the App can mint an
-                  installation token.
+                description: |-
+                  InstallationVerified is True when the App can mint an installation token,
+                  or, for type gitea, when the user's token reaches spec.owner with write
+                  access.
                 type: boolean
               lastVerifiedTime:
                 format: date-time
@@ -201,6 +238,10 @@ spec:
         x-kubernetes-validations:
         - message: spec.github is required for type github-app
           rule: self.spec.type != 'github-app' || has(self.spec.github)
+        - message: spec.gitea is required for type gitea
+          rule: self.spec.type != 'gitea' || has(self.spec.gitea)
+        - message: 'spec.owner names a Gitea organization: at most 40 characters'
+          rule: self.spec.type != 'gitea' || size(self.spec.owner) <= 40
     served: true
     storage: true
     subresources:

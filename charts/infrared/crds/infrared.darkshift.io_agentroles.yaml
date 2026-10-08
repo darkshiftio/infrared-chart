@@ -300,6 +300,13 @@ spec:
                     - allowlist
                     - open
                     type: string
+                  publish:
+                    description: |-
+                      Publish lets the role's steps push images and charts to the install's
+                      registry, under <org>/<product>. The runner pushes what the agent leaves
+                      in .infrared/publish/ with a key of the org's that ends with the step;
+                      the agent never sees the key. Ignored on an install without a registry.
+                    type: boolean
                 type: object
               responsibilities:
                 items:

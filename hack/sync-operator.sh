@@ -51,5 +51,6 @@ awk -v b="$begin" -v e="$end" -v r="$rules" '
 mv "$tmp" "$tpl"
 
 rev="$(git -C "$op" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-dirty="$(git -C "$op" status --porcelain -- config 2>/dev/null | head -1)"
+# An exported tree (git archive) is not a checkout: no revision, nothing dirty.
+dirty="$(git -C "$op" status --porcelain -- config 2>/dev/null | head -1 || true)"
 echo "synced ${#crds[@]} CRDs and $(grep -c '^- apiGroups' "$rules") rules from $op @ $rev${dirty:+ (uncommitted changes in config/)} at $(date -u +%Y-%m-%dT%H:%M:%SZ)"

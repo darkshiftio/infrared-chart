@@ -1,5 +1,24 @@
 {{- $c := .Values.mcp }}
 {{- $ctx := dict "root" . "c" $c "component" "mcp" }}
+{{- /*
+The two tokens, both ways: the one infrared-mcp sends to the API (the mcp token
+Secret) and the one MCP clients must send to /mcp (the access Secret), each the
+chart's or the existingSecret named in its place. As files, from the Secrets'
+volumes: infrared-mcp 640546c and later reads each again at every use
+(INFRARED_API_TOKEN_FILE, INFRARED_MCP_TOKEN_FILE) in place of its variable, and
+the kubelet writes a changed Secret into its volume within its sync period, so
+a rotation, or a restore writing the saved tokens back, needs no restart. And as
+the variables they always were (INFRARED_API_TOKEN, INFRARED_MCP_TOKEN), so that
+an image from before the files, mid-roll, pinned by an older Application or
+after a rollback, still sends a token and still asks for one on /mcp: it keeps
+the tokens it started with, and never serves /mcp open. Never a subPath, which
+the kubelet does not update. The files keep the volume's default mode: the pod
+sets no fsGroup, so the image's user, whatever its uid, reads them as others.
+*/}}
+{{- $tokenVolume := dict "name" "api-token" "secret" (dict "secretName" (include "infrared.mcpTokenSecret" .) "items" (list (dict "key" "token" "path" "token"))) }}
+{{- $accessVolume := dict "name" "mcp-access" "secret" (dict "secretName" (include "infrared.mcpAccessSecret" .) "items" (list (dict "key" "token" "path" "token"))) }}
+{{- $_ := set $ctx "volumes" (list $tokenVolume $accessVolume) }}
+{{- $_ := set $ctx "volumeMounts" (list (dict "name" "api-token" "mountPath" "/var/run/infrared/api-token" "readOnly" true) (dict "name" "mcp-access" "mountPath" "/var/run/infrared/mcp-access" "readOnly" true)) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,6 +64,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "infrared.mcpAccessSecret" . }}
                   key: token
+            # The same two tokens as files, read again at every use: infrared-mcp
+            # 640546c and later reads these in place of the two variables above,
+            # which an image from before them still reads.
+            - name: INFRARED_API_TOKEN_FILE
+              value: "/var/run/infrared/api-token/token"
+            - name: INFRARED_MCP_TOKEN_FILE
+              value: "/var/run/infrared/mcp-access/token"
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -52,4 +78,12 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- if .Values.codeIndex.enabled }}
+            # Every tool, the code index's among them, for agent steps inside the
+            # cluster (INFRARED_MCP_CODE_LISTEN, :8081 by default). Never routed
+            # outside it: /mcp on the public name stays on http, without them.
+            - name: code
+              containerPort: 8081
+              protocol: TCP
+            {{- end }}
           {{- include "infrared.probes" (dict "port" "http") | nindent 10 }}

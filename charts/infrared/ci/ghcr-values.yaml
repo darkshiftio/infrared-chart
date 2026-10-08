@@ -1,0 +1,32 @@
+# CI: a cluster outside AWS, which cannot reach the preprod ECR registry. Every
+# component image, the runner's included, comes from ghcr.io/darkshiftio pinned
+# by digest, and one dockerconfigjson Secret pulls them all: the chart sets it
+# on every pod and hands its name to the operator (INFRARED_IMAGE_PULL_SECRET),
+# which copies it into each org namespace for the runner Jobs. The branch
+# workflows tag ghcr images one-install-<short sha>.
+managementCluster:
+  name: ci-outside-aws
+image:
+  registry: ghcr.io/darkshiftio
+imagePullSecrets:
+  - name: ghcr-pull
+operator:
+  image:
+    tag: one-install-0000001
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000021
+api:
+  image:
+    tag: one-install-0000002
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000022
+ui:
+  image:
+    tag: one-install-0000003
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000023
+mcp:
+  image:
+    tag: one-install-0000004
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000024
+runner:
+  image:
+    tag: one-install-0000005
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000025

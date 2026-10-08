@@ -1,0 +1,10 @@
+# CI: Gitea as the gitops repo's `infrared` Application carries it once Argo CD
+# adopts the release, layered on ghcr-values.yaml, adopted-values.yaml and
+# stores-adopted-values.yaml: on, on the same volume class, and the install's
+# admin Secret kept, so it is not rendered again.
+gitea:
+  enabled: true
+  persistence:
+    storageClass: linode-block-storage-retain
+giteaAdmin:
+  existingSecret: infrared-gitea-admin

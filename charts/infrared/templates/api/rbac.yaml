@@ -35,6 +35,21 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list"]
+  # The platform by layer: besides the Deployments above, the API reads Argo
+  # CD's application controller (a StatefulSet), the stores' Postgres (a
+  # CloudNativePG Cluster and its Backups: its WAL archive and how old its last
+  # base backup is, which CloudNativePG records only on the Backup when a
+  # plugin takes it) and the CronJob that copies the buckets, to say whether
+  # each layer is ready.
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list"]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters", "backups"]
+    verbs: ["get", "list"]
   # Environment detail: each zone's persistent volume claims and recent events.
   - apiGroups: [""]
     resources: ["persistentvolumeclaims", "events"]
@@ -44,6 +59,11 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list"]
+  # ...and on a Gateway edge each zone's HTTPRoute <product>-preview, its
+  # hostnames and who may open it.
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get"]
   # Organizations live in ir-org-* namespaces, which the API creates.
   - apiGroups: [""]
     resources: ["namespaces"]

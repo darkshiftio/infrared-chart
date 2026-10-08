@@ -26,6 +26,10 @@ spec:
     - jsonPath: .spec.managementCluster
       name: Cluster
       type: string
+    - jsonPath: .status.backup.lastPoint
+      name: Last point
+      priority: 1
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -81,6 +85,169 @@ spec:
                 - email
                 - passwordSecretRef
                 type: object
+              backup:
+                description: |-
+                  Backup is where the platform's backups go and how they are made. The
+                  operator fills it from INFRARED_BACKUP and INFRARED_COPIES while it is
+                  empty, and never overwrites a value someone set.
+                properties:
+                  destination:
+                    description: |-
+                      Destination is the object storage outside the cluster the backups and
+                      the mirror are written to.
+                    properties:
+                      bucket:
+                        description: Bucket is the bucket's name.
+                        maxLength: 63
+                        minLength: 3
+                        pattern: ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$
+                        type: string
+                      credentials:
+                        description: |-
+                          Credentials are how the backups reach the bucket: a key, or the
+                          identity of whatever runs.
+                        properties:
+                          kind:
+                            description: |-
+                              Kind is the credential's kind: accessKey, an S3 access key and its
+                              secret, in the Secret secretRef names (linode, s3); or serviceAccount,
+                              the identity of whatever reaches the bucket, granted the bucket's role
+                              outside Infrared, with nothing in any Secret (gcs). role (AWS) is
+                              reserved.
+                            enum:
+                            - accessKey
+                            - serviceAccount
+                            type: string
+                          secretRef:
+                            description: |-
+                              SecretRef names the Secret in Infrared's namespace that holds the
+                              access key, as backup-access-key-id and backup-secret-access-key:
+                              infrared-platform-tokens, which the chart keeps. Required for an
+                              accessKey; none for a serviceAccount.
+                            properties:
+                              name:
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                        required:
+                        - kind
+                        type: object
+                        x-kubernetes-validations:
+                        - message: an accessKey names the Secret that holds it in
+                            secretRef
+                          rule: self.kind != 'accessKey' || has(self.secretRef)
+                      endpoint:
+                        description: |-
+                          Endpoint is the store's endpoint, https:// and a host, with no path:
+                          https://<region>.linodeobjects.com for Linode, and for gcs always
+                          https://storage.googleapis.com.
+                        maxLength: 270
+                        pattern: ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$
+                        type: string
+                      prefix:
+                        description: |-
+                          Prefix is where in the bucket this install's backups and mirror go:
+                          <prefix>/backups/ and <prefix>/seaweedfs/. Empty means the install's
+                          name, the management cluster's.
+                        pattern: ^([a-z0-9][a-z0-9._-]{0,62})?$
+                        type: string
+                      provider:
+                        description: |-
+                          Provider runs the store: linode, Linode Object Storage, the one offered
+                          on day one; s3, any other S3-compatible store; or gcs, Google Cloud
+                          Storage, reached natively by the identity of whatever runs, with
+                          credentials of kind serviceAccount. aws is reserved for AWS by role.
+                        enum:
+                        - linode
+                        - s3
+                        - gcs
+                        type: string
+                      region:
+                        description: |-
+                          Region is the region S3 requests are signed for, such as us-lax-4;
+                          for gcs, the bucket's location, such as us-central1, which nothing
+                          signs for.
+                        maxLength: 63
+                        pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                        type: string
+                    required:
+                    - bucket
+                    - credentials
+                    - endpoint
+                    - provider
+                    - region
+                    type: object
+                    x-kubernetes-validations:
+                    - message: gcs takes credentials of kind serviceAccount at the
+                        endpoint https://storage.googleapis.com; linode and s3 take
+                        an accessKey
+                      rule: 'self.provider == ''gcs'' ? (self.credentials.kind ==
+                        ''serviceAccount'' && self.endpoint == ''https://storage.googleapis.com'')
+                        : self.credentials.kind == ''accessKey'''
+                  mirror:
+                    description: Mirror is the stores' buckets' mirror to the destination.
+                    properties:
+                      schedule:
+                        description: |-
+                          Schedule is when the mirror runs, five cron fields in UTC. Empty means
+                          17 * * * *.
+                        maxLength: 128
+                        pattern: ^[0-9A-Za-z*/,?-]+( [0-9A-Za-z*/,?-]+){4}$
+                        type: string
+                    type: object
+                  postgres:
+                    description: Postgres is the platform's Postgres's own archive.
+                    properties:
+                      archive:
+                        description: |-
+                          Archive turns on Barman's WAL archiving and a daily base backup to the
+                          destination's <prefix>/postgres/. Off by default: each backup holds a
+                          dump of Postgres, and a restore never reads the archive.
+                        type: boolean
+                    type: object
+                  recipients:
+                    description: |-
+                      Recipients are the age public keys (age1...) each backup is encrypted
+                      to; any one of their identities opens it. Without one no backup is
+                      made. Only the public half is ever here.
+                    items:
+                      pattern: ^age1[02-9ac-hj-np-z]{58}$
+                      type: string
+                    maxItems: 16
+                    type: array
+                    x-kubernetes-list-type: set
+                  retention:
+                    description: |-
+                      Retention is how long a backup is kept, whole days such as 7d; the
+                      newest complete backup is never deleted. Empty means 7d.
+                    pattern: ^[1-9][0-9]{0,2}d$
+                    type: string
+                  schedule:
+                    description: |-
+                      Schedule is when a backup is made, five cron fields in UTC. Empty
+                      means 5 * * * *.
+                    maxLength: 128
+                    pattern: ^[0-9A-Za-z*/,?-]+( [0-9A-Za-z*/,?-]+){4}$
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: postgres.archive is not offered with gcs yet
+                  rule: '!(has(self.destination) && self.destination.provider == ''gcs''
+                    && has(self.postgres) && self.postgres.archive)'
+              edge:
+                description: |-
+                  Edge is how traffic reaches Infrared and its zones: traefik, through
+                  Traefik Ingresses as before, or gateway, through one shared Gateway run
+                  by Envoy Gateway. Empty means traefik. The gitops template installs the
+                  edge it names. The operator fills it from INFRARED_EDGE while it is
+                  empty, and never overwrites a value someone set.
+                enum:
+                - ""
+                - traefik
+                - gateway
+                type: string
               gitProviderRef:
                 description: GitProviderRef is the platform org's git provider.
                 properties:
@@ -151,8 +318,9 @@ spec:
                   control plane.
                 type: string
               previews:
-                description: Previews give pre-release zones a URL behind Infrared
-                  sign-in.
+                description: |-
+                  Previews give pre-release zones a URL behind Infrared sign-in. The
+                  operator fills it from INFRARED_PREVIEWS while it is unset.
                 properties:
                   cloudflareTokenSecret:
                     description: |-
@@ -199,6 +367,43 @@ spec:
           status:
             description: InstallationStatus is the observed state of the install.
             properties:
+              backup:
+                description: |-
+                  Backup is the newest backup, mirror run and point the operator has
+                  seen in the destination.
+                properties:
+                  lastBackup:
+                    description: LastBackup is the stamp of the newest complete backup.
+                    pattern: ^[0-9]{8}T[0-9]{6}Z$
+                    type: string
+                  lastBackupAt:
+                    description: |-
+                      LastBackupAt is when the newest complete backup was made: the time its
+                      stamp names.
+                    format: date-time
+                    type: string
+                  lastMirrorRun:
+                    description: LastMirrorRun is the stamp of the mirror's newest
+                      run.
+                    pattern: ^[0-9]{8}T[0-9]{6}Z$
+                    type: string
+                  lastPoint:
+                    description: |-
+                      LastPoint is the stamp of the newest point: the newest complete backup
+                      a mirror run followed, which a restore brings back whole.
+                    pattern: ^[0-9]{8}T[0-9]{6}Z$
+                    type: string
+                  lastPointAt:
+                    description: |-
+                      LastPointAt is when the newest point's backup was made: the time its
+                      stamp names.
+                    format: date-time
+                    type: string
+                  message:
+                    description: Message says what happened last, or why the backups
+                      are not healthy.
+                    type: string
+                type: object
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -273,6 +478,16 @@ spec:
                 - AwaitingGitopsRepo
                 - Syncing
                 - Ready
+                type: string
+              postgresServerName:
+                description: |-
+                  PostgresServerName is the server name the platform's Postgres archives
+                  under in the backup bucket, chosen once and never changed for the life
+                  of the install: postgres-<stamp of when the operator chose it> on a
+                  fresh install, the restore's new name on a restore, or postgres on an
+                  install that archived before the field existed. Empty until the
+                  operator has chosen.
+                pattern: ^[a-z][A-Za-z0-9._-]{0,62}$
                 type: string
               version:
                 description: Version of the Infrared control plane.

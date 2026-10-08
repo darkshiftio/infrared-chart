@@ -837,6 +837,15 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - messageExpression: '''Product name '' + self.metadata.name + '' is reserved:
+            a Product deploys into the namespaces '' + self.metadata.name + ''-*,
+            and those include namespaces of the platform, such as kube-system, ir-org-<org>
+            or cert-manager'''
+          rule: '!(self.metadata.name in [''argocd'', ''builds'', ''cert'', ''cnpg'',
+            ''default'', ''envoy'', ''external'', ''gitea'', ''infrared'', ''ir'',
+            ''kpack'', ''kube'', ''local'', ''monitoring'', ''origin'', ''registry'',
+            ''stores''])'
     served: true
     storage: true
     subresources:

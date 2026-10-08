@@ -12,8 +12,8 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `templates/operator/clusterrole.yaml` are generated: run
   `hack/sync-operator.sh`, never edit them by hand.
 - Fixed contract with the API: Secrets `infrared-setup` (token),
-  `infrared-session` (key), `infrared-api-tokens` (name -> hex sha256) in the
-  release namespace. The UI Service is `{{ include "infrared.fullname" . }}`
+  `infrared-session` (key), `infrared-api-tokens` (name -> hex sha256, and
+  owner.<name> -> the admin it was minted for) in the release namespace. The UI Service is `{{ include "infrared.fullname" . }}`
   (`svc/infrared`), port 80 -> 8080.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.

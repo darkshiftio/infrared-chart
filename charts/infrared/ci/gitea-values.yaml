@@ -1,0 +1,9 @@
+# CI: Gitea as the install's forge, layered on ghcr-values.yaml and
+# install-values.yaml. The chart runs it on one volume of Linode's Retain class,
+# as linode-mgmt does, generates its admin Secret once, and hands its address
+# to the operator and the API and that Secret to the API.
+gitea:
+  enabled: true
+  persistence:
+    storageClass: linode-block-storage-retain
+    size: 10Gi

@@ -1,0 +1,9 @@
+# CI: a restore at install, layered on an install's values with Gitea: the
+# newest complete backup at or before a time, and Gitea held at no pod until its
+# volume is filled. The age identity is a Secret made before the install, never
+# a value.
+restore:
+  enabled: true
+  from: "2026-10-03T05:00:00Z"
+gitea:
+  replicaCount: 0

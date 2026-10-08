@@ -174,8 +174,8 @@ check() { # check <file> <description> <grep -E pattern> [count]
   else bad "$2"; fi
 }
 check defaults.yaml "UI Service is named exactly 'infrared', port 80 -> http" '^  name: infrared$'
-check defaults.yaml "default images are the pinned preprod builds" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}$' 4
-check defaults.yaml "operator runs steps in the pinned runner" 'value: "977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-runner:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
+check defaults.yaml "default images are the pinned preprod builds" 'image: us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-(operator|api|ui|mcp):v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}$' 4
+check defaults.yaml "operator runs steps in the pinned runner" 'value: "us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-runner:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
 check defaults.yaml "Go toolchain image pinned by digest" 'value: "golang:[0-9.]+@sha256:[0-9a-f]{64}"$' 1
 check defaults.yaml "operator knows the API's cluster address for alert webhooks" 'value: "http://infrared-api.infrared.svc:8080"$' 1
 check defaults.yaml "API reads SLOs from VictoriaMetrics" 'value: "http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428"$' 1
@@ -193,7 +193,7 @@ check defaults.yaml "UI proxies to infrared-mcp" 'value: "http://infrared-mcp:80
 check defaults.yaml "every container read-only root fs" 'readOnlyRootFilesystem: true' 4
 check defaults.yaml "every container drops ALL" 'drop:$' 4
 check defaults.yaml "cluster name default" 'value: "infrared-mgmt"'
-check digests.yaml "pinned images render tag@digest" 'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):v0.1.0@sha256:[0-9a-f]{64}$' 4
+check digests.yaml "pinned images render tag@digest" 'image: us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-(operator|api|ui|mcp):v0.1.0@sha256:[0-9a-f]{64}$' 4
 check digests.yaml "pull secret on every pod" '^        - name: ghcr-pull$' 4
 check digests.yaml "first pull secret handed to the operator" 'value: "ghcr-pull"' 1
 check digests.yaml "extra operator rule appended" '^  - ci.example.com$' 1
@@ -224,7 +224,7 @@ has ghcr.env "every pin handed to the operator, as JSON" "INFRARED_IMAGES=\"$ghc
 has ghcr.env "the operator's own image handed to it, by tag and digest" \
   'INFRARED_OPERATOR_IMAGE="ghcr.io/darkshiftio/infrared-operator:one-install-0000001@sha256:0000000000000000000000000000000000000000000000000000000000000021"'
 check defaults.env "the operator's own image handed to it, the default pin" \
-  '^INFRARED_OPERATOR_IMAGE="977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-operator:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
+  '^INFRARED_OPERATOR_IMAGE="us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-operator:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
 check ghcr.yaml "no pull Secret without imageCredentials" '^type: kubernetes\.io/dockerconfigjson$' 0
 has ghcr-adopted.env "after adoption the operator still gets the registry" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
 has ghcr-adopted.env "after adoption the operator still gets every pin" "INFRARED_IMAGES=\"$ghcr_pins\""
@@ -232,9 +232,11 @@ check ghcr-adopted.yaml "after adoption no Secret is rendered, so the install's 
 check ghcr-adopted.yaml "after adoption every pod still pulls with the pull secret" '^        - name: ghcr-pull$' 4
 # The default registry: the chart version's own pins, nothing handed on (and the
 # default in values.yaml matches infrared.defaultRegistry).
-for f in defaults digests ecr; do
+for f in defaults digests; do
   check "$f.env" "$f: no registry or pins handed to the operator" '^INFRARED_(IMAGE_REGISTRY|IMAGES)=' 0
 done
+# ECR was the default before 0.1.0-alpha.146; now it is another registry, handed on like ghcr's.
+has ecr.env "ecr: the registry handed to the operator" 'INFRARED_IMAGE_REGISTRY="977456087177.dkr.ecr.us-east-1.amazonaws.com"'
 # The Installation's edge and previews, and the two Secrets rendered from values:
 # none of it by default, so the default render is what it was.
 check defaults.env "no edge or previews by default" '^INFRARED_(EDGE|PREVIEWS)=' 0

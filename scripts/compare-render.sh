@@ -32,6 +32,9 @@ ci=charts/infrared/ci
 printf 'ci-secret\n' >"$work/secret"
 fixed=(--set "setup.token=ci-setup,session.key=ci-session,mcp.token=ci-mcp,mcp.access.token=ci-mcp-access")
 secrets="--set-file imageCredentials.password=$work/secret --set-file platformTokens.cloudflareApiToken=$work/secret"
+# Gitea's admin Secret is generated with a random password: the cases with Gitea
+# name an existing one, so both renders are deterministic.
+gitea="--set giteaAdmin.existingSecret=infrared-gitea-admin"
 cases=(
   "defaults"
   "digests -f $ci/digests-values.yaml"
@@ -40,6 +43,8 @@ cases=(
   "ghcr -f $ci/ghcr-values.yaml"
   "install -f $ci/ghcr-values.yaml -f $ci/install-values.yaml $secrets"
   "adopted -f $ci/ghcr-values.yaml -f $ci/adopted-values.yaml -f $ci/stores-adopted-values.yaml"
+  "backups -f $ci/ghcr-values.yaml -f $ci/install-values.yaml -f $ci/gitea-values.yaml -f $ci/backup-values.yaml $secrets $gitea"
+  "restore -f $ci/ghcr-values.yaml -f $ci/install-values.yaml -f $ci/gitea-values.yaml -f $ci/backup-values.yaml -f $ci/restore-values.yaml $secrets $gitea"
 )
 fail=0
 for c in "${cases[@]}"; do

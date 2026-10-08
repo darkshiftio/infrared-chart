@@ -235,6 +235,10 @@ spec:
               value: {{ $restore | quote }}
             - name: INFRARED_BACKUP
               value: {{ include "infrared.backup" $ | quote }}
+            {{- /* Google Cloud Storage takes no key: the Job's ServiceAccount
+            infrared-restore is the identity, granted the bucket's role outside
+            Infrared. */}}
+            {{- if ne (include "infrared.backupProvider" $) "gcs" }}
             # The backup bucket's key, which only reads here.
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
@@ -246,6 +250,7 @@ spec:
                 secretKeyRef:
                   name: infrared-platform-tokens
                   key: backup-secret-access-key
+            {{- end }}
             {{- if $.Values.gitea.enabled }}
             - name: INFRARED_GITEA_URL
               value: {{ include "infrared.giteaURL" $ | quote }}

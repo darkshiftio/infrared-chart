@@ -149,6 +149,22 @@ prefix only with them; the operator refuses anything else at start.
 {{- end }}
 
 {{/*
+The backup bucket's provider, as the operator derives it from the endpoint's
+host: linode for *.linodeobjects.com, gcs for storage.googleapis.com (Google
+Cloud Storage, reached by the identity of whatever runs: the Jobs'
+ServiceAccounts, granted the bucket's role outside Infrared, and no key), s3
+for any other host, and empty with no bucket. The chart mounts the bucket's key
+only for a provider that takes one, and refuses a key given with gcs.
+*/}}
+{{- define "infrared.backupProvider" -}}
+{{- $b := .Values.backup }}
+{{- if or $b.bucket $b.endpoint $b.region }}
+{{- $host := regexReplaceAll "^https?://([^/:?#]+).*$" (lower $b.endpoint) "${1}" }}
+{{- if hasSuffix ".linodeobjects.com" $host }}linode{{ else if eq $host "storage.googleapis.com" }}gcs{{ else }}s3{{ end }}
+{{- end }}
+{{- end }}
+
+{{/*
 The gitops template's components the install leaves out, as JSON
 (INFRARED_DISABLED_COMPONENTS): components.disabled, and with the stores and a
 registry, where the template can run Agent Substrate, substrate-test-actors,
@@ -290,7 +306,11 @@ spec.backup from it, beside the bucket.
 {{- with ($b.mirror | default dict).schedule }}{{ $_ := set $out "mirror" (dict "schedule" .) }}{{ end }}
 {{- with $b.retention }}{{ $_ := set $out "retention" . }}{{ end }}
 {{- with $b.recipients }}{{ $_ := set $out "recipients" . }}{{ end }}
-{{- if ($b.postgres | default dict).archive }}{{ $_ := set $out "postgres" (dict "archive" true) }}{{ end }}
+{{- if ($b.postgres | default dict).archive }}
+{{- if eq (include "infrared.backupProvider" .) "gcs" }}
+{{- fail "backup.postgres.archive is not offered with Google Cloud Storage yet: Barman writes its WAL archive through S3 with a key, which gcs has none of" }}
+{{- end }}
+{{- $_ := set $out "postgres" (dict "archive" true) }}{{ end }}
 {{- if $out }}{{ toJson $out }}{{ end }}
 {{- end }}
 

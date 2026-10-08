@@ -104,6 +104,10 @@ spec:
                   fieldPath: metadata.namespace
             - name: INFRARED_BACKUP
               value: {{ include "infrared.backup" . | quote }}
+            {{- /* Google Cloud Storage takes no key: the Job's ServiceAccount
+            infrared-gitea-restore is the identity, granted the bucket's role
+            outside Infrared. */}}
+            {{- if ne (include "infrared.backupProvider" .) "gcs" }}
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -114,6 +118,7 @@ spec:
                 secretKeyRef:
                   name: infrared-platform-tokens
                   key: backup-secret-access-key
+            {{- end }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources:

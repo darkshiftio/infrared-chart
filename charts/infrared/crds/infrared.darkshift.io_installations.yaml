@@ -103,22 +103,27 @@ spec:
                         pattern: ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$
                         type: string
                       credentials:
-                        description: Credentials are the key the backups reach the
-                          bucket with.
+                        description: |-
+                          Credentials are how the backups reach the bucket: a key, or the
+                          identity of whatever runs.
                         properties:
                           kind:
                             description: |-
                               Kind is the credential's kind: accessKey, an S3 access key and its
-                              secret. serviceAccount (Google Cloud Storage) and role (AWS) are
+                              secret, in the Secret secretRef names (linode, s3); or serviceAccount,
+                              the identity of whatever reaches the bucket, granted the bucket's role
+                              outside Infrared, with nothing in any Secret (gcs). role (AWS) is
                               reserved.
                             enum:
                             - accessKey
+                            - serviceAccount
                             type: string
                           secretRef:
                             description: |-
-                              SecretRef names the Secret in Infrared's namespace that holds the key,
-                              as backup-access-key-id and backup-secret-access-key:
-                              infrared-platform-tokens, which the chart keeps.
+                              SecretRef names the Secret in Infrared's namespace that holds the
+                              access key, as backup-access-key-id and backup-secret-access-key:
+                              infrared-platform-tokens, which the chart keeps. Required for an
+                              accessKey; none for a serviceAccount.
                             properties:
                               name:
                                 minLength: 1
@@ -128,12 +133,16 @@ spec:
                             type: object
                         required:
                         - kind
-                        - secretRef
                         type: object
+                        x-kubernetes-validations:
+                        - message: an accessKey names the Secret that holds it in
+                            secretRef
+                          rule: self.kind != 'accessKey' || has(self.secretRef)
                       endpoint:
                         description: |-
-                          Endpoint is the store's S3 endpoint, https:// and a host, with no path:
-                          https://<region>.linodeobjects.com for Linode.
+                          Endpoint is the store's endpoint, https:// and a host, with no path:
+                          https://<region>.linodeobjects.com for Linode, and for gcs always
+                          https://storage.googleapis.com.
                         maxLength: 270
                         pattern: ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$
                         type: string
@@ -147,15 +156,19 @@ spec:
                       provider:
                         description: |-
                           Provider runs the store: linode, Linode Object Storage, the one offered
-                          on day one; or s3, any other S3-compatible store. gcs and aws are
-                          reserved for native Google Cloud Storage and AWS by role.
+                          on day one; s3, any other S3-compatible store; or gcs, Google Cloud
+                          Storage, reached natively by the identity of whatever runs, with
+                          credentials of kind serviceAccount. aws is reserved for AWS by role.
                         enum:
                         - linode
                         - s3
+                        - gcs
                         type: string
                       region:
-                        description: Region is the region S3 requests are signed for,
-                          such as us-lax-4.
+                        description: |-
+                          Region is the region S3 requests are signed for, such as us-lax-4;
+                          for gcs, the bucket's location, such as us-central1, which nothing
+                          signs for.
                         maxLength: 63
                         pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
                         type: string
@@ -166,6 +179,13 @@ spec:
                     - provider
                     - region
                     type: object
+                    x-kubernetes-validations:
+                    - message: gcs takes credentials of kind serviceAccount at the
+                        endpoint https://storage.googleapis.com; linode and s3 take
+                        an accessKey
+                      rule: 'self.provider == ''gcs'' ? (self.credentials.kind ==
+                        ''serviceAccount'' && self.endpoint == ''https://storage.googleapis.com'')
+                        : self.credentials.kind == ''accessKey'''
                   mirror:
                     description: Mirror is the stores' buckets' mirror to the destination.
                     properties:
@@ -212,6 +232,10 @@ spec:
                     pattern: ^[0-9A-Za-z*/,?-]+( [0-9A-Za-z*/,?-]+){4}$
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: postgres.archive is not offered with gcs yet
+                  rule: '!(has(self.destination) && self.destination.provider == ''gcs''
+                    && has(self.postgres) && self.postgres.archive)'
               edge:
                 description: |-
                   Edge is how traffic reaches Infrared and its zones: traefik, through

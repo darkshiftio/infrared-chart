@@ -47,6 +47,13 @@ app_key=(--set-file "platformTokens.codeIndexGithubAppId=$out/ci-app-id"
 install=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set-file "imageCredentials.password=$out/ci-password"
   --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token" "${backup_key[@]}")
+# The same install with its backups in Google Cloud Storage: no key, the Jobs'
+# ServiceAccounts reach the bucket; Barman's archive is not offered there.
+install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
+  --set-file "imageCredentials.password=$out/ci-password"
+  --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token"
+  --set "backup.bucket=darkshift-google-backup,backup.endpoint=https://storage.googleapis.com,backup.region=us-central1"
+  --set backup.postgres.archive=false)
 
 step "helm lint"
 for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml; do
@@ -68,6 +75,8 @@ backups=(-f "$chart/ci/backup-values.yaml")
 restore=(-f "$chart/ci/restore-values.yaml")
 if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" "${backups[@]}" "${restore[@]}" >"$out/lint.log" 2>&1; then ok "lint a restore with Gitea and backups"
 else cat "$out/lint.log"; bad "lint a restore with Gitea and backups"; fi
+if helm lint --strict "$chart" "${install_gcs[@]}" "${gitea[@]}" "${backups[@]}" "${restore[@]}" --set backup.postgres.archive=false >"$out/lint.log" 2>&1; then ok "lint a restore with Gitea and backups in Google Cloud Storage"
+else cat "$out/lint.log"; bad "lint a restore with Gitea and backups in Google Cloud Storage"; fi
 if helm lint --strict "$chart" "${install[@]}" -f "$chart/ci/code-index-values.yaml" "${app_key[@]}" >"$out/lint.log" 2>&1; then
   ok "lint install with the code index, its record and its GitHub App"
 else cat "$out/lint.log"; bad "lint install with the code index"; fi
@@ -108,6 +117,12 @@ helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-
 helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${backups[@]}" "${restore[@]}" >"$out/restore.yaml"
 helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${backups[@]}" "${restore[@]}" \
   --set restore.from= --set restore.point=20261006T010500Z >"$out/restore-point.yaml"
+# The same backups and restore with the bucket in Google Cloud Storage: the
+# values after ci/backup-values.yaml turn Barman's archive off again.
+helm template infrared "$chart" -n infrared "${install_gcs[@]}" "${gitea[@]}" "${backups[@]}" \
+  --set backup.postgres.archive=false >"$out/backups-gcs.yaml"
+helm template infrared "$chart" -n infrared "${install_gcs[@]}" "${gitea[@]}" "${backups[@]}" "${restore[@]}" \
+  --set backup.postgres.archive=false >"$out/restore-gcs.yaml"
 # Substrate's test actors turned on: at install, and once the template's
 # Application carries substrate.testActors as well.
 helm template infrared "$chart" -n infrared "${install[@]}" --set substrate.testActors=true >"$out/test-actors.yaml"
@@ -133,7 +148,7 @@ helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" \
 # The name named by hand as well: listed once.
 helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
   --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, restore, restore-point, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -141,7 +156,7 @@ envs() {
   awk '/^ +- name: [A-Z0-9_]+$/ {n=$3; next} n && /^ +value: / {sub(/^ +value: /, ""); print n "=" $0} {n=""}' \
     "$out/$1.yaml" >"$out/$1.env"
 }
-for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted restore restore-point \
+for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
     test-actors test-actors-adopted test-actors-named code-index code-index-install code-index-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -565,6 +580,21 @@ check defaults.yaml "Installation CRD has spec.backup and status.backup" '^     
 has restore.env "the operator, the API and the restore Job get INFRARED_RESTORE, as JSON" 'INFRARED_RESTORE="{\"from\":\"2026-10-03T05:00:00Z\"}"' 3
 has restore-point.env "...and with restore.point, the backup by its stamp" 'INFRARED_RESTORE="{\"point\":\"20261006T010500Z\"}"' 3
 has restore.env "the operator and both restore Jobs read the bucket and its prefix" "INFRARED_BACKUP=\"$backup_json\"" 3
+# The bucket's key: both restore Jobs read it from infrared-platform-tokens for
+# an S3 bucket (Linode's among them); with Google Cloud Storage, no Job and no
+# Secret carries a key: the ServiceAccounts infrared-restore and
+# infrared-gitea-restore are the identity, granted the bucket's role outside
+# Infrared, as the operator's own and infrared-backup's are. The operator still
+# gets the bucket as JSON, with Google's endpoint.
+check restore.yaml "both restore Jobs read the bucket's key from infrared-platform-tokens" '^ +key: backup-(access-key-id|secret-access-key)$' 4
+check restore-gcs.yaml "with Google Cloud Storage no restore Job mounts a key" '^ +- name: AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)$' 0
+check restore-gcs.yaml "...and both restore Jobs still run as their ServiceAccounts" '^      serviceAccountName: infrared-(gitea-)?restore$' 2
+check restore-gcs.yaml "...infrared-backup's ServiceAccount, ClusterRole and binding are rendered as always" '^  name: infrared-backup$' 4
+check backups-gcs.yaml "...and infrared-platform-tokens holds the Cloudflare token alone, no bucket key" '^  backup-(access-key-id|secret-access-key): ' 0
+check backups-gcs.yaml "...the Secret itself still rendered for the Cloudflare token" '^  name: infrared-platform-tokens$' 1
+has restore-gcs.env "...the operator and both restore Jobs read the Google bucket, its region the location" \
+  'INFRARED_BACKUP="{\"bucket\":\"darkshift-google-backup\",\"endpoint\":\"https://storage.googleapis.com\",\"prefix\":\"ci-mgmt\",\"region\":\"us-central1\"}"' 3
+check backups-gcs.env "...and INFRARED_COPIES carries no archive with Google Cloud Storage" 'INFRARED_COPIES=.*archive' 0
 check backups-adopted.yaml "after adoption no restore is rendered" 'INFRARED_RESTORE|^  name: infrared-(gitea-)?restore$' 0
 # Each reader takes its whole input: one that stops early fails the pipe (SIGPIPE).
 op_image="$(obj restore Deployment infrared-operator | awk '/^ +image: / && !n {print $2; n = 1}')"
@@ -715,6 +745,10 @@ refuse() {
 }
 ext='ui.extensions[0].id=ledger,ui.extensions[0].title=Ledger,ui.extensions[0].upstream=ledger.ledger.svc.cluster.local:8080'
 refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"
+refuse "a bucket key with Google Cloud Storage fails" "Google Cloud Storage (backup.endpoint https://storage.googleapis.com) takes none" \
+  "${install_gcs[@]}" "${backup_key[@]}"
+refuse "Barman's archive with Google Cloud Storage fails" "backup.postgres.archive is not offered with Google Cloud Storage yet" \
+  "${install_gcs[@]}" "${gitea[@]}" "${backups[@]}" --set backup.postgres.archive=true
 refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
   --set "$ext,ui.extensions[0].upstream=ledger:8080,ui.extensionsProxySecret.existingSecret=x"
 refuse "a duplicate extension id fails" 'id "ledger" is listed more than once' \
@@ -819,7 +853,7 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted restore restore-point code-index code-index-install; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

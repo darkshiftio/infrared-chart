@@ -230,6 +230,18 @@ why. After Argo CD adopts the release, the gitops repo's `infrared` Application
 has to carry the three settings, or the operator stops receiving them. The
 bucket also seeds the Installation's `spec.backup.destination` (see "Backups").
 
+A bucket in Google Cloud Storage takes no key: `backup.endpoint` is
+`https://storage.googleapis.com`, `backup.region` the bucket's location (such
+as `us-central1`), and whatever reaches the bucket does so as its own
+identity, granted the bucket's role outside Infrared (Workload Identity on
+GKE): the ServiceAccounts `infrared-backup`, `infrared-restore` and
+`infrared-gitea-restore`, the operator's and the API's, all in the release
+namespace. The chart then mounts no key in the restore Jobs, refuses
+`platformTokens.backupAccessKeyId` and `.backupSecretAccessKey`, and refuses
+`backup.postgres.archive`, which Barman writes through S3 with a key. The
+operator seeds the destination as provider `gcs` with credentials of kind
+`serviceAccount`.
+
 ### Substrate's test actors
 
 With the stores and a registry, the gitops template can run Agent Substrate
@@ -531,7 +543,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `restore.enabled` / `.from` / `.point` | `false` / `""` / `""` | Restore this install from the backup bucket at install (`INFRARED_RESTORE`, operator and API): the backup `point` names by its stamp, or the newest complete one at or before `from` (RFC 3339, UTC), or the newest when both are empty; never both. See "Restore at install" |
 | `restore.postgresImage` | the gitops template's Postgres image, `ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:...` | The restore Job's Postgres sidecar, which restores each consumer database's dump with `pg_restore`: the image the template's Postgres Cluster runs, `name:tag@sha256:digest`, so `pg_restore` and the server share a major; change the two together. See "Restore at install" |
 | `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
-| `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster the backups and the stores' mirror go to: its name, its S3 endpoint (`https://` and a host) and the region requests are signed for. All three or none (`INFRARED_BACKUP`, operator, JSON) |
+| `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster the backups and the stores' mirror go to: its name, its S3 endpoint (`https://` and a host; `https://storage.googleapis.com` for Google Cloud Storage, reached keyless as the Jobs' ServiceAccounts) and the region requests are signed for (for Google Cloud Storage, the bucket's location). All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
 | `codeIndex.enabled` | `false` | Infrared's code index, which the gitops template runs in the namespace `code-index`: its image is handed to the operator among Infrared's own (`INFRARED_IMAGES`, `code-index`). Needs an `image.registry` other than the default, and a pin. See "The code index" |
 | `codeIndex.knowledge.url` / `.ref` | `""` / `""` | The code index's record: the knowledge repository's URL (`https://` or `http://`) and the branch, tag or commit to read it at (empty: `main`). With `codeIndex.enabled`, written into `infrared-platform-tokens` at the install, and required wherever the chart renders that Secret. See "The code index" |
@@ -542,7 +554,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job |
 | `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
 | `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
-| `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`. Pass them with `--set-file` |
+| `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`; refused with Google Cloud Storage, which takes none. Pass them with `--set-file` |
 | `platformTokens.codeIndexGithubAppId` / `.codeIndexGithubAppInstallationId` / `.codeIndexGithubAppPrivateKey` | `""` | The code index's GitHub App, all three or none and only with `codeIndex.enabled`: its ID and its installation's (numbers) and its private key (PEM), rendered into `infrared-platform-tokens`, keys `code-index-github-app-id`, `-installation-id` and `-private-key`; empty for none. Pass them with `--set-file` |
 | `gitea.enabled` | `false` | Run Gitea, the chart's gitea dependency, and hand its address to the operator and the API (`INFRARED_GITEA_URL`) and its admin Secret to the API (`INFRARED_GITEA_ADMIN_SECRET`). See "Gitea" |
 | `gitea.persistence.storageClass` / `.size` | `""` / `10Gi` | StorageClass and size of Gitea's volume; empty uses the cluster's default class |
@@ -593,7 +605,9 @@ them on every sync (the gitops template syncs the `infrared` Application with
 - **infrared-backup** (always): the ServiceAccount the operator's backup Jobs
   run as, and a ClusterRole that may get and list every `infrared.darkshift.io`
   resource, namespaces, Secrets and ConfigMaps, and nothing else.
-- **infrared-restore** (with `restore.enabled`): ClusterRole that may get, list,
+- **infrared-restore** (with `restore.enabled`; with Google Cloud Storage the
+  identity that reads the bucket, as `infrared-gitea-restore` is for its Job):
+  ClusterRole that may get, list,
   watch, create, update and patch every `infrared.darkshift.io` resource,
   namespaces, Secrets and ConfigMaps, create events, and, by name, scale the
   Deployment `gitea` and read the Job `infrared-gitea-restore`; it deletes

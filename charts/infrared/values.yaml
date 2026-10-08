@@ -85,9 +85,12 @@ stores:
 backup:
   # -- Bucket name. Empty: no backups.
   bucket: ""
-  # -- The bucket's S3 endpoint: https:// and a host, e.g. `https://s3.example.com`.
+  # -- The bucket's S3 endpoint: https:// and a host, e.g. `https://s3.example.com`;
+  # `https://storage.googleapis.com` for Google Cloud Storage, which the Jobs
+  # reach keyless, as their ServiceAccounts (see `platformTokens.backupAccessKeyId`).
   endpoint: ""
-  # -- The region S3 requests are signed for, e.g. `us-east-1`.
+  # -- The region S3 requests are signed for, e.g. `us-east-1`; for Google
+  # Cloud Storage the bucket's location, e.g. `us-central1`.
   region: ""
   # -- The path everything is kept under in the bucket, with the bucket only. Empty: managementCluster.name.
   prefix: ""
@@ -242,7 +245,11 @@ platformTokens:
   # records and origin certificates.
   cloudflareApiToken: ""
   # -- Access key ID of the backup bucket's key (key `backup-access-key-id`);
-  # required with the secret access key. Pass the pair at install only: once
+  # required with the secret access key. Not with Google Cloud Storage
+  # (`backup.endpoint` `https://storage.googleapis.com`), which takes no key:
+  # the ServiceAccounts infrared-backup, infrared-restore, infrared-gitea-restore,
+  # the operator's and the API's are granted the bucket's role outside Infrared,
+  # and the chart refuses a key given with it. Pass the pair at install only: once
   # Infrared runs, Settings → Backups writes a new key into these same two
   # keys, and a later helm upgrade that passes them again overwrites that key
   # with this one.

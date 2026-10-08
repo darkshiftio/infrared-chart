@@ -175,7 +175,7 @@
         },
         "backupAccessKeyId": {
           "type": "string",
-          "description": "Key backup-access-key-id, with backupSecretAccessKey. Pass it with --set-file; surrounding whitespace is trimmed."
+          "description": "Key backup-access-key-id, with backupSecretAccessKey; refused with Google Cloud Storage, which takes no key. Pass it with --set-file; surrounding whitespace is trimmed."
         },
         "backupSecretAccessKey": {
           "type": "string",
@@ -718,12 +718,12 @@
         "endpoint": {
           "type": "string",
           "pattern": "^(https://[^/?#@\\s]+/?)?$",
-          "description": "The bucket's S3 endpoint: https:// and a host, no path."
+          "description": "The bucket's S3 endpoint: https:// and a host, no path; https://storage.googleapis.com for Google Cloud Storage, reached keyless by the Jobs' ServiceAccounts."
         },
         "region": {
           "type": "string",
           "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$",
-          "description": "The region S3 requests are signed for, e.g. us-east-1."
+          "description": "The region S3 requests are signed for, e.g. us-east-1; for Google Cloud Storage the bucket's location, e.g. us-central1."
         },
         "prefix": {
           "type": "string",

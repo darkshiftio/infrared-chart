@@ -52,7 +52,7 @@ install=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
 install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set-file "imageCredentials.password=$out/ci-password"
   --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token"
-  --set "backup.bucket=darkshift-google-backup,backup.endpoint=https://storage.googleapis.com,backup.region=us-central1"
+  --set "backup.bucket=darkshift-preprod-backup,backup.endpoint=https://storage.googleapis.com,backup.region=us-central1"
   --set backup.postgres.archive=false)
 
 step "helm lint"
@@ -593,7 +593,7 @@ check restore-gcs.yaml "...infrared-backup's ServiceAccount, ClusterRole and bin
 check backups-gcs.yaml "...and infrared-platform-tokens holds the Cloudflare token alone, no bucket key" '^  backup-(access-key-id|secret-access-key): ' 0
 check backups-gcs.yaml "...the Secret itself still rendered for the Cloudflare token" '^  name: infrared-platform-tokens$' 1
 has restore-gcs.env "...the operator and both restore Jobs read the Google bucket, its region the location" \
-  'INFRARED_BACKUP="{\"bucket\":\"darkshift-google-backup\",\"endpoint\":\"https://storage.googleapis.com\",\"prefix\":\"ci-mgmt\",\"region\":\"us-central1\"}"' 3
+  'INFRARED_BACKUP="{\"bucket\":\"darkshift-preprod-backup\",\"endpoint\":\"https://storage.googleapis.com\",\"prefix\":\"ci-mgmt\",\"region\":\"us-central1\"}"' 3
 check backups-gcs.env "...and INFRARED_COPIES carries no archive with Google Cloud Storage" 'INFRARED_COPIES=.*archive' 0
 check backups-adopted.yaml "after adoption no restore is rendered" 'INFRARED_RESTORE|^  name: infrared-(gitea-)?restore$' 0
 # Each reader takes its whole input: one that stops early fails the pipe (SIGPIPE).

@@ -76,12 +76,13 @@ digest is set (a pin).
 {{- end }}
 
 {{/*
-The default image.registry, darkshift's preprod ECR. Every chart version pins its
+The default image.registry, darkshift's Artifact Registry in Google Cloud (darkshift-preprod,
+us-central1, repository infrared) since 0.1.0-alpha.146; ECR before. Every chart version pins its
 own builds there, so a cluster on it upgrades its images with the chart version
 alone. `make verify` fails if values.yaml's default and this one differ.
 */}}
 {{- define "infrared.defaultRegistry" -}}
-977456087177.dkr.ecr.us-east-1.amazonaws.com
+us-central1-docker.pkg.dev/darkshift-preprod/infrared
 {{- end }}
 
 {{/*

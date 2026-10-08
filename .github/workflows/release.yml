@@ -1,4 +1,6 @@
-# Publishes the chart to oci://ghcr.io/darkshiftio/charts/infrared on a v* tag.
+# Publishes the chart to oci://ghcr.io/darkshiftio/charts/infrared on a v* tag. From v0.1.0-alpha.146 the
+# chart's home is Artifact Registry in Google Cloud: `make publish`, by a person, until this job signs in
+# to Google Cloud through workload identity federation (workspace TODO 192).
 # Only the chart is published here; component images are built by kpack on
 # darkshift-build (darkshiftio/gitops), never on GitHub runners.
 name: release

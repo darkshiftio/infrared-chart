@@ -35,8 +35,7 @@ env:
 jobs:
   publish:
     if: github.event_name == 'workflow_dispatch'
-    # The org's self-hosted runners on google-ephem1 while GitHub-hosted ones are off (workspace TODO 191).
-    runs-on: darkshift
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read

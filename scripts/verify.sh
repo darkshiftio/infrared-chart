@@ -948,7 +948,7 @@ for f in aws aws-irsa aws-adopted; do
   check "$f.yaml" "$f: the Secret's user is AWS" 'username: "AWS"' 2
   check "$f.yaml" "$f: no Google metadata server" 'metadata\.google\.internal' 0
 done
-has aws.env "aws: the token as JSON, the node's role" "INFRARED_REGISTRY_TOKEN=\"{\\\"aws\\\":{\\\"region\\\":\\\"us-east-1\\\"},\\\"registry\\\":\\\"$ecr\\\"}\""
+has aws.env "aws: the token as JSON, the node's role on the node's network" "INFRARED_REGISTRY_TOKEN=\"{\\\"aws\\\":{\\\"hostNetwork\\\":true,\\\"region\\\":\\\"us-east-1\\\"},\\\"registry\\\":\\\"$ecr\\\"}\""
 has aws-irsa.env "aws-irsa: the token as JSON, with the IRSA role" \
   "INFRARED_REGISTRY_TOKEN=\"{\\\"aws\\\":{\\\"region\\\":\\\"us-east-1\\\",\\\"roleArn\\\":\\\"arn:aws:iam::977456087177:role/ci-registry-reader\\\"},\\\"registry\\\":\\\"$ecr\\\"}\""
 check aws.yaml "aws: hostNetwork for the node's role, on the CronJob and the first Job" '^ +hostNetwork: true$' 2

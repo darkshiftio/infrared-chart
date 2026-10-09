@@ -253,7 +253,8 @@ reached on the host's network with `registryToken.aws.hostNetwork` where the
 instance metadata answers only one hop. The role needs
 `ecr:GetAuthorizationToken` and read on the repositories. The operator gets
 `INFRARED_REGISTRY_TOKEN` as `{"aws":{"region":"us-east-1"},"registry":"<ecr host>"}`
-(with `roleArn` when set). Set one kind of token: both together fail, and the
+(with `roleArn` and `"hostNetwork":true` when set, so the gitops template's
+`infrared` Application keeps both after adoption). Set one kind of token: both together fail, and the
 ECR host must be in the token's region. Since the gitops template does not carry
 `cloud`, the ECR registry is handed to the operator with every pin
 (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`), so Argo CD keeps it after it

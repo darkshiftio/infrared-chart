@@ -261,6 +261,7 @@ registryToken:
     roleArn: ""
     # -- Run the Job on the host's network, for EC2 nodes (such as k3s) whose
     # instance metadata answers only one hop, so a pod reaches the node's role.
+    # Handed to the operator, so adoption keeps it.
     hostNetwork: false
   # -- The registry host the token is for. Empty: the image registry's host, e.g.
   # `us-central1-docker.pkg.dev`. The images and gitops.chartRepository must be on it.

@@ -420,6 +420,8 @@ The registry token for the operator (INFRARED_REGISTRY_TOKEN), as JSON:
 {{- else if eq $kind "aws" }}
 {{- $aws := dict "region" .Values.registryToken.aws.region }}
 {{- with .Values.registryToken.aws.roleArn }}{{ $_ := set $aws "roleArn" . }}{{ end }}
+{{- /* hostNetwork too, so the gitops template's infrared Application keeps it after adoption. */}}
+{{- if .Values.registryToken.aws.hostNetwork }}{{ $_ := set $aws "hostNetwork" true }}{{ end }}
 {{- toJson (dict "aws" $aws "registry" (include "infrared.registryTokenHost" .)) }}
 {{- end }}
 {{- end }}

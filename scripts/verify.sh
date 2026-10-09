@@ -56,7 +56,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -92,6 +92,10 @@ helm template other "$chart" -n ir-test >"$out/other.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" >"$out/extensions.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" >"$out/ghcr.yaml"
+# A Google install: the registry token, and after Argo CD adopts the release.
+helm template infrared "$chart" -n infrared -f "$chart/ci/registry-token-values.yaml" >"$out/registry-token.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/registry-token-values.yaml" -f "$chart/ci/adopted-values.yaml" \
+  -f "$chart/ci/stores-adopted-values.yaml" >"$out/registry-token-adopted.yaml"
 helm template infrared "$chart" -n infrared "${install[@]}" >"$out/install.yaml"
 # What Argo CD renders once it adopts a release outside AWS: the template's
 # values carry the registry, the pins and the pull secret's name, and no secret.
@@ -148,7 +152,7 @@ helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" \
 # The name named by hand as well: listed once.
 helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
   --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -157,7 +161,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named code-index code-index-install code-index-adopted; do envs "$f"; done
+    test-actors test-actors-adopted test-actors-named code-index code-index-install code-index-adopted registry-token registry-token-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -828,6 +832,77 @@ refuse "an App ID that is not a number fails" "are numbers" \
   -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" --set-string platformTokens.codeIndexGithubAppId=app \
   --set-file "platformTokens.codeIndexGithubAppInstallationId=$out/ci-app-installation-id" --set-file "platformTokens.codeIndexGithubAppPrivateKey=$out/ci-app-key"
 refuse "an App ID given as a YAML number fails" "at '/platformTokens/codeIndexGithubAppId'" --set platformTokens.codeIndexGithubAppId=5116570
+refuse "the registry token beside a pull secret fails" "leave imagePullSecrets and imageCredentials empty" \
+  -f "$chart/ci/registry-token-values.yaml" --set 'imagePullSecrets[0].name=ghcr-pull'
+refuse "the registry token beside imageCredentials fails" "leave imagePullSecrets and imageCredentials empty" \
+  -f "$chart/ci/registry-token-values.yaml" --set imageCredentials.username=ci-reader
+refuse "the registry token with images on another registry fails" "but image.registry is on ghcr.io" \
+  -f "$chart/ci/registry-token-values.yaml" --set image.registry=ghcr.io/darkshiftio,registryToken.registry=us-central1-docker.pkg.dev
+refuse "the registry token with the chart on another registry fails" "but gitops.chartRepository is on ghcr.io" \
+  -f "$chart/ci/registry-token-values.yaml" --set gitops.chartRepository=ghcr.io/darkshiftio/charts
+refuse "a registry token for a user, not a service account, fails" "at '/registryToken/gcpServiceAccount'" \
+  --set registryToken.gcpServiceAccount=someone@example.com
+refuse "a registry token's registry with a path fails" "at '/registryToken/registry'" \
+  -f "$chart/ci/registry-token-values.yaml" --set registryToken.registry=us-central1-docker.pkg.dev/darkshift-preprod
+refuse "the token Job's image without a digest fails" "at '/registryToken/image'" --set registryToken.image=docker.io/alpine/k8s:1.37.0
+refuse "a chart repository with oci:// fails" "at '/gitops/chartRepository'" \
+  --set gitops.chartRepository=oci://us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts
+
+# The registry token (a Google install): a ServiceAccount bound to the Google
+# service account, a Role on its one Secret, the first token at the install and
+# a CronJob every 30 minutes, and that Secret as the install's pull secret, with
+# the operator told where Substrate's images and the chart come from.
+gsa=registry-reader@darkshift-preprod.iam.gserviceaccount.com
+for f in registry-token registry-token-adopted; do
+  has "$f.env" "$f: registry-token is the pull secret handed to the operator" 'INFRARED_IMAGE_PULL_SECRET="registry-token"'
+  has "$f.env" "$f: the token's account and registry handed to the operator, as JSON" \
+    "INFRARED_REGISTRY_TOKEN=\"{\\\"gcpServiceAccount\\\":\\\"$gsa\\\",\\\"registry\\\":\\\"us-central1-docker.pkg.dev\\\"}\""
+  has "$f.env" "$f: Substrate's images from beside Infrared's own" \
+    'INFRARED_SUBSTRATE_REGISTRY="us-central1-docker.pkg.dev/darkshift-preprod/infrared/substrate"'
+  has "$f.env" "$f: the chart's repository handed to the operator" \
+    'INFRARED_CHART_REPO="us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts"'
+  check "$f.yaml" "$f: no pod names a pull secret: the nodes pull as their own account" 'imagePullSecrets:' 0
+  check "$f.yaml" "$f: the chart renders no pull Secret: the Job writes it" '^type: kubernetes\.io/dockerconfigjson$' 0
+  sa="$(obj "$f" ServiceAccount registry-token)"
+  if [[ "$sa" == *"iam.gke.io/gcp-service-account: \"$gsa\""* ]]; then ok "$f: ServiceAccount registry-token bound to $gsa"
+  else bad "$f: ServiceAccount registry-token is not annotated with $gsa"; fi
+  role="$(obj "$f" Role registry-token | awk '/^rules:/ {f=1; next} f')"
+  want_role='  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["registry-token"]
+    verbs: ["get", "update", "patch"]'
+  if [[ "$role" == "$want_role" ]]; then ok "$f: the Role creates Secrets and gets, updates and patches registry-token alone"
+  else bad "$f: the Role registry-token is not exactly create, and get/update/patch on registry-token: $role"; fi
+  cron="$(obj "$f" CronJob registry-token)"
+  first="$(obj "$f" Job registry-token-first)"
+  for job in cron first; do
+    body="${!job}"
+    if grep -qxE ' +serviceAccountName: registry-token' <<<"$body"; then
+      ok "$f: the $job Job runs as registry-token"
+    else bad "$f: the $job Job does not run as registry-token"; fi
+    if grep -qE 'image: "docker\.io/alpine/k8s:[0-9.]+@sha256:[0-9a-f]{64}"$' <<<"$body"; then ok "$f: the $job Job's image is pinned by digest"
+    else bad "$f: the $job Job's image is not pinned by digest"; fi
+    # It creates or replaces the Secret, never applies it (the token would stay
+    # in an annotation), and prints only names.
+    # shellcheck disable=SC2016 # $tok is the script's own word, matched literally
+    if grep -q 'kubectl replace -f /work/secret.json' <<<"$body" && grep -q 'kubectl create -f /work/secret.json' <<<"$body" \
+       && ! grep -q 'kubectl apply' <<<"$body" && ! grep -qE 'echo .*(\$tok|token\.json|secret\.json)' <<<"$body"; then
+      ok "$f: the $job Job creates or replaces the Secret, never applies it, and prints no token"
+    else bad "$f: the $job Job applies the Secret or prints the token"; fi
+  done
+  if grep -qxF '  schedule: "*/30 * * * *"' <<<"$cron" && grep -qxF '  concurrencyPolicy: Forbid' <<<"$cron"; then
+    ok "$f: the CronJob writes a new token every 30 minutes, one at a time"
+  else bad "$f: the CronJob's schedule is not every 30 minutes"; fi
+  if grep -qxF '    helm.sh/hook: post-install,post-upgrade' <<<"$first"; then ok "$f: the first token at the install and every upgrade (a hook)"
+  else bad "$f: the first token is not a post-install,post-upgrade hook"; fi
+done
+check defaults.yaml "no registry token by default" '^  name: registry-token' 0
+check defaults.env "no registry token or Substrate registry handed by default" '^INFRARED_(REGISTRY_TOKEN|SUBSTRATE_REGISTRY)=' 0
+has defaults.env "the chart's repository handed to the operator, Artifact Registry by default" \
+  'INFRARED_CHART_REPO="us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts"'
 
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
@@ -855,7 +930,7 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

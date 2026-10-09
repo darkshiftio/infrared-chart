@@ -103,9 +103,15 @@
           "type": "string",
           "pattern": "^(v[0-9]+\\.[0-9]+\\.[0-9]+.*|[0-9a-f]{40})$",
           "description": "A tag of infrared-gitops-template, or a full 40-character commit SHA."
+        },
+        "chartRepository": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?(/[a-z0-9]+([._-][a-z0-9]+)*)+$",
+          "description": "The OCI repository of this chart, host and path with no oci://, tag or trailing slash (INFRARED_CHART_REPO)."
         }
       },
       "required": [
+        "chartRepository",
         "templateVersion"
       ]
     },
@@ -163,6 +169,33 @@
           "description": "Pass it with --set-file; surrounding whitespace is trimmed."
         }
       }
+    },
+    "registryToken": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The registry token: a Google service account's access token for a private Artifact Registry, written to the Secret registry-token every 30 minutes (Workload Identity, no key).",
+      "properties": {
+        "gcpServiceAccount": {
+          "type": "string",
+          "pattern": "^$|^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\\.iam\\.gserviceaccount\\.com$",
+          "description": "The Google service account, <name>@<project>.iam.gserviceaccount.com; empty for none."
+        },
+        "registry": {
+          "type": "string",
+          "pattern": "^$|^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?$",
+          "description": "The registry host the token is for; empty for image.registry's host."
+        },
+        "image": {
+          "type": "string",
+          "pattern": "@sha256:[0-9a-f]{64}$",
+          "description": "The Job's image, with curl, jq and kubectl, by digest."
+        }
+      },
+      "required": [
+        "gcpServiceAccount",
+        "registry",
+        "image"
+      ]
     },
     "platformTokens": {
       "type": "object",

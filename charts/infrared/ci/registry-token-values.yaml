@@ -1,0 +1,7 @@
+# A Google install: Infrared's images and chart on darkshift's private Artifact
+# Registry (image.registry's and gitops.chartRepository's defaults), the pods'
+# images pulled by GKE's nodes as their own service account, and the registry
+# token for what pulls by itself: Argo CD's repo-server (the chart) and the copy
+# of Substrate's images into the registry inside the cluster.
+registryToken:
+  gcpServiceAccount: registry-reader@darkshift-preprod.iam.gserviceaccount.com

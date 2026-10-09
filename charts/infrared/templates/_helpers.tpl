@@ -92,11 +92,13 @@ The registry to hand to the operator (INFRARED_IMAGE_REGISTRY), or empty for the
 default registry. Images from any other registry are pinned in the values, and
 those pins have to reach the gitops repo's `infrared` Application, or Argo CD
 renders the chart's defaults once it adopts the release. The Application then
-carries the same registry, so the operator keeps receiving it.
+carries the same registry, so the operator keeps receiving it. With the code
+index on, the default registry is handed too: the gitops template names the code
+index's image by it (<registry>/infrared-codeindex), and has no default of its own.
 */}}
 {{- define "infrared.handedRegistry" -}}
 {{- $registry := trimSuffix "/" .Values.image.registry }}
-{{- if and $registry (ne $registry (include "infrared.defaultRegistry" .)) }}{{ $registry }}{{ end }}
+{{- if and $registry (or .Values.codeIndex.enabled (ne $registry (include "infrared.defaultRegistry" .))) }}{{ $registry }}{{ end }}
 {{- end }}
 
 {{/*

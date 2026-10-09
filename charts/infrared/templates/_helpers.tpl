@@ -70,9 +70,11 @@ digest is set (a pin).
 {{- $ref }}
 {{- end }}
 
-{{/* The first image pull secret name, or empty. */}}
+{{/* The first image pull secret name: registry-token with the registry token, else imagePullSecrets[0]'s, or empty. */}}
 {{- define "infrared.firstPullSecret" -}}
-{{- with .Values.imagePullSecrets }}{{ (first .).name }}{{ end }}
+{{- if .Values.registryToken.gcpServiceAccount }}registry-token
+{{- else }}{{ with .Values.imagePullSecrets }}{{ (first .).name }}{{ end }}
+{{- end }}
 {{- end }}
 
 {{/*
@@ -362,3 +364,143 @@ render without it.
 {{- include "infrared.image" (dict "root" . "image" .Values.operator.image) }}
 {{- end }}
 
+
+{{/*
+The registry token's registry host: registryToken.registry, or image.registry's
+host. Empty while registryToken.gcpServiceAccount is.
+*/}}
+{{- define "infrared.registryTokenHost" -}}
+{{- if .Values.registryToken.gcpServiceAccount }}
+{{- default (first (splitList "/" .Values.image.registry)) .Values.registryToken.registry }}
+{{- end }}
+{{- end }}
+
+{{/*
+The registry token for the operator (INFRARED_REGISTRY_TOKEN), as JSON:
+{"gcpServiceAccount", "registry"}. Empty while registryToken.gcpServiceAccount is.
+*/}}
+{{- define "infrared.registryToken" -}}
+{{- with .Values.registryToken.gcpServiceAccount }}
+{{- toJson (dict "gcpServiceAccount" . "registry" (include "infrared.registryTokenHost" $)) }}
+{{- end }}
+{{- end }}
+
+{{/*
+What the registry token needs: it is the install's pull secret, so no other is
+named, and the images and the chart's repository are on its registry host.
+*/}}
+{{- define "infrared.registryTokenCheck" -}}
+{{- if .Values.registryToken.gcpServiceAccount }}
+{{- $host := include "infrared.registryTokenHost" . }}
+{{- if or .Values.imagePullSecrets .Values.imageCredentials.username .Values.imageCredentials.password }}
+{{- fail "registryToken.gcpServiceAccount makes the Secret registry-token the install's pull secret: leave imagePullSecrets and imageCredentials empty" }}
+{{- end }}
+{{- if ne (first (splitList "/" .Values.image.registry)) $host }}
+{{- fail (printf "registryToken is for %s, but image.registry is on %s: Substrate's images come from <image.registry>/substrate with the token" $host (first (splitList "/" .Values.image.registry))) }}
+{{- end }}
+{{- if ne (first (splitList "/" .Values.gitops.chartRepository)) $host }}
+{{- fail (printf "registryToken is for %s, but gitops.chartRepository is on %s: Argo CD pulls the chart with the token" $host (first (splitList "/" .Values.gitops.chartRepository))) }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+The registry token's Job: fetch the bound Google service account's access token
+from the GKE metadata server and write it to the Secret registry-token, created
+or replaced (never applied, which would keep the token in an annotation).
+Nothing prints the token. Call with the root context.
+*/}}
+{{- define "infrared.registryTokenJob" -}}
+backoffLimit: 4
+activeDeadlineSeconds: 300
+template:
+  metadata:
+    labels:
+      {{- include "infrared.selectorLabels" (dict "root" . "component" "registry-token") | nindent 6 }}
+  spec:
+    serviceAccountName: registry-token
+    restartPolicy: OnFailure
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      runAsGroup: 65534
+      seccompProfile:
+        type: RuntimeDefault
+    containers:
+      - name: token
+        image: {{ .Values.registryToken.image | quote }}
+        env:
+          - name: HOME
+            value: /tmp
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: GCP_SERVICE_ACCOUNT
+            value: {{ .Values.registryToken.gcpServiceAccount | quote }}
+          - name: REGISTRY
+            value: {{ include "infrared.registryTokenHost" . | quote }}
+          - name: SECRET
+            value: registry-token
+        command:
+          - /bin/sh
+          - -ec
+          - |
+            umask 077
+            md=http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default
+            get() { curl -sSf --retry 10 --retry-delay 3 --retry-connrefused -m 10 -H 'Metadata-Flavor: Google' "$@"; }
+            # Workload Identity: the metadata server answers as the Google
+            # service account bound to this ServiceAccount, or refuses.
+            email="$(get "$md/email")"
+            if [ "$email" != "$GCP_SERVICE_ACCOUNT" ]; then
+              echo "the metadata server answers as '$email', not $GCP_SERVICE_ACCOUNT: grant it roles/iam.workloadIdentityUser for $NAMESPACE/registry-token, on a node pool with GKE_METADATA" >&2
+              exit 1
+            fi
+            # The token, into memory; from there into the Secret's manifest.
+            get "$md/token" -o /work/token.json
+            if ! jq -n --rawfile t /work/token.json --arg host "$REGISTRY" --arg name "$SECRET" --arg ns "$NAMESPACE" '
+                ($t | fromjson | .access_token) as $tok
+                | if ($tok | type) != "string" or $tok == "" then error("no access_token") else . end
+                | {apiVersion: "v1", kind: "Secret", type: "kubernetes.io/dockerconfigjson",
+                   metadata: {name: $name, namespace: $ns,
+                     labels: {"app.kubernetes.io/name": "infrared", "app.kubernetes.io/part-of": "infrared",
+                              "app.kubernetes.io/component": "registry-token"}},
+                   stringData: {".dockerconfigjson": ({auths: {($host): {username: "oauth2accesstoken", password: $tok,
+                     auth: ("oauth2accesstoken:" + $tok | @base64)}}} | tojson)}}' >/work/secret.json 2>/dev/null; then
+              echo "the metadata server's answer holds no access token" >&2
+              exit 1
+            fi
+            expires="$(jq -r '.expires_in // "?"' /work/token.json)"
+            if kubectl get secret "$SECRET" -o name >/dev/null 2>&1; then
+              kubectl replace -f /work/secret.json >/dev/null
+              done=replaced
+            else
+              kubectl create -f /work/secret.json >/dev/null
+              done=created
+            fi
+            echo "$NAMESPACE/$SECRET $done: $email's token for $REGISTRY, good for ${expires}s"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+          - name: work
+            mountPath: /work
+          - name: tmp
+            mountPath: /tmp
+    volumes:
+      - name: work
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Mi
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+{{- end }}

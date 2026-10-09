@@ -1,0 +1,106 @@
+{{- /*
+The registry token (registryToken.gcpServiceAccount): a private Artifact
+Registry in Google Cloud, which Argo CD's repo-server and the copy of
+Substrate's images pull from themselves, without the nodes' own credential.
+No key exists (the organization forbids them), so the ServiceAccount
+registry-token is bound to the Google service account through Workload Identity,
+and a Job fetches that account's access token from the GKE metadata server and
+writes it, as a kubernetes.io/dockerconfigjson for the registry host, to the
+Secret registry-token: at the install and every upgrade (a hook, so the token is
+there before the operator bootstraps Argo CD) and every 30 minutes after (the
+CronJob), since a token lasts an hour. The token is never printed: it goes from
+the metadata server to a file in memory and from there into the Secret.
+
+The Secret is the install's pull secret (INFRARED_IMAGE_PULL_SECRET): the
+operator gives Argo CD its credential for Infrared's chart repository
+(argocd/infrared-oci-charts) at every pass, and the gitops template copies it to
+Substrate's namespaces. The pods' own images need none of this: GKE's nodes pull
+from Artifact Registry as their service account.
+
+The Google side is made once, by a person: the service account with
+roles/artifactregistry.reader on the repository, and
+roles/iam.workloadIdentityUser for <project>.svc.id.goog[<namespace>/registry-token].
+*/}}
+{{- include "infrared.registryTokenCheck" . }}
+{{- with .Values.registryToken.gcpServiceAccount }}
+{{- $ctx := dict "root" $ "component" "registry-token" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  # The name the Google service account's Workload Identity binding names.
+  name: registry-token
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+  annotations:
+    iam.gke.io/gcp-service-account: {{ . | quote }}
+---
+# The one Secret it writes. RBAC cannot limit a create to a name (the name is
+# not known when the request is authorized), so create is for the namespace;
+# get, update and patch are for registry-token alone, so it reads no other
+# Secret.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-token
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["registry-token"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-token
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-token
+subjects:
+  - kind: ServiceAccount
+    name: registry-token
+    namespace: {{ $.Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: registry-token
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+spec:
+  # Every 30 minutes: a token lasts an hour.
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      {{- include "infrared.registryTokenJob" $ | nindent 6 }}
+---
+# The first token, at the install and every upgrade: Helm waits for it, and
+# under Argo CD it runs after each sync (a PostSync hook).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: registry-token-first
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  {{- include "infrared.registryTokenJob" $ | nindent 2 }}
+{{- end }}

@@ -189,6 +189,49 @@ same two keys of `infrared-platform-tokens`; a later plain `helm upgrade` that
 passes `platformTokens.backupAccessKeyId` and `.backupSecretAccessKey` again
 overwrites that key with the one from the files.
 
+## The registry token
+
+```yaml
+registryToken:
+  gcpServiceAccount: registry-reader@darkshift-preprod.iam.gserviceaccount.com
+```
+
+For a private Artifact Registry in Google Cloud, on GKE with Workload Identity
+(no key: the organization forbids them). GKE's nodes pull every pod's image as
+their own service account, so the pods need no pull secret; but two things
+pull by themselves: Argo CD's repo-server, which fetches this chart from
+`gitops.chartRepository` once it adopts the release, and the gitops template's
+copy of Substrate's images into the registry inside the cluster. With a Google
+service account set, the chart renders:
+
+| Object (namespace = release) | What |
+|---|---|
+| ServiceAccount `registry-token` | annotated `iam.gke.io/gcp-service-account: <gcpServiceAccount>` |
+| Role and RoleBinding `registry-token` | create Secrets (RBAC cannot limit a create to a name); get, update and patch the Secret `registry-token` alone |
+| Job `registry-token-first` | a `post-install,post-upgrade` hook (under Argo CD, a PostSync hook): the first token, before the operator bootstraps Argo CD |
+| CronJob `registry-token` | every 30 minutes, since a token lasts an hour |
+
+Each run checks that the metadata server answers as the Google service
+account, fetches its access token, and creates or replaces (never applies,
+which would keep the token in an annotation) the Secret `registry-token`, a
+`kubernetes.io/dockerconfigjson` with one entry, `oauth2accesstoken` and the
+token, for `registryToken.registry` (empty: `image.registry`'s host). Nothing
+prints the token. That Secret is the install's pull secret
+(`INFRARED_IMAGE_PULL_SECRET`): the operator writes its credential into Argo
+CD's repository Secret for the chart (`argocd/infrared-oci-charts`) at every
+pass, and the gitops template copies it to Substrate's namespaces every 5
+minutes. The operator also gets `INFRARED_REGISTRY_TOKEN` and
+`INFRARED_SUBSTRATE_REGISTRY`, `<image.registry>/substrate`, where Substrate's
+images are copied by digest; the gitops template carries `registryToken` in the
+`infrared` Application, so Argo CD's render keeps all of this.
+
+`imagePullSecrets` and `imageCredentials` stay empty with it, and
+`image.registry` and `gitops.chartRepository` must be on the token's registry
+host; the chart refuses anything else. The Google side is made once, by a
+person: the service account, `roles/artifactregistry.reader` on the repository,
+and `roles/iam.workloadIdentityUser` for
+`<project>.svc.id.goog[<release namespace>/registry-token]`.
+
 ## The Installation's edge and previews
 
 The operator writes `installation.edge` and `installation.previews` to the
@@ -531,6 +574,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `externalURL` | `""` | The API's public base URL, ending in `/api` (for example `https://infrared.example.com/api`), if exposed (`INFRARED_EXTERNAL_URL`, api). Usually unnecessary: Infrared works it out from the request |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
+| `gitops.chartRepository` | `us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts` | This chart's OCI repository, no `oci://` (`INFRARED_CHART_REPO`): the gitops repo's `infrared` Application pulls the chart from it, and the operator registers it with Argo CD with the pull secret's credential for its registry |
 | `gitops.templateVersion` | `7be814b9…` (feat/one-artifact-per-backup) | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `registry.address` | `""` | The install's own registry, host and port with no scheme (`INFRARED_REGISTRY`, operator and API). See "The install's own registry" |
@@ -551,8 +595,11 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `substrate.testActors` | `false` | Agent Substrate's test actors, `counter-v1` and `sandbox-v1`, for the gitops template's counter test and fence check. Off, with `stores.enabled` and `registry.address`, adds `substrate-test-actors` to `INFRARED_DISABLED_COMPONENTS`. See "Substrate's test actors" |
 | `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
-| `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job |
+| `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job. With `registryToken`, empty: `INFRARED_IMAGE_PULL_SECRET` is `registry-token` |
 | `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
+| `registryToken.gcpServiceAccount` | `""` | A Google service account whose access token the chart writes to the Secret `registry-token` every 30 minutes, the install's pull secret, through Workload Identity (see "The registry token"); empty for none |
+| `registryToken.registry` | `""` | The registry host the token is for; empty for `image.registry`'s host |
+| `registryToken.image` | `docker.io/alpine/k8s:1.37.0@sha256:b421c2e9…` | The token Job's image: curl, jq and kubectl, by digest |
 | `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
 | `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`; refused with Google Cloud Storage, which takes none. Pass them with `--set-file` |
 | `platformTokens.codeIndexGithubAppId` / `.codeIndexGithubAppInstallationId` / `.codeIndexGithubAppPrivateKey` | `""` | The code index's GitHub App, all three or none and only with `codeIndex.enabled`: its ID and its installation's (numbers) and its private key (PEM), rendered into `infrared-platform-tokens`, keys `code-index-github-app-id`, `-installation-id` and `-private-key`; empty for none. Pass them with `--set-file` |

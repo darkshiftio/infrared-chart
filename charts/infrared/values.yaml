@@ -37,6 +37,11 @@ gitops:
   # to install from a branch of the template. Here feat/one-artifact-per-backup's
   # head, which this branch's operator renders; back to a tag before a release.
   templateVersion: f71301a4a61e345feb9b335f476a3368c7e75d02
+  # -- The OCI repository of this chart, host and path with no oci://
+  # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
+  # pulls the chart from it, and the operator registers it with Argo CD, with the
+  # pull secret's credential for its registry.
+  chartRepository: us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts
 
 builds:
   # -- Registry prefix product images are built into by kpack, e.g.
@@ -214,6 +219,30 @@ imageCredentials:
   username: ""
   # -- Password or token, e.g. a token that may only read packages; required with a username.
   password: ""
+
+# The registry token, for a private Artifact Registry in Google Cloud on GKE with
+# Workload Identity (no key). The nodes pull the pods' images as their own
+# service account; Argo CD's repo-server (the chart) and the copy of Substrate's
+# images into the registry inside the cluster pull themselves, with this. With a
+# Google service account set, the chart runs the ServiceAccount registry-token
+# (annotated iam.gke.io/gcp-service-account), a Job at the install and every
+# upgrade, and a CronJob every 30 minutes, which write that account's access
+# token to the Secret registry-token: the install's pull secret
+# (INFRARED_IMAGE_PULL_SECRET), so imagePullSecrets and imageCredentials stay
+# empty. Substrate's images then come from <image.registry>/substrate
+# (INFRARED_SUBSTRATE_REGISTRY). See "The registry token".
+registryToken:
+  # -- The Google service account whose access token is written, e.g.
+  # `registry-reader@darkshift-preprod.iam.gserviceaccount.com`. It needs
+  # roles/artifactregistry.reader on the repository, and
+  # roles/iam.workloadIdentityUser for `<project>.svc.id.goog[<namespace>/registry-token]`.
+  # Empty (the default): no registry token.
+  gcpServiceAccount: ""
+  # -- The registry host the token is for. Empty: image.registry's host, e.g.
+  # `us-central1-docker.pkg.dev`. image.registry and gitops.chartRepository must be on it.
+  registry: ""
+  # -- The Job's image: curl, jq and kubectl. alpine/k8s 1.37.0, by digest, as the gitops template's jobs.
+  image: "docker.io/alpine/k8s:1.37.0@sha256:b421c2e9419edb98db39b6ab641669f4db7bb2acf354f22450c6b7e7176d1ff4"
 
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is
 # generated once and kept across upgrades (looked up with `lookup`). Under

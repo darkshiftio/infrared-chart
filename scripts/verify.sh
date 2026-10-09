@@ -810,7 +810,12 @@ refuse "a restore by both a point and a time fails" "restore.point and restore.f
 refuse "a restore without the stores fails" "restore.enabled needs stores.enabled" --set restore.enabled=true
 refuse "a restore without a backup bucket fails" "restore.enabled needs backup.bucket" --set restore.enabled=true,stores.enabled=true
 refuse "a restore with Gitea running fails" "needs --set gitea.replicaCount=0" -f "$chart/ci/install-values.yaml" -f "$chart/ci/gitea-values.yaml" --set restore.enabled=true
-refuse "the code index on the default registry fails" "codeIndex.enabled needs image.registry" -f "$chart/ci/code-index-values.yaml"
+refuse "the code index with no registry at all fails" "codeIndex.enabled needs image.registry" -f "$chart/ci/code-index-values.yaml" --set image.registry=
+# The code index on the default registry (Artifact Registry, since 0.1.0-alpha.146) renders, and the
+# default registry is handed to the operator: the template names the code index's image by it.
+helm template infrared "$chart" -n infrared -f "$chart/ci/code-index-values.yaml" >"$out/code-index-default.yaml"
+check code-index-default.yaml "the code index on the default registry hands that registry to the operator" \
+  'value: "us-central1-docker\.pkg\.dev/darkshift-preprod/infrared"$' 1
 refuse "the code index without a pin fails" "codeIndex.enabled needs codeIndex.image.tag or codeIndex.image.digest" \
   -f "$chart/ci/ghcr-values.yaml" --set codeIndex.enabled=true,codeIndex.image.tag=,codeIndex.image.digest=
 refuse "a code index digest that is not sha256 fails" "at '/codeIndex/image/digest'" \

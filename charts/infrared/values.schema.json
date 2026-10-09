@@ -233,6 +233,32 @@
         "image"
       ]
     },
+    "cloudIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gcpServiceAccount": {
+          "type": "string",
+          "pattern": "^$|^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\\.iam\\.gserviceaccount\\.com$"
+        },
+        "aws": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "roleARN": {
+              "type": "string",
+              "pattern": "^$|^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}$"
+            },
+            "hostNetwork": {
+              "type": "boolean"
+            },
+            "webIdentity": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
     "platformTokens": {
       "type": "object",
       "additionalProperties": false,

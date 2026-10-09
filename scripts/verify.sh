@@ -983,8 +983,48 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
   else bad "the API's ClusterRole has no rule to get and list ${resources//\"/} ($group)"; fi
 done
 
+step "cloud identity (ADR 0033: CloudAccount)"
+# The install's identity for cloud accounts: the ServiceAccount infrared-cloud,
+# always rendered, annotated for the mode set, and INFRARED_CLOUD_IDENTITY on the
+# operator and the API in the exact JSON the operator parses
+# (infrared-operator internal/controller/cloud_identity.go).
+ci_gsa=infrared-cloud@darkshift-preprod.iam.gserviceaccount.com
+ci_role=arn:aws:iam::977456087177:role/ci-infrared-cloud
+helm template infrared "$chart" -n infrared --set cloudIdentity.gcpServiceAccount=$ci_gsa >"$out/cloud-gcp.yaml"
+helm template infrared "$chart" -n infrared --set cloudIdentity.aws.roleARN=$ci_role >"$out/cloud-irsa.yaml"
+helm template infrared "$chart" -n infrared --set cloudIdentity.aws.hostNetwork=true >"$out/cloud-ec2.yaml"
+helm template infrared "$chart" -n infrared --set cloudIdentity.gcpServiceAccount=$ci_gsa --set cloudIdentity.aws.webIdentity=true >"$out/cloud-web.yaml"
+check defaults.yaml "the ServiceAccount infrared-cloud is always made" '^  name: infrared-cloud$' 1
+check defaults.yaml "infrared-cloud's token is not mounted" '^automountServiceAccountToken: false$' 1
+check defaults.yaml "no cloud identity: no INFRARED_CLOUD_IDENTITY" 'name: INFRARED_CLOUD_IDENTITY$' 0
+check defaults.yaml "no cloud identity: infrared-cloud unannotated" '(iam\.gke\.io/gcp-service-account|eks\.amazonaws\.com/role-arn): ' 0
+check cloud-gcp.yaml "Google: infrared-cloud bound by Workload Identity" "^    iam\.gke\.io/gcp-service-account: \"$ci_gsa\"$" 1
+check cloud-gcp.yaml "Google: the operator and the API get the service account" "value: \"\{\\\\\"gcpServiceAccount\\\\\":\\\\\"$ci_gsa\\\\\"\}\"$" 2
+check cloud-irsa.yaml "IRSA: infrared-cloud annotated with the role" "^    eks\.amazonaws\.com/role-arn: \"$ci_role\"$" 1
+check cloud-irsa.yaml "IRSA: the role in the JSON" "value: \"\{\\\\\"aws\\\\\":\{\\\\\"roleARN\\\\\":\\\\\"$ci_role\\\\\"\}\}\"$" 2
+check cloud-ec2.yaml "EC2: hostNetwork in the JSON, no annotation" 'value: "\{\\"aws\\":\{\\"hostNetwork\\":true\}\}"$' 2
+check cloud-ec2.yaml "EC2: infrared-cloud unannotated" '(iam\.gke\.io/gcp-service-account|eks\.amazonaws\.com/role-arn): ' 0
+check cloud-web.yaml "both clouds: web identity beside the service account" "value: \"\{\\\\\"aws\\\\\":\{\\\\\"webIdentity\\\\\":true\},\\\\\"gcpServiceAccount\\\\\":\\\\\"$ci_gsa\\\\\"\}\"$" 2
+refuse "two AWS modes fail" "set at most one of roleARN, hostNetwork and webIdentity" \
+  --set cloudIdentity.aws.hostNetwork=true --set cloudIdentity.aws.webIdentity=true
+refuse "a cloud identity that is not a Google service account fails" "at '/cloudIdentity/gcpServiceAccount'" \
+  --set cloudIdentity.gcpServiceAccount=someone@example.com
+refuse "a role that is not an IAM role ARN fails" "at '/cloudIdentity/aws/roleARN'" \
+  --set cloudIdentity.aws.roleARN=arn:aws:s3:::bucket
+# The CloudAccount CRD and the operator's rights to it (hack/sync-operator.sh).
+check defaults.yaml "the CloudAccount CRD is included" '^    kind: CloudAccount$' 1
+cr="$(awk '/^kind: ClusterRole$/{c=1} c' "$out/defaults.yaml")"
+if grep -qxF '  - cloudaccounts/status' <<<"$cr" && grep -qxF '  - cloudaccounts' <<<"$cr"; then ok "the operator may read CloudAccounts and write their status"
+else bad "the operator's ClusterRole lacks cloudaccounts or cloudaccounts/status (run hack/sync-operator.sh)"; fi
+# With a sibling operator checkout named, its CRD must be this chart's, byte for byte.
+if [[ -n "${INFRARED_OPERATOR_DIR:-}" ]]; then
+  if cmp -s "$INFRARED_OPERATOR_DIR/config/crd/bases/infrared.darkshift.io_cloudaccounts.yaml" "$chart/crds/infrared.darkshift.io_cloudaccounts.yaml"; then
+    ok "the CloudAccount CRD matches $INFRARED_OPERATOR_DIR"
+  else bad "the CloudAccount CRD differs from $INFRARED_OPERATOR_DIR (run hack/sync-operator.sh)"; fi
+fi
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

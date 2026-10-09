@@ -41,6 +41,12 @@ spec:
                   fieldPath: metadata.namespace
             - name: INFRARED_GITOPS_TEMPLATE_VERSION
               value: {{ .Values.gitops.templateVersion | quote }}
+            {{- with include "infrared.cloudIdentity" . }}
+            # The install's identity for cloud accounts: what an admin grants
+            # (GET /v1/cloud-identity).
+            - name: INFRARED_CLOUD_IDENTITY
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.externalURL }}
             - name: INFRARED_EXTERNAL_URL
               value: {{ . | quote }}

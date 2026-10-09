@@ -6,7 +6,7 @@ metadata:
     {{- include "infrared.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
 rules:
   # Every Infrared resource (Organization, Cluster, GitopsRepo, AgentRole,
-  # AgentWorkflow, AgentWorkflowRun, ...) and its status.
+  # AgentWorkflow, AgentWorkflowRun, CloudAccount, ...) and its status.
   - apiGroups: ["infrared.darkshift.io"]
     resources: ["*", "*/status"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

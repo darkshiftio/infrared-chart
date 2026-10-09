@@ -1,0 +1,9 @@
+# A control plane on AWS (ADR 0033): Infrared's images and chart from darkshift's
+# ECR, and ECR's token, as the node's role reached on the host's network (an EC2
+# node such as k3s), written to the Secret registry-token for Argo CD's chart
+# pull and the copy of Substrate's images.
+cloud: aws
+registryToken:
+  aws:
+    region: us-east-1
+    hostNetwork: true

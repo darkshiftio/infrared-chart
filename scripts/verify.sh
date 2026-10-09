@@ -56,7 +56,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -96,6 +96,17 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" >"$o
 helm template infrared "$chart" -n infrared -f "$chart/ci/registry-token-values.yaml" >"$out/registry-token.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/registry-token-values.yaml" -f "$chart/ci/adopted-values.yaml" \
   -f "$chart/ci/stores-adopted-values.yaml" >"$out/registry-token-adopted.yaml"
+# A control plane on AWS (ADR 0033): ECR's images, chart and token, on an EC2
+# node's role (hostNetwork); on EKS through IRSA (roleArn); and once Argo CD has
+# adopted it, from the values the gitops template writes (no `cloud`: the ECR
+# registry, chart repository and token are handed on).
+helm template infrared "$chart" -n infrared -f "$chart/ci/aws-values.yaml" >"$out/aws.yaml"
+helm template infrared "$chart" -n infrared --set cloud=aws,registryToken.aws.region=us-east-1 \
+  --set registryToken.aws.roleArn=arn:aws:iam::977456087177:role/ci-registry-reader >"$out/aws-irsa.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/adopted-values.yaml" -f "$chart/ci/stores-adopted-values.yaml" \
+  --set image.registry=977456087177.dkr.ecr.us-east-1.amazonaws.com \
+  --set gitops.chartRepository=977456087177.dkr.ecr.us-east-1.amazonaws.com/charts \
+  --set registryToken.aws.region=us-east-1,registryToken.registry=977456087177.dkr.ecr.us-east-1.amazonaws.com >"$out/aws-adopted.yaml"
 helm template infrared "$chart" -n infrared "${install[@]}" >"$out/install.yaml"
 # What Argo CD renders once it adopts a release outside AWS: the template's
 # values carry the registry, the pins and the pull secret's name, and no secret.
@@ -152,7 +163,7 @@ helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" \
 # The name named by hand as well: listed once.
 helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
   --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -161,7 +172,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named code-index code-index-install code-index-adopted registry-token registry-token-adopted; do envs "$f"; done
+    test-actors test-actors-adopted test-actors-named code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -810,7 +821,6 @@ refuse "a restore by both a point and a time fails" "restore.point and restore.f
 refuse "a restore without the stores fails" "restore.enabled needs stores.enabled" --set restore.enabled=true
 refuse "a restore without a backup bucket fails" "restore.enabled needs backup.bucket" --set restore.enabled=true,stores.enabled=true
 refuse "a restore with Gitea running fails" "needs --set gitea.replicaCount=0" -f "$chart/ci/install-values.yaml" -f "$chart/ci/gitea-values.yaml" --set restore.enabled=true
-refuse "the code index with no registry at all fails" "codeIndex.enabled needs image.registry" -f "$chart/ci/code-index-values.yaml" --set image.registry=
 # The code index on the default registry (Artifact Registry, since 0.1.0-alpha.146) renders, and the
 # default registry is handed to the operator: the template names the code index's image by it.
 helm template infrared "$chart" -n infrared -f "$chart/ci/code-index-values.yaml" >"$out/code-index-default.yaml"
@@ -852,6 +862,18 @@ refuse "a registry token's registry with a path fails" "at '/registryToken/regis
 refuse "the token Job's image without a digest fails" "at '/registryToken/image'" --set registryToken.image=docker.io/alpine/k8s:1.37.0
 refuse "a chart repository with oci:// fails" "at '/gitops/chartRepository'" \
   --set gitops.chartRepository=oci://us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts
+refuse "a cloud other than gcp or aws fails" "at '/cloud'" --set cloud=azure
+refuse "both kinds of registry token fail" "two kinds of registry token: set one" \
+  -f "$chart/ci/registry-token-values.yaml" --set registryToken.aws.region=us-east-1
+refuse "an ECR token for Artifact Registry's images fails" "but its registry is us-central1-docker.pkg.dev" \
+  --set registryToken.aws.region=us-east-1
+refuse "an ECR token in another region than the registry fails" "registryToken.aws is for ECR in us-west-2" \
+  -f "$chart/ci/aws-values.yaml" --set registryToken.aws.region=us-west-2
+refuse "an IRSA role without a region fails" "need registryToken.aws.region" \
+  --set registryToken.aws.roleArn=arn:aws:iam::977456087177:role/ci-registry-reader
+refuse "an IRSA role that is not a role ARN fails" "at '/registryToken/aws/roleArn'" \
+  -f "$chart/ci/aws-values.yaml" --set registryToken.aws.roleArn=ci-registry-reader
+refuse "an ECR region that is not a region fails" "at '/registryToken/aws/region'" --set cloud=aws,registryToken.aws.region=east
 
 # The registry token (a Google install): a ServiceAccount bound to the Google
 # service account, a Role on its one Secret, the first token at the install and
@@ -909,6 +931,33 @@ check defaults.env "no registry token or Substrate registry handed by default" '
 has defaults.env "the chart's repository handed to the operator, Artifact Registry by default" \
   'INFRARED_CHART_REPO="us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts"'
 
+# A control plane on AWS (ADR 0033): every image and the chart from darkshift's
+# ECR, ECR's token as the install's pull secret, and the registry handed on so
+# Argo CD keeps it after adoption.
+ecr=977456087177.dkr.ecr.us-east-1.amazonaws.com
+check aws.yaml "aws: every component image from ECR, pinned by digest" \
+  'image: 977456087177\.dkr\.ecr\.us-east-1\.amazonaws\.com/infrared-(operator|api|ui|mcp):v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}$' 4
+check aws.yaml "aws: nothing from Artifact Registry" 'us-central1-docker\.pkg\.dev' 0
+for f in aws aws-irsa aws-adopted; do
+  has "$f.env" "$f: the chart from ECR" "INFRARED_CHART_REPO=\"$ecr/charts\""
+  has "$f.env" "$f: Substrate's images from ECR" "INFRARED_SUBSTRATE_REGISTRY=\"$ecr/substrate\""
+  has "$f.env" "$f: ECR handed to the operator, so adoption keeps it" "INFRARED_IMAGE_REGISTRY=\"$ecr\""
+  has "$f.env" "$f: registry-token is the pull secret handed to the operator" 'INFRARED_IMAGE_PULL_SECRET="registry-token"'
+  # shellcheck disable=SC2016 # $AWS_REGION is the Job's own word, matched literally
+  check "$f.yaml" "$f: the token Job asks ECR, as AWS" 'aws ecr get-login-password --region "\$AWS_REGION"' 2
+  check "$f.yaml" "$f: the Secret's user is AWS" 'username: "AWS"' 2
+  check "$f.yaml" "$f: no Google metadata server" 'metadata\.google\.internal' 0
+done
+has aws.env "aws: the token as JSON, the node's role" "INFRARED_REGISTRY_TOKEN=\"{\\\"aws\\\":{\\\"region\\\":\\\"us-east-1\\\"},\\\"registry\\\":\\\"$ecr\\\"}\""
+has aws-irsa.env "aws-irsa: the token as JSON, with the IRSA role" \
+  "INFRARED_REGISTRY_TOKEN=\"{\\\"aws\\\":{\\\"region\\\":\\\"us-east-1\\\",\\\"roleArn\\\":\\\"arn:aws:iam::977456087177:role/ci-registry-reader\\\"},\\\"registry\\\":\\\"$ecr\\\"}\""
+check aws.yaml "aws: hostNetwork for the node's role, on the CronJob and the first Job" '^ +hostNetwork: true$' 2
+check aws.yaml "aws: no IRSA annotation without roleArn" 'eks\.amazonaws\.com/role-arn' 0
+check aws-irsa.yaml "aws-irsa: the ServiceAccount annotated with the role" \
+  '^    eks\.amazonaws\.com/role-arn: "arn:aws:iam::977456087177:role/ci-registry-reader"$' 1
+check aws-irsa.yaml "aws-irsa: not on the host's network" 'hostNetwork' 0
+check aws-adopted.yaml "aws-adopted: adoption renders no Secrets" '^kind: Secret$' 0
+
 # The generated operator rules must be present (hack/sync-operator.sh ran).
 if awk '/BEGIN GENERATED RULES/{f=1;next} /END GENERATED RULES/{f=0} f' \
      "$chart/templates/operator/clusterrole.yaml" | grep -q '^- apiGroups'; then
@@ -935,7 +984,7 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

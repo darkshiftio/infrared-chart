@@ -31,6 +31,15 @@ installation:
   #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
   #   signInURL: https://infrared.example.com  # where preview visitors sign in
 
+# -- The control plane's cloud (ADR 0033): "gcp" or "aws"; empty is "gcp". It
+# picks the default image registry and chart repository: darkshift's Artifact
+# Registry for "gcp" (us-central1-docker.pkg.dev/darkshift-preprod/infrared), its
+# ECR for "aws" (977456087177.dkr.ecr.us-east-1.amazonaws.com). Every release is in
+# both, by the same digests. image.registry and gitops.chartRepository override it.
+# A control plane on AWS also sets registryToken.aws.region, so Argo CD can pull
+# the chart and Substrate's images can be copied with an ECR token.
+cloud: ""
+
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
@@ -40,8 +49,9 @@ gitops:
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
-  # pull secret's credential for its registry.
-  chartRepository: us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts
+  # pull secret's credential for its registry. Empty: the cloud's, Artifact
+  # Registry's `.../infrared/charts` or ECR's `<ecr>/charts`.
+  chartRepository: ""
 
 builds:
   # -- Registry prefix product images are built into by kpack, e.g.
@@ -191,11 +201,12 @@ codeIndex:
     digest: sha256:ef9dfab51a875f50cc20cbb27e3f551b5b1367a543792a98cb857eb7873fb307
 
 image:
-  # -- Registry prefix shared by every component image. Any registry other than
-  # this default is handed to the operator with every component's tag and digest
-  # (INFRARED_IMAGE_REGISTRY, INFRARED_IMAGES), so the gitops template writes them
-  # into the `infrared` Application and Argo CD keeps them when it adopts the release.
-  registry: us-central1-docker.pkg.dev/darkshift-preprod/infrared
+  # -- Registry prefix shared by every component image. Empty: the cloud's
+  # default (see `cloud`). Any registry other than the cloud's default is handed
+  # to the operator with every component's tag and digest (INFRARED_IMAGE_REGISTRY,
+  # INFRARED_IMAGES), so the gitops template writes them into the `infrared`
+  # Application and Argo CD keeps them when it adopts the release.
+  registry: ""
   # -- Pull policy for every component image.
   pullPolicy: IfNotPresent
 
@@ -221,7 +232,8 @@ imageCredentials:
   password: ""
 
 # The registry token, for a private Artifact Registry in Google Cloud on GKE with
-# Workload Identity (no key). The nodes pull the pods' images as their own
+# Workload Identity (no key), or for ECR on AWS with an IAM role (IRSA or the
+# node's role). The nodes pull the pods' images as their own
 # service account; Argo CD's repo-server (the chart) and the copy of Substrate's
 # images into the registry inside the cluster pull themselves, with this. With a
 # Google service account set, the chart runs the ServiceAccount registry-token
@@ -238,10 +250,22 @@ registryToken:
   # roles/iam.workloadIdentityUser for `<project>.svc.id.goog[<namespace>/registry-token]`.
   # Empty (the default): no registry token.
   gcpServiceAccount: ""
-  # -- The registry host the token is for. Empty: image.registry's host, e.g.
-  # `us-central1-docker.pkg.dev`. image.registry and gitops.chartRepository must be on it.
+  # AWS: ECR's token (12 hours) as an IAM role, written the same way; set one of
+  # gcpServiceAccount and aws.region. The role needs ecr:GetAuthorizationToken
+  # and read on the repositories.
+  aws:
+    # -- The ECR region, e.g. `us-east-1`. Empty (the default): no ECR token.
+    region: ""
+    # -- An IAM role for IRSA on EKS, `arn:aws:iam::<account>:role/<name>`, which
+    # the ServiceAccount registry-token is annotated with. Empty: the node's role.
+    roleArn: ""
+    # -- Run the Job on the host's network, for EC2 nodes (such as k3s) whose
+    # instance metadata answers only one hop, so a pod reaches the node's role.
+    hostNetwork: false
+  # -- The registry host the token is for. Empty: the image registry's host, e.g.
+  # `us-central1-docker.pkg.dev`. The images and gitops.chartRepository must be on it.
   registry: ""
-  # -- The Job's image: curl, jq and kubectl. alpine/k8s 1.37.0, by digest, as the gitops template's jobs.
+  # -- The Job's image: curl, jq, kubectl and the AWS CLI. alpine/k8s 1.37.0, by digest, as the gitops template's jobs.
   image: "docker.io/alpine/k8s:1.37.0@sha256:b421c2e9419edb98db39b6ab641669f4db7bb2acf354f22450c6b7e7176d1ff4"
 
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is

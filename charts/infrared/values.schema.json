@@ -95,6 +95,15 @@
         }
       }
     },
+    "cloud": {
+      "type": "string",
+      "enum": [
+        "",
+        "gcp",
+        "aws"
+      ],
+      "description": "The control plane's cloud: picks the default image registry and chart repository (ADR 0033); empty is gcp."
+    },
     "gitops": {
       "type": "object",
       "additionalProperties": false,
@@ -106,8 +115,8 @@
         },
         "chartRepository": {
           "type": "string",
-          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?(/[a-z0-9]+([._-][a-z0-9]+)*)+$",
-          "description": "The OCI repository of this chart, host and path with no oci://, tag or trailing slash (INFRARED_CHART_REPO)."
+          "pattern": "^$|^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?(/[a-z0-9]+([._-][a-z0-9]+)*)+$",
+          "description": "The OCI repository of this chart, host and path with no oci://, tag or trailing slash (INFRARED_CHART_REPO); empty for the cloud's."
         }
       },
       "required": [
@@ -120,7 +129,8 @@
       "additionalProperties": false,
       "properties": {
         "registry": {
-          "type": "string"
+          "type": "string",
+          "description": "Registry prefix of every component image; empty for the cloud's default."
         },
         "pullPolicy": {
           "type": "string",
@@ -173,12 +183,37 @@
     "registryToken": {
       "type": "object",
       "additionalProperties": false,
-      "description": "The registry token: a Google service account's access token for a private Artifact Registry, written to the Secret registry-token every 30 minutes (Workload Identity, no key).",
+      "description": "The registry token: a Google service account's access token for a private Artifact Registry (Workload Identity, no key), or ECR's token as an IAM role, written to the Secret registry-token every 30 minutes.",
       "properties": {
         "gcpServiceAccount": {
           "type": "string",
           "pattern": "^$|^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\\.iam\\.gserviceaccount\\.com$",
           "description": "The Google service account, <name>@<project>.iam.gserviceaccount.com; empty for none."
+        },
+        "aws": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "region": {
+              "type": "string",
+              "pattern": "^$|^[a-z]{2}(-gov)?-[a-z]+-[0-9]$",
+              "description": "The ECR region; empty for no ECR token."
+            },
+            "roleArn": {
+              "type": "string",
+              "pattern": "^$|^arn:aws(-[a-z]+)?:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}$",
+              "description": "An IAM role for IRSA on EKS; empty for the node's role."
+            },
+            "hostNetwork": {
+              "type": "boolean",
+              "description": "Run the Job on the host's network, for nodes whose instance metadata answers one hop."
+            }
+          },
+          "required": [
+            "region",
+            "roleArn",
+            "hostNetwork"
+          ]
         },
         "registry": {
           "type": "string",
@@ -188,11 +223,12 @@
         "image": {
           "type": "string",
           "pattern": "@sha256:[0-9a-f]{64}$",
-          "description": "The Job's image, with curl, jq and kubectl, by digest."
+          "description": "The Job's image, with curl, jq, kubectl and the AWS CLI, by digest."
         }
       },
       "required": [
         "gcpServiceAccount",
+        "aws",
         "registry",
         "image"
       ]

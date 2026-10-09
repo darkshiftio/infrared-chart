@@ -62,7 +62,7 @@ Renders registry/repository:tag, or registry/repository:tag@digest when a
 digest is set (a pin).
 */}}
 {{- define "infrared.image" -}}
-{{- $registry := trimSuffix "/" .root.Values.image.registry }}
+{{- $registry := include "infrared.registry" .root }}
 {{- $tag := default .root.Chart.AppVersion .image.tag }}
 {{- $ref := printf "%s:%s" .image.repository $tag }}
 {{- if $registry }}{{ $ref = printf "%s/%s" $registry $ref }}{{ end }}
@@ -72,19 +72,39 @@ digest is set (a pin).
 
 {{/* The first image pull secret name: registry-token with the registry token, else imagePullSecrets[0]'s, or empty. */}}
 {{- define "infrared.firstPullSecret" -}}
-{{- if .Values.registryToken.gcpServiceAccount }}registry-token
+{{- if include "infrared.registryTokenKind" . }}registry-token
 {{- else }}{{ with .Values.imagePullSecrets }}{{ (first .).name }}{{ end }}
 {{- end }}
 {{- end }}
 
 {{/*
-The default image.registry, darkshift's Artifact Registry in Google Cloud (darkshift-preprod,
-us-central1, repository infrared) since 0.1.0-alpha.146; ECR before. Every chart version pins its
-own builds there, so a cluster on it upgrades its images with the chart version
-alone. `make verify` fails if values.yaml's default and this one differ.
+The default image registry for the control plane's cloud (ADR 0033): darkshift's
+Artifact Registry in Google Cloud (darkshift-preprod, us-central1, repository
+infrared) for cloud "gcp" or "" (since 0.1.0-alpha.146), and darkshift's ECR in
+the preprod account for "aws". Every chart version pins its own builds by a
+digest that is the same in both, so a cluster on either upgrades its images with
+the chart version alone.
 */}}
 {{- define "infrared.defaultRegistry" -}}
-us-central1-docker.pkg.dev/darkshift-preprod/infrared
+{{- if eq .Values.cloud "aws" }}977456087177.dkr.ecr.us-east-1.amazonaws.com
+{{- else }}us-central1-docker.pkg.dev/darkshift-preprod/infrared
+{{- end }}
+{{- end }}
+
+{{/* The registry every component image is in: image.registry, or the cloud's default. */}}
+{{- define "infrared.registry" -}}
+{{- default (include "infrared.defaultRegistry" .) (trimSuffix "/" .Values.image.registry) }}
+{{- end }}
+
+{{/*
+The OCI repository of this chart (INFRARED_CHART_REPO): gitops.chartRepository,
+or the cloud's: Artifact Registry's charts for "gcp" or "", ECR's for "aws".
+*/}}
+{{- define "infrared.chartRepository" -}}
+{{- if .Values.gitops.chartRepository }}{{ .Values.gitops.chartRepository }}
+{{- else if eq .Values.cloud "aws" }}977456087177.dkr.ecr.us-east-1.amazonaws.com/charts
+{{- else }}us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts
+{{- end }}
 {{- end }}
 
 {{/*
@@ -95,10 +115,14 @@ renders the chart's defaults once it adopts the release. The Application then
 carries the same registry, so the operator keeps receiving it. With the code
 index on, the default registry is handed too: the gitops template names the code
 index's image by it (<registry>/infrared-codeindex), and has no default of its own.
+
+The default compared with is Google's, the chart's default with no `cloud`:
+the gitops template does not carry `cloud` into the `infrared` Application, so
+an install on AWS hands its ECR registry on, and Argo CD keeps it after adoption.
 */}}
 {{- define "infrared.handedRegistry" -}}
-{{- $registry := trimSuffix "/" .Values.image.registry }}
-{{- if and $registry (or .Values.codeIndex.enabled (ne $registry (include "infrared.defaultRegistry" .))) }}{{ $registry }}{{ end }}
+{{- $registry := include "infrared.registry" . }}
+{{- if or .Values.codeIndex.enabled (ne $registry (include "infrared.defaultRegistry" (dict "Values" (dict "cloud" "")))) }}{{ $registry }}{{ end }}
 {{- end }}
 
 {{/*
@@ -122,15 +146,12 @@ it only while that pin is there.
 {{- end }}
 
 {{/*
-What codeIndex.enabled needs, checked at every render: an image registry other
-than the default, which the operator hands to the gitops template with the
-pins (the template names the code index's image by it), and a pin.
+What codeIndex.enabled needs, checked at every render: a pin. Its registry is
+always handed to the operator with the pins while it is on (infrared.handedRegistry):
+the gitops template names the code index's image by it.
 */}}
 {{- define "infrared.codeIndexCheck" -}}
 {{- if .Values.codeIndex.enabled }}
-{{- if not (include "infrared.handedRegistry" .) }}
-{{- fail "codeIndex.enabled needs image.registry to name the registry the code index's image is in, such as ghcr.io/darkshiftio: the gitops template names the image by it, and the default registry is never handed on" }}
-{{- end }}
 {{- if not (or .Values.codeIndex.image.tag .Values.codeIndex.image.digest) }}
 {{- fail "codeIndex.enabled needs codeIndex.image.tag or codeIndex.image.digest: a build of darkshiftio/infrared-codeindex" }}
 {{- end }}
@@ -368,22 +389,38 @@ render without it.
 
 
 {{/*
-The registry token's registry host: registryToken.registry, or image.registry's
-host. Empty while registryToken.gcpServiceAccount is.
+The registry token's kind: "gcp" with registryToken.gcpServiceAccount, "aws" with
+registryToken.aws.region, else empty. Both set fails (infrared.registryTokenCheck).
+*/}}
+{{- define "infrared.registryTokenKind" -}}
+{{- if .Values.registryToken.gcpServiceAccount }}gcp
+{{- else if .Values.registryToken.aws.region }}aws
+{{- end }}
+{{- end }}
+
+{{/*
+The registry token's registry host: registryToken.registry, or the image
+registry's host. Empty while no registry token is set.
 */}}
 {{- define "infrared.registryTokenHost" -}}
-{{- if .Values.registryToken.gcpServiceAccount }}
-{{- default (first (splitList "/" .Values.image.registry)) .Values.registryToken.registry }}
+{{- if include "infrared.registryTokenKind" . }}
+{{- default (first (splitList "/" (include "infrared.registry" .))) .Values.registryToken.registry }}
 {{- end }}
 {{- end }}
 
 {{/*
 The registry token for the operator (INFRARED_REGISTRY_TOKEN), as JSON:
-{"gcpServiceAccount", "registry"}. Empty while registryToken.gcpServiceAccount is.
+{"gcpServiceAccount", "registry"} for Google, {"aws": {"region", "roleArn"},
+"registry"} for AWS (roleArn only when set). Empty while no token is set.
 */}}
 {{- define "infrared.registryToken" -}}
-{{- with .Values.registryToken.gcpServiceAccount }}
-{{- toJson (dict "gcpServiceAccount" . "registry" (include "infrared.registryTokenHost" $)) }}
+{{- $kind := include "infrared.registryTokenKind" . }}
+{{- if eq $kind "gcp" }}
+{{- toJson (dict "gcpServiceAccount" .Values.registryToken.gcpServiceAccount "registry" (include "infrared.registryTokenHost" .)) }}
+{{- else if eq $kind "aws" }}
+{{- $aws := dict "region" .Values.registryToken.aws.region }}
+{{- with .Values.registryToken.aws.roleArn }}{{ $_ := set $aws "roleArn" . }}{{ end }}
+{{- toJson (dict "aws" $aws "registry" (include "infrared.registryTokenHost" .)) }}
 {{- end }}
 {{- end }}
 
@@ -392,25 +429,42 @@ What the registry token needs: it is the install's pull secret, so no other is
 named, and the images and the chart's repository are on its registry host.
 */}}
 {{- define "infrared.registryTokenCheck" -}}
-{{- if .Values.registryToken.gcpServiceAccount }}
+{{- if and .Values.registryToken.gcpServiceAccount .Values.registryToken.aws.region }}
+{{- fail "registryToken.gcpServiceAccount and registryToken.aws.region are two kinds of registry token: set one" }}
+{{- end }}
+{{- if and (not .Values.registryToken.aws.region) (or .Values.registryToken.aws.roleArn .Values.registryToken.aws.hostNetwork) }}
+{{- fail "registryToken.aws.roleArn and registryToken.aws.hostNetwork need registryToken.aws.region" }}
+{{- end }}
+{{- if include "infrared.registryTokenKind" . }}
 {{- $host := include "infrared.registryTokenHost" . }}
+{{- $images := first (splitList "/" (include "infrared.registry" .)) }}
+{{- $charts := first (splitList "/" (include "infrared.chartRepository" .)) }}
 {{- if or .Values.imagePullSecrets .Values.imageCredentials.username .Values.imageCredentials.password }}
-{{- fail "registryToken.gcpServiceAccount makes the Secret registry-token the install's pull secret: leave imagePullSecrets and imageCredentials empty" }}
+{{- fail "the registry token makes the Secret registry-token the install's pull secret: leave imagePullSecrets and imageCredentials empty" }}
 {{- end }}
-{{- if ne (first (splitList "/" .Values.image.registry)) $host }}
-{{- fail (printf "registryToken is for %s, but image.registry is on %s: Substrate's images come from <image.registry>/substrate with the token" $host (first (splitList "/" .Values.image.registry))) }}
+{{- if ne $images $host }}
+{{- fail (printf "registryToken is for %s, but image.registry is on %s: Substrate's images come from <image.registry>/substrate with the token" $host $images) }}
 {{- end }}
-{{- if ne (first (splitList "/" .Values.gitops.chartRepository)) $host }}
-{{- fail (printf "registryToken is for %s, but gitops.chartRepository is on %s: Argo CD pulls the chart with the token" $host (first (splitList "/" .Values.gitops.chartRepository))) }}
+{{- if ne $charts $host }}
+{{- fail (printf "registryToken is for %s, but gitops.chartRepository is on %s: Argo CD pulls the chart with the token" $host $charts) }}
+{{- end }}
+{{- if eq (include "infrared.registryTokenKind" .) "aws" }}
+{{- $want := printf ".dkr.ecr.%s.amazonaws.com" .Values.registryToken.aws.region }}
+{{- if not (hasSuffix $want $host) }}
+{{- fail (printf "registryToken.aws is for ECR in %s, but its registry is %s: want <account>%s" .Values.registryToken.aws.region $host $want) }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
 
 {{/*
-The registry token's Job: fetch the bound Google service account's access token
-from the GKE metadata server and write it to the Secret registry-token, created
-or replaced (never applied, which would keep the token in an annotation).
-Nothing prints the token. Call with the root context.
+The registry token's Job: fetch a registry token and write it to the Secret
+registry-token, created or replaced (never applied, which would keep the token
+in an annotation). Google: the bound service account's access token from the
+GKE metadata server. AWS: `aws ecr get-login-password` as the pod's identity
+(IRSA with registryToken.aws.roleArn, else the node's role, reached on the
+host's network with registryToken.aws.hostNetwork where IMDS answers only one
+hop). Nothing prints the token. Call with the root context.
 */}}
 {{- define "infrared.registryTokenJob" -}}
 backoffLimit: 4
@@ -422,6 +476,10 @@ template:
   spec:
     serviceAccountName: registry-token
     restartPolicy: OnFailure
+    {{- if and (eq (include "infrared.registryTokenKind" .) "aws") .Values.registryToken.aws.hostNetwork }}
+    hostNetwork: true
+    dnsPolicy: ClusterFirstWithHostNet
+    {{- end }}
     securityContext:
       runAsNonRoot: true
       runAsUser: 65534
@@ -438,12 +496,47 @@ template:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          {{- if eq (include "infrared.registryTokenKind" .) "aws" }}
+          - name: AWS_REGION
+            value: {{ .Values.registryToken.aws.region | quote }}
+          {{- else }}
           - name: GCP_SERVICE_ACCOUNT
             value: {{ .Values.registryToken.gcpServiceAccount | quote }}
+          {{- end }}
           - name: REGISTRY
             value: {{ include "infrared.registryTokenHost" . | quote }}
           - name: SECRET
             value: registry-token
+        {{- if eq (include "infrared.registryTokenKind" .) "aws" }}
+        command:
+          - /bin/sh
+          - -ec
+          - |
+            umask 077
+            # ECR's token for this identity, into memory; from there into the
+            # Secret's manifest. It lasts 12 hours.
+            if ! aws ecr get-login-password --region "$AWS_REGION" >/work/token 2>/work/err || [ ! -s /work/token ]; then
+              echo "ECR gave no token in $AWS_REGION: $(tr '\n' ' ' </work/err)" >&2
+              exit 1
+            fi
+            jq -n --rawfile t /work/token --arg host "$REGISTRY" --arg name "$SECRET" --arg ns "$NAMESPACE" '
+                ($t | rtrimstr("\n")) as $tok
+                | {apiVersion: "v1", kind: "Secret", type: "kubernetes.io/dockerconfigjson",
+                   metadata: {name: $name, namespace: $ns,
+                     labels: {"app.kubernetes.io/name": "infrared", "app.kubernetes.io/part-of": "infrared",
+                              "app.kubernetes.io/component": "registry-token"}},
+                   stringData: {".dockerconfigjson": ({auths: {($host): {username: "AWS", password: $tok,
+                     auth: ("AWS:" + $tok | @base64)}}} | tojson)}}' >/work/secret.json
+            who="$(aws sts get-caller-identity --query Arn --output text 2>/dev/null || echo 'an unknown identity')"
+            if kubectl get secret "$SECRET" -o name >/dev/null 2>&1; then
+              kubectl replace -f /work/secret.json >/dev/null
+              done=replaced
+            else
+              kubectl create -f /work/secret.json >/dev/null
+              done=created
+            fi
+            echo "$NAMESPACE/$SECRET $done: $who's ECR token for $REGISTRY, good for 12h"
+        {{- else }}
         command:
           - /bin/sh
           - -ec
@@ -481,6 +574,7 @@ template:
               done=created
             fi
             echo "$NAMESPACE/$SECRET $done: $email's token for $REGISTRY, good for ${expires}s"
+        {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

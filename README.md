@@ -12,7 +12,7 @@ app-of-apps, and from that point Argo CD manages Infrared itself.
 | ui | `<image.registry>/infrared-ui` | 8080 | Web UI; proxies `/api` and MCP to the services below. Its Service is the primary one, named `infrared` |
 | mcp | `<image.registry>/infrared-mcp` | 8080 | MCP server for agents, authenticated to the API with its own token |
 
-Images come from `image.registry` (today darkshift's ECR registry; ask your darkshift contact for pull access), tagged `v0.1.0-alpha.<n>` and pinned by digest. The chart is published as an OCI artifact: `oci://ghcr.io/darkshiftio/charts/infrared`, versioned `0.1.0-alpha.<n>` until 0.1.0 is released.
+Images come from darkshift's private registries, chosen by the control plane's cloud (`cloud`, ADR 0033): Artifact Registry (`us-central1-docker.pkg.dev/darkshift-preprod/infrared`) for `gcp` or empty, ECR (`977456087177.dkr.ecr.us-east-1.amazonaws.com`) for `aws`; `image.registry` overrides it. Every release is in both, tagged `v0.1.0-alpha.<n>` and pinned by the same digest. The chart is published as an OCI artifact: `oci://us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts/infrared`, versioned `0.1.0-alpha.<n>` until 0.1.0 is released; ask your darkshift contact for pull access.
 
 ## Install
 
@@ -232,6 +232,33 @@ person: the service account, `roles/artifactregistry.reader` on the repository,
 and `roles/iam.workloadIdentityUser` for
 `<project>.svc.id.goog[<release namespace>/registry-token]`.
 
+### On AWS: ECR's token
+
+```yaml
+cloud: aws
+registryToken:
+  aws:
+    region: us-east-1
+    hostNetwork: true      # an EC2 node (k3s) whose instance metadata answers one hop
+    # roleArn: arn:aws:iam::<account>:role/<name>   # IRSA on EKS instead
+```
+
+A control plane on EKS or EC2 sets `cloud: aws` (images and the chart from
+darkshift's ECR) and `registryToken.aws.region`. The same objects render, and
+each run writes ECR's token (`aws ecr get-login-password`, good for 12 hours),
+with the user `AWS`, to the same Secret `registry-token`, as the pod's
+identity: the IAM role `registryToken.aws.roleArn` through IRSA (the
+ServiceAccount is annotated `eks.amazonaws.com/role-arn`), else the node's role,
+reached on the host's network with `registryToken.aws.hostNetwork` where the
+instance metadata answers only one hop. The role needs
+`ecr:GetAuthorizationToken` and read on the repositories. The operator gets
+`INFRARED_REGISTRY_TOKEN` as `{"aws":{"region":"us-east-1"},"registry":"<ecr host>"}`
+(with `roleArn` when set). Set one kind of token: both together fail, and the
+ECR host must be in the token's region. Since the gitops template does not carry
+`cloud`, the ECR registry is handed to the operator with every pin
+(`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`), so Argo CD keeps it after it
+adopts the release.
+
 ## The Installation's edge and previews
 
 The operator writes `installation.edge` and `installation.previews` to the
@@ -322,10 +349,10 @@ endpoints. The chart renders nothing of it. On, it hands the code index's image
 to the operator among Infrared's own (`INFRARED_IMAGES`, key `code-index`), and
 the gitops template runs it in the namespace `code-index`, at
 `http://code-index.code-index.svc:8080`, which only infrared-api's pods reach.
-The template names the image `<image.registry>/infrared-codeindex`, so the
-code index needs an `image.registry` other than the default, which is the one
-the operator is handed (`ghcr.io/darkshiftio`, where the image is published),
-and a tag or a digest: the chart refuses to render without either. Off, the
+The template names the image `<image.registry>/infrared-codeindex`, so with the
+code index on the image registry, the cloud's default included, is always handed
+to the operator; it needs a tag or a digest: the chart refuses to render without
+either. Off, the
 default, changes nothing.
 
 Its record and its credential come from the install, through the platform's
@@ -574,7 +601,8 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `externalURL` | `""` | The API's public base URL, ending in `/api` (for example `https://infrared.example.com/api`), if exposed (`INFRARED_EXTERNAL_URL`, api). Usually unnecessary: Infrared works it out from the request |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
-| `gitops.chartRepository` | `us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts` | This chart's OCI repository, no `oci://` (`INFRARED_CHART_REPO`): the gitops repo's `infrared` Application pulls the chart from it, and the operator registers it with Argo CD with the pull secret's credential for its registry |
+| `cloud` | `""` | The control plane's cloud, `gcp` or `aws` (empty is `gcp`): the default image registry and chart repository, Artifact Registry or ECR (ADR 0033) |
+| `gitops.chartRepository` | `""` | This chart's OCI repository; empty for the cloud's (Artifact Registry's `.../infrared/charts`, or ECR's `<ecr>/charts` with `cloud: aws`), no `oci://` (`INFRARED_CHART_REPO`): the gitops repo's `infrared` Application pulls the chart from it, and the operator registers it with Argo CD with the pull secret's credential for its registry |
 | `gitops.templateVersion` | `7be814b9…` (feat/one-artifact-per-backup) | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`) |
 | `builds.registry` | `""` | Registry prefix kpack builds product images into (`INFRARED_BUILD_REGISTRY`); empty leaves the template's builds component out |
 | `registry.address` | `""` | The install's own registry, host and port with no scheme (`INFRARED_REGISTRY`, operator and API). See "The install's own registry" |
@@ -593,13 +621,14 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `codeIndex.knowledge.url` / `.ref` | `""` / `""` | The code index's record: the knowledge repository's URL (`https://` or `http://`) and the branch, tag or commit to read it at (empty: `main`). With `codeIndex.enabled`, written into `infrared-platform-tokens` at the install, and required wherever the chart renders that Secret. See "The code index" |
 | `codeIndex.image.tag` / `.digest` | `one-install-34162bc` / `sha256:ef9dfab5…` | The image `<image.registry>/infrared-codeindex`: a `one-install-<short sha>` build of darkshiftio/infrared-codeindex, and its `sha256:` digest |
 | `substrate.testActors` | `false` | Agent Substrate's test actors, `counter-v1` and `sandbox-v1`, for the gitops template's counter test and fence check. Off, with `stores.enabled` and `registry.address`, adds `substrate-test-actors` to `INFRARED_DISABLED_COMPONENTS`. See "Substrate's test actors" |
-| `image.registry` | `977456087177.dkr.ecr.us-east-1.amazonaws.com` | Registry prefix for every component. During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
+| `image.registry` | `""` | Registry prefix for every component; empty for the cloud's default (see `cloud`). During the 0.1 track the chart pins the preprod kpack builds by digest (`<c>.image.tag: main`, `<c>.image.digest`). Any other registry is handed to the operator with every pin (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`) for the gitops template |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for every component |
 | `imagePullSecrets` | `[]` | `[{name: ...}]` on every pod; the first is `INFRARED_IMAGE_PULL_SECRET`, which the operator also copies into each org namespace and sets on every runner Job. With `registryToken`, empty: `INFRARED_IMAGE_PULL_SECRET` is `registry-token` |
 | `imageCredentials.registry` / `.username` / `.password` | `ghcr.io` / `""` / `""` | With a username and password, the chart renders the Secret named by `imagePullSecrets[0]` (see "Secrets from values"). Pass the password with `--set-file` |
 | `registryToken.gcpServiceAccount` | `""` | A Google service account whose access token the chart writes to the Secret `registry-token` every 30 minutes, the install's pull secret, through Workload Identity (see "The registry token"); empty for none |
+| `registryToken.aws.region` / `.roleArn` / `.hostNetwork` | `""` / `""` / `false` | ECR's token instead, written the same way: the region, an IRSA role on EKS (empty: the node's role), and the host's network for EC2 nodes whose metadata answers one hop. See "On AWS: ECR's token" |
 | `registryToken.registry` | `""` | The registry host the token is for; empty for `image.registry`'s host |
-| `registryToken.image` | `docker.io/alpine/k8s:1.37.0@sha256:b421c2e9…` | The token Job's image: curl, jq and kubectl, by digest |
+| `registryToken.image` | `docker.io/alpine/k8s:1.37.0@sha256:b421c2e9…` | The token Job's image: curl, jq, kubectl and the AWS CLI, by digest |
 | `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
 | `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`; refused with Google Cloud Storage, which takes none. Pass them with `--set-file` |
 | `platformTokens.codeIndexGithubAppId` / `.codeIndexGithubAppInstallationId` / `.codeIndexGithubAppPrivateKey` | `""` | The code index's GitHub App, all three or none and only with `codeIndex.enabled`: its ID and its installation's (numbers) and its private key (PEM), rendered into `infrared-platform-tokens`, keys `code-index-github-app-id`, `-installation-id` and `-private-key`; empty for none. Pass them with `--set-file` |

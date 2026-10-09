@@ -1,7 +1,8 @@
 {{- /*
-The registry token (registryToken.gcpServiceAccount): a private Artifact
-Registry in Google Cloud, which Argo CD's repo-server and the copy of
-Substrate's images pull from themselves, without the nodes' own credential.
+The registry token (registryToken.gcpServiceAccount, or registryToken.aws): a
+private registry, Artifact Registry in Google Cloud or ECR in AWS, which Argo
+CD's repo-server and the copy of Substrate's images pull from themselves,
+without the nodes' own credential.
 No key exists (the organization forbids them), so the ServiceAccount
 registry-token is bound to the Google service account through Workload Identity,
 and a Job fetches that account's access token from the GKE metadata server and
@@ -20,9 +21,17 @@ from Artifact Registry as their service account.
 The Google side is made once, by a person: the service account with
 roles/artifactregistry.reader on the repository, and
 roles/iam.workloadIdentityUser for <project>.svc.id.goog[<namespace>/registry-token].
+
+On AWS the token is ECR's (aws ecr get-login-password, 12 hours), as the pod's
+identity: the IAM role registryToken.aws.roleArn through IRSA on EKS (the
+ServiceAccount is annotated eks.amazonaws.com/role-arn), else the node's role,
+reached on the host's network with registryToken.aws.hostNetwork where the
+instance metadata answers only one hop (EC2 nodes such as k3s). The role needs
+ecr:GetAuthorizationToken and read on the repositories.
 */}}
 {{- include "infrared.registryTokenCheck" . }}
-{{- with .Values.registryToken.gcpServiceAccount }}
+{{- $kind := include "infrared.registryTokenKind" . }}
+{{- if $kind }}
 {{- $ctx := dict "root" $ "component" "registry-token" }}
 apiVersion: v1
 kind: ServiceAccount
@@ -32,8 +41,13 @@ metadata:
   namespace: {{ $.Release.Namespace }}
   labels:
     {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+  {{- if eq $kind "gcp" }}
   annotations:
-    iam.gke.io/gcp-service-account: {{ . | quote }}
+    iam.gke.io/gcp-service-account: {{ $.Values.registryToken.gcpServiceAccount | quote }}
+  {{- else if $.Values.registryToken.aws.roleArn }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ $.Values.registryToken.aws.roleArn | quote }}
+  {{- end }}
 ---
 # The one Secret it writes. RBAC cannot limit a create to a name (the name is
 # not known when the request is authorized), so create is for the namespace;

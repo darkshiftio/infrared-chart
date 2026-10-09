@@ -62,15 +62,16 @@ spec:
               value: {{ include "infrared.firstPullSecret" . | quote }}
             # Infrared's chart repository, which Argo CD pulls the chart from.
             - name: INFRARED_CHART_REPO
-              value: {{ .Values.gitops.chartRepository | quote }}
+              value: {{ include "infrared.chartRepository" . | quote }}
             {{- with include "infrared.registryToken" . }}
+            {{- /* Or ECR's token on AWS (registryToken.aws), the same way. */}}
             # The registry token: the pull secret above is an access token of
             # this Google service account, rewritten every 30 minutes; and
             # Substrate's images come from beside Infrared's own.
             - name: INFRARED_REGISTRY_TOKEN
               value: {{ . | quote }}
             - name: INFRARED_SUBSTRATE_REGISTRY
-              value: {{ printf "%s/substrate" (trimSuffix "/" $.Values.image.registry) | quote }}
+              value: {{ printf "%s/substrate" (include "infrared.registry" $) | quote }}
             {{- end }}
             {{- with include "infrared.handedRegistry" . }}
             # Images from a registry other than the default: the operator hands

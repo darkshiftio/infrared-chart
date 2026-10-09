@@ -1,0 +1,231 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: cloudaccounts.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: CloudAccount
+    listKind: CloudAccountList
+    plural: cloudaccounts
+    shortNames:
+    - cloudacct
+    singular: cloudaccount
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Name
+      type: string
+    - jsonPath: .spec.gcp.projectID
+      name: GCP project
+      priority: 1
+      type: string
+    - jsonPath: .spec.aws.accountID
+      name: AWS account
+      priority: 1
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.verifiedAt
+      name: Verified
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          CloudAccount is one of an org's cloud accounts, in the org's namespace
+          (ir-org-<org>): a Google Cloud project or an AWS account Infrared reaches
+          by identity federation, checked when it is added and every 24 hours.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              CloudAccountSpec names one cloud account of the org: a Google Cloud project
+              or an AWS account, reached by identity federation (infrared-docs-internal
+              ADR 0033). There is no field for a key.
+            properties:
+              aws:
+                description: |-
+                  CloudAccountAWS is an AWS account Infrared reaches by assuming a role in it,
+                  from the install's own AWS identity: its IRSA role or node role
+                  (sts:AssumeRole, with ExternalID when set), or the cluster's OIDC token
+                  (sts:AssumeRoleWithWebIdentity). No access key is held.
+                properties:
+                  accountID:
+                    description: AccountID is the 12-digit AWS account the role is
+                      in.
+                    pattern: ^[0-9]{12}$
+                    type: string
+                  externalID:
+                    description: |-
+                      ExternalID is the external ID the role's trust policy requires, for
+                      sts:AssumeRole. A web identity trust names the cluster's token instead.
+                    maxLength: 1224
+                    minLength: 2
+                    pattern: ^[A-Za-z0-9+=,.@:/_-]+$
+                    type: string
+                  roleARN:
+                    description: |-
+                      RoleARN is the IAM role Infrared assumes, e.g.
+                      arn:aws:iam::123456789012:role/infrared.
+                    pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}$
+                    type: string
+                required:
+                - accountID
+                - roleARN
+                type: object
+              displayName:
+                description: DisplayName is how people see the account, e.g. "Acme
+                  production".
+                maxLength: 100
+                type: string
+              gcp:
+                description: |-
+                  CloudAccountGCP is a Google Cloud project Infrared reaches by impersonating a
+                  service account in it, through the install's own service account (Workload
+                  Identity). The org grants the install's service account
+                  roles/iam.serviceAccountTokenCreator on ServiceAccount. No key is held.
+                properties:
+                  projectID:
+                    description: ProjectID is the Google Cloud project, e.g. acme-prod.
+                    pattern: ^[a-z][a-z0-9-]{4,28}[a-z0-9]$
+                    type: string
+                  serviceAccount:
+                    description: |-
+                      ServiceAccount is the Google service account Infrared impersonates, e.g.
+                      infrared@acme-prod.iam.gserviceaccount.com.
+                    maxLength: 100
+                    pattern: ^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$
+                    type: string
+                required:
+                - projectID
+                - serviceAccount
+                type: object
+            type: object
+            x-kubernetes-validations:
+            - message: exactly one of gcp or aws
+              rule: has(self.gcp) != has(self.aws)
+            - message: aws.roleARN must be a role in aws.accountID
+              rule: '!has(self.aws) || self.aws.roleARN.split('':'')[4] == self.aws.accountID'
+          status:
+            description: CloudAccountStatus is what the latest check found.
+            properties:
+              checkedAt:
+                description: CheckedAt is when the latest check finished.
+                format: date-time
+                type: string
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              identity:
+                description: |-
+                  Identity is what the cloud said Infrared acted as: the impersonated
+                  service account, or the assumed role's session ARN.
+                type: string
+              message:
+                description: Message says what the cloud answered when the check failed.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the spec generation the latest
+                  check ran against.
+                format: int64
+                type: integer
+              phase:
+                description: Phase is Pending, Verified or Failed.
+                enum:
+                - Pending
+                - Verified
+                - Failed
+                type: string
+              verifiedAt:
+                description: VerifiedAt is when a check last reached the account.
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

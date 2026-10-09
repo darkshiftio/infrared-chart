@@ -1,0 +1,26 @@
+{{- /*
+The install's own identity for the cloud accounts orgs add (CloudAccount,
+infrared-docs-internal ADR 0033): the operator's check Jobs run as this
+ServiceAccount, the only identity that reaches an org's cloud. It never talks to
+the Kubernetes API, so its token is not mounted; the Jobs mount their own
+projected token when cloudIdentity.aws.webIdentity is set.
+*/}}
+{{- $ctx := dict "root" . "component" "cloud-identity" }}
+{{- $_ := include "infrared.cloudIdentity" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infrared-cloud
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" $ctx | nindent 4 }}
+  {{- if or .Values.cloudIdentity.gcpServiceAccount .Values.cloudIdentity.aws.roleARN }}
+  annotations:
+    {{- with .Values.cloudIdentity.gcpServiceAccount }}
+    iam.gke.io/gcp-service-account: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.cloudIdentity.aws.roleARN }}
+    eks.amazonaws.com/role-arn: {{ . | quote }}
+    {{- end }}
+  {{- end }}
+automountServiceAccountToken: false

@@ -602,3 +602,30 @@ template:
         emptyDir:
           sizeLimit: 64Mi
 {{- end }}
+
+{{/*
+The install's cloud identity for the operator and the API (INFRARED_CLOUD_IDENTITY),
+as JSON: {"gcpServiceAccount", "aws": {"roleARN" | "hostNetwork" | "webIdentity"}},
+each part only when set, and aws only when one of its three is (an empty aws
+object would mean the default credential chain to the operator). Empty when
+nothing is set. Fails with more than one of the aws three: they are the one
+place infrared-cloud's AWS credentials come from.
+*/}}
+{{- define "infrared.cloudIdentity" -}}
+{{- $ci := .Values.cloudIdentity }}
+{{- $aws := $ci.aws }}
+{{- $n := 0 }}
+{{- if $aws.roleARN }}{{ $n = add1 $n }}{{ end }}
+{{- if $aws.hostNetwork }}{{ $n = add1 $n }}{{ end }}
+{{- if $aws.webIdentity }}{{ $n = add1 $n }}{{ end }}
+{{- if gt $n 1 }}
+{{- fail "cloudIdentity.aws: set at most one of roleARN, hostNetwork and webIdentity, the one place infrared-cloud's AWS credentials come from" }}
+{{- end }}
+{{- $out := dict }}
+{{- with $ci.gcpServiceAccount }}{{ $_ := set $out "gcpServiceAccount" . }}{{ end }}
+{{- if $aws.roleARN }}{{ $_ := set $out "aws" (dict "roleARN" $aws.roleARN) }}
+{{- else if $aws.hostNetwork }}{{ $_ := set $out "aws" (dict "hostNetwork" true) }}
+{{- else if $aws.webIdentity }}{{ $_ := set $out "aws" (dict "webIdentity" true) }}
+{{- end }}
+{{- if $out }}{{ toJson $out }}{{ end }}
+{{- end }}

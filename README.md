@@ -260,6 +260,19 @@ ECR host must be in the token's region. Since the gitops template does not carry
 (`INFRARED_IMAGE_REGISTRY`, `INFRARED_IMAGES`), so Argo CD keeps it after it
 adopts the release.
 
+## The cloud identity
+
+Orgs add their own cloud accounts to Infrared as `CloudAccount`s (infrared-docs-internal ADR 0033): a Google service account Infrared impersonates, or an AWS role it assumes, never a key. The operator checks each with a short Job that runs as the ServiceAccount `infrared-cloud`, which the chart always makes (its token unmounted) and which is the only identity that reaches an org's cloud. `cloudIdentity` says where its own credentials come from, and reaches the operator and the API as `INFRARED_CLOUD_IDENTITY`:
+
+| Value | Control plane | What the chart does | What the cloud needs |
+|---|---|---|---|
+| `cloudIdentity.gcpServiceAccount` | GKE | Annotates `infrared-cloud` with `iam.gke.io/gcp-service-account` | `roles/iam.workloadIdentityUser` for `<project>.svc.id.goog[<namespace>/infrared-cloud]`; each org grants it `roles/iam.serviceAccountTokenCreator` on its own service account |
+| `cloudIdentity.aws.roleARN` | EKS | Annotates `infrared-cloud` with `eks.amazonaws.com/role-arn` (IRSA) | Each org's role trusts that role for `sts:AssumeRole` |
+| `cloudIdentity.aws.hostNetwork` | EC2 (k3s) | The check Jobs run on the host's network to reach the node's role | Each org's role trusts the node role |
+| `cloudIdentity.aws.webIdentity` | Outside AWS | The check Jobs mount a projected token for `sts.amazonaws.com` | Each org's role trusts the cluster's OIDC issuer for `system:serviceaccount:<namespace>:infrared-cloud` |
+
+Set at most one of the three under `aws`; `gcpServiceAccount` may stand beside any of them. Nothing set: no identity, and every cloud account fails its check.
+
 ## The Installation's edge and previews
 
 The operator writes `installation.edge` and `installation.previews` to the

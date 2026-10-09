@@ -269,6 +269,32 @@ registryToken:
   # -- The Job's image: curl, jq, kubectl and the AWS CLI. alpine/k8s 1.37.0, by digest, as the gitops template's jobs.
   image: "docker.io/alpine/k8s:1.37.0@sha256:b421c2e9419edb98db39b6ab641669f4db7bb2acf354f22450c6b7e7176d1ff4"
 
+# The install's own identity for the cloud accounts orgs add to Infrared
+# (CloudAccount, infrared-docs-internal ADR 0033): the ServiceAccount
+# infrared-cloud, which the chart always makes and the operator's check Jobs
+# run as, is the only identity that reaches an org's cloud. Nothing set: no
+# identity, and every cloud account fails its check. Handed to the operator and
+# the API as INFRARED_CLOUD_IDENTITY.
+cloudIdentity:
+  # -- The install's Google service account, bound to infrared-cloud by Workload
+  # Identity on GKE: roles/iam.workloadIdentityUser for
+  # `<project>.svc.id.goog[<namespace>/infrared-cloud]`. An org grants it
+  # roles/iam.serviceAccountTokenCreator on its own service account. Empty: no
+  # Google Cloud accounts.
+  gcpServiceAccount: ""
+  # Where infrared-cloud's AWS credentials come from: at most one of the three.
+  # None set: no AWS accounts.
+  aws:
+    # -- An IAM role for IRSA on EKS, `arn:aws:iam::<account>:role/<name>`, which
+    # infrared-cloud is annotated with; it assumes an org's role.
+    roleARN: ""
+    # -- The node's role through instance metadata, for EC2 nodes (such as k3s)
+    # whose metadata answers only one hop: the check Jobs run on the host's network.
+    hostNetwork: false
+    # -- The cluster's own projected token (audience sts.amazonaws.com), for a
+    # control plane outside AWS: an org's role trusts the cluster's OIDC issuer.
+    webIdentity: false
+
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is
 # generated once and kept across upgrades (looked up with `lookup`). Under
 # Argo CD `lookup` returns nothing, so once Argo CD adopts the release the

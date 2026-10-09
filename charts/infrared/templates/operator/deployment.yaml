@@ -60,6 +60,12 @@ spec:
               value: {{ include "infrared.operatorImage" . | quote }}
             - name: INFRARED_IMAGE_PULL_SECRET
               value: {{ include "infrared.firstPullSecret" . | quote }}
+            {{- with include "infrared.cloudIdentity" . }}
+            # The install's identity for cloud accounts (ServiceAccount
+            # infrared-cloud): the check Jobs' pod spec follows it.
+            - name: INFRARED_CLOUD_IDENTITY
+              value: {{ . | quote }}
+            {{- end }}
             # Infrared's chart repository, which Argo CD pulls the chart from.
             - name: INFRARED_CHART_REPO
               value: {{ include "infrared.chartRepository" . | quote }}

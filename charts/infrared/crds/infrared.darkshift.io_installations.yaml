@@ -322,10 +322,16 @@ spec:
                   Previews give pre-release zones a URL behind Infrared sign-in. The
                   operator fills it from INFRARED_PREVIEWS while it is unset.
                 properties:
+                  cloudflareTokenKey:
+                    description: |-
+                      CloudflareTokenKey is the key of CloudflareTokenSecret that holds the
+                      token; empty is api-token. The chart's infrared-platform-tokens holds it
+                      as cloudflare-api-token.
+                    type: string
                   cloudflareTokenSecret:
                     description: |-
                       CloudflareTokenSecret names a Secret in Infrared's namespace whose
-                      api-token key may edit DNS for the managed roots.
+                      CloudflareTokenKey key may edit DNS for the managed roots.
                     type: string
                   domain:
                     description: |-

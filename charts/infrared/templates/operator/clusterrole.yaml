@@ -127,8 +127,12 @@ rules:
   resources:
   - certificates
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - external-secrets.io
@@ -141,6 +145,15 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
+  - httproutes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - listenersets
   - referencegrants
   verbs:
   - create

@@ -56,6 +56,12 @@ operator:
     digest: sha256:...     # from gitops scripts/release-tag.sh
 ```
 
+A release that moves a default pin in `values.yaml` also runs `hack/sync-image-defaults.sh`,
+which copies the defaults to `charts/infrared/files/image-defaults.yaml` (`make verify` fails
+until it does). The chart hands the operator only pins that differ from those defaults, so an
+install on the chart's own images carries no pin in its gitops repo's `infrared` Application, and
+a new chart version upgrades its images by itself.
+
 (`ci/ecr-values.yaml` renders exactly this in `make verify`.) Nodes without the
 credential provider need a dockerconfigjson Secret holding an ECR token, which
 expires after 12 hours; use the credential provider instead.

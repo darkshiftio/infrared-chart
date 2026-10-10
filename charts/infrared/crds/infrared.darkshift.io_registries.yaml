@@ -1,0 +1,236 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: registries.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: Registry
+    listKind: RegistryList
+    plural: registries
+    shortNames:
+    - reg
+    singular: registry
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Name
+      type: string
+    - jsonPath: .spec.cloudAccount
+      name: Account
+      type: string
+    - jsonPath: .status.imagePrefix
+      name: Images
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.expiresAt
+      name: Expires
+      priority: 1
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Registry is a container registry of an org, in the org's namespace
+          (ir-org-<org>), on one of its CloudAccounts. Infrared keeps a short-lived
+          credential for it, refreshed before it expires; an Organization's
+          spec.buildRegistry makes it where the org's Products build.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              RegistrySpec is a container registry on one of the org's cloud accounts
+              (infrared-docs-internal ADR 0033, phase 3): ECR on an AWS account or
+              Artifact Registry on a Google Cloud one.
+            properties:
+              artifactRegistry:
+                description: |-
+                  RegistryArtifactRegistry is one Docker repository in Artifact Registry, in
+                  the project of the Registry's cloud account, which the org makes:
+                  <location>-docker.pkg.dev/<project>/<repository>/<product>. The account's
+                  service account needs to write to it (roles/artifactregistry.writer).
+                properties:
+                  location:
+                    description: |-
+                      Location is the repository's location, e.g. us-central1, or a
+                      multi-region such as us.
+                    pattern: ^[a-z]+(-[a-z]+[0-9]+)?$
+                    type: string
+                  repository:
+                    description: Repository is the Docker repository's ID.
+                    pattern: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$
+                    type: string
+                required:
+                - location
+                - repository
+                type: object
+              cloudAccount:
+                description: |-
+                  CloudAccount is the CloudAccount, in the same namespace, the registry is
+                  on: an AWS account for ecr, a Google Cloud one for artifactRegistry.
+                maxLength: 253
+                minLength: 1
+                type: string
+              displayName:
+                description: DisplayName is how people see the registry, e.g. "Acme
+                  images".
+                maxLength: 100
+                type: string
+              ecr:
+                description: |-
+                  RegistryECR is a set of ECR repositories in the AWS account of the
+                  Registry's cloud account: <account>.dkr.ecr.<region>.amazonaws.com/<prefix>/<product>.
+                  Infrared creates each Product's repository through the account's role, so
+                  the role needs ecr:CreateRepository and ecr:PutLifecyclePolicy on
+                  <prefix>/*, besides pushing and pulling.
+                properties:
+                  prefix:
+                    description: |-
+                      Prefix is the path every Product's repository is under; empty means the
+                      org's name.
+                    maxLength: 128
+                    pattern: ^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$
+                    type: string
+                  region:
+                    description: Region is the ECR region, e.g. us-east-1.
+                    pattern: ^[a-z]{2}(-gov|-iso[a-z]*)?-[a-z]+-[0-9]$
+                    type: string
+                required:
+                - region
+                type: object
+            required:
+            - cloudAccount
+            type: object
+            x-kubernetes-validations:
+            - message: exactly one of ecr or artifactRegistry
+              rule: has(self.ecr) != has(self.artifactRegistry)
+          status:
+            description: RegistryStatus is what the latest credential refresh found.
+            properties:
+              checkedAt:
+                description: CheckedAt is when the latest refresh finished.
+                format: date-time
+                type: string
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              credentialsRefreshedAt:
+                description: CredentialsRefreshedAt is when Infrared last got a credential.
+                format: date-time
+                type: string
+              expiresAt:
+                description: ExpiresAt is when that credential stops working.
+                format: date-time
+                type: string
+              host:
+                description: Host is the registry's host, e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com.
+                type: string
+              imagePrefix:
+                description: |-
+                  ImagePrefix is what each Product's image repository is under:
+                  <ImagePrefix>/<product>.
+                type: string
+              message:
+                description: Message says why the latest refresh failed.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the spec generation the latest
+                  refresh ran against.
+                format: int64
+                type: integer
+              phase:
+                description: Phase is Pending, Ready or Failed.
+                enum:
+                - Pending
+                - Ready
+                - Failed
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

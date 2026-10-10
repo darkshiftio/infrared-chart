@@ -176,6 +176,7 @@ rules:
   - installations/finalizers
   - organizations/finalizers
   - products/finalizers
+  - registries/finalizers
   verbs:
   - update
 - apiGroups:
@@ -192,6 +193,7 @@ rules:
   - installations/status
   - organizations/status
   - products/status
+  - registries/status
   - releases/status
   verbs:
   - get
@@ -233,6 +235,7 @@ rules:
   - domains
   - organizations
   - products
+  - registries
   verbs:
   - get
   - list

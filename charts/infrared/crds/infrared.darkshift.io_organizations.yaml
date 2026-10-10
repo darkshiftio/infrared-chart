@@ -86,6 +86,14 @@ spec:
                       type: object
                     type: array
                 type: object
+              buildRegistry:
+                description: |-
+                  BuildRegistry is the Registry, in the org's namespace, its Products
+                  build into; empty means the install's own registry (infrared-docs-internal
+                  ADR 0033). A Product follows it from its next scaffold; images already
+                  released stay where they are.
+                maxLength: 253
+                type: string
               clusterAllowlist:
                 description: Clusters this org may deliver zones to. Managed by the
                   platform org.

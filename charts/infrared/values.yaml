@@ -295,6 +295,16 @@ cloudIdentity:
     # control plane outside AWS: an org's role trusts the cluster's OIDC issuer.
     webIdentity: false
 
+# The org registries' credentials (Registry, infrared-docs-internal ADR 0033 phase
+# 3): the operator's credential Jobs, as infrared-cloud, write each registry's
+# short-lived token into this namespace, which only they may write to (create and
+# update on Secrets, nothing else) and only the operator reads; the operator copies
+# it to the builds and zone namespaces. Handed to the operator as
+# INFRARED_REGISTRY_CREDENTIALS_NAMESPACE.
+registryCredentials:
+  # -- The namespace the chart makes for them.
+  namespace: infrared-registry-credentials
+
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is
 # generated once and kept across upgrades (looked up with `lookup`). Under
 # Argo CD `lookup` returns nothing, so once Argo CD adopts the release the

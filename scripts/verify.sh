@@ -1023,8 +1023,35 @@ if [[ -n "${INFRARED_OPERATOR_DIR:-}" ]]; then
   else bad "the CloudAccount CRD differs from $INFRARED_OPERATOR_DIR (run hack/sync-operator.sh)"; fi
 fi
 
+step "org registries' credentials (ADR 0033: Registry)"
+# The namespace the credential Jobs write tokens to, where infrared-cloud may
+# create and update Secrets and nothing else; the operator learns its name.
+helm template infrared "$chart" -n infrared --set registryCredentials.namespace=ci-registry-creds >"$out/registry-creds.yaml"
+check defaults.yaml "the credentials namespace is made" '^  name: infrared-registry-credentials$' 1
+check defaults.yaml "infrared-cloud may create and update Secrets there, nothing more" '^    verbs: \["create", "update"\]$' 1
+subj="$(yq 'select(.kind == "RoleBinding" and .metadata.name == "infrared-cloud-registry-credentials") | .subjects[0] | .kind + " " + .namespace + "/" + .name' "$out/defaults.yaml")"
+if [[ "$subj" == "ServiceAccount infrared/infrared-cloud" ]]; then ok "the RoleBinding's subject is infrared/infrared-cloud"
+else bad "the credentials RoleBinding binds '$subj', not ServiceAccount infrared/infrared-cloud"; fi
+check defaults.yaml "the operator learns the credentials namespace" 'name: INFRARED_REGISTRY_CREDENTIALS_NAMESPACE$' 1
+check registry-creds.yaml "another namespace: made and handed to the operator" '^  name: ci-registry-creds$|value: "ci-registry-creds"$' 2
+refuse "a credentials namespace that is not a DNS label fails" "at '/registryCredentials/namespace'" \
+  --set registryCredentials.namespace=Not_A_Name
+# The Registry CRD, the Organization's buildRegistry and the operator's rights to Registries.
+check defaults.yaml "the Registry CRD is included" '^    kind: Registry$' 1
+check defaults.yaml "the Organization CRD has buildRegistry" '^              buildRegistry:$' 1
+cr="$(awk '/^kind: ClusterRole$/{c=1} c' "$out/defaults.yaml")"
+if grep -qxF '  - registries' <<<"$cr" && grep -qxF '  - registries/status' <<<"$cr" && grep -qxF '  - registries/finalizers' <<<"$cr"; then ok "the operator may manage Registries, their status and finalizers"
+else bad "the operator's ClusterRole lacks registries, registries/status or registries/finalizers (run hack/sync-operator.sh)"; fi
+if [[ -n "${INFRARED_OPERATOR_DIR:-}" ]]; then
+  for c in registries organizations; do
+    if cmp -s "$INFRARED_OPERATOR_DIR/config/crd/bases/infrared.darkshift.io_$c.yaml" "$chart/crds/infrared.darkshift.io_$c.yaml"; then
+      ok "the $c CRD matches $INFRARED_OPERATOR_DIR"
+    else bad "the $c CRD differs from $INFRARED_OPERATOR_DIR (run hack/sync-operator.sh)"; fi
+  done
+fi
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

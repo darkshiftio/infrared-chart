@@ -110,6 +110,18 @@ spec:
                     - plan
                     - apply
                     type: string
+                  cloudAccount:
+                    description: |-
+                      CloudAccount names a CloudAccount of the platform org (in its namespace,
+                      ir-org-<platform org>) that the Job acts through (ADR 0033): before each
+                      run Infrared mints the account's short-lived credentials as
+                      cluster-<name>-credentials, AWS session keys for an aws account and a
+                      Google access token for a gcp one, and deletes them when the Job ends.
+                      The account must be Verified and match spec.provider. Empty keeps the
+                      hand-made Secret cluster-<name>-credentials.
+                    maxLength: 63
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                    type: string
                   credentialsSecretRef:
                     description: |-
                       CredentialsSecretRef is ignored: the Job's cloud credentials are always

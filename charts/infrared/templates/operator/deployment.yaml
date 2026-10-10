@@ -66,6 +66,9 @@ spec:
             - name: INFRARED_CLOUD_IDENTITY
               value: {{ . | quote }}
             {{- end }}
+            # Where the org registries' credential Jobs write their tokens.
+            - name: INFRARED_REGISTRY_CREDENTIALS_NAMESPACE
+              value: {{ .Values.registryCredentials.namespace | quote }}
             # Infrared's chart repository, which Argo CD pulls the chart from.
             - name: INFRARED_CHART_REPO
               value: {{ include "infrared.chartRepository" . | quote }}

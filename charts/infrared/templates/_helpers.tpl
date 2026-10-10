@@ -126,23 +126,40 @@ an install on AWS hands its ECR registry on, and Argo CD keeps it after adoption
 {{- end }}
 
 {{/*
-Every component's pin as JSON (INFRARED_IMAGES): {"<component>": {"tag", "digest"}}
-for operator, api, ui, mcp and runner. The tag is the one the chart renders (the
-appVersion when empty); the digest is empty when the image is not pinned. With
-codeIndex.enabled, the code index's too, as code-index: the gitops template runs
-it only while that pin is there.
+The pins this install sets itself, as JSON (INFRARED_IMAGES): {"<component>":
+{"tag", "digest"}} for operator, api, ui, mcp and runner, each only where it
+differs from the chart version's own default (files/image-defaults.yaml, a copy
+of values.yaml's that make verify holds equal). A pin handed here is written into
+the gitops repo's `infrared` Application and so kept through adoption and every
+upgrade after; a default one is left out, so a chart upgrade moves the image
+(drift row 53: handing every pin made the old images stick). The tag is the one
+the chart renders (the appVersion when empty). With codeIndex.enabled, the code
+index's pin always, as code-index, since the gitops template runs it only while
+that pin is there; marked "default": true when it is the chart's own, which the
+template leaves out of the Application.
 */}}
 {{- define "infrared.imagePins" -}}
+{{- $defaults := .Files.Get "files/image-defaults.yaml" | fromYaml }}
 {{- $pins := dict }}
 {{- range $c := list "operator" "api" "ui" "mcp" "runner" }}
 {{- $img := (index $.Values $c).image }}
-{{- $_ := set $pins $c (dict "tag" (default $.Chart.AppVersion $img.tag) "digest" (default "" $img.digest)) }}
+{{- $tag := default $.Chart.AppVersion $img.tag }}
+{{- $digest := default "" $img.digest }}
+{{- $d := default dict (index $defaults $c) }}
+{{- if or (ne $tag (default $.Chart.AppVersion $d.tag)) (ne $digest (default "" $d.digest)) }}
+{{- $_ := set $pins $c (dict "tag" $tag "digest" $digest) }}
+{{- end }}
 {{- end }}
 {{- if .Values.codeIndex.enabled }}
 {{- $ci := .Values.codeIndex.image }}
-{{- $_ := set $pins "code-index" (dict "tag" (default "" $ci.tag) "digest" (default "" $ci.digest)) }}
+{{- $d := default dict (index $defaults "code-index") }}
+{{- $pin := dict "tag" (default "" $ci.tag) "digest" (default "" $ci.digest) }}
+{{- if and (eq (default "" $ci.tag) (default "" $d.tag)) (eq (default "" $ci.digest) (default "" $d.digest)) }}
+{{- $_ := set $pin "default" true }}
 {{- end }}
-{{- toJson $pins }}
+{{- $_ := set $pins "code-index" $pin }}
+{{- end }}
+{{- if $pins }}{{ toJson $pins }}{{ end }}
 {{- end }}
 
 {{/*

@@ -400,11 +400,28 @@ check code-index.yaml "the code index adds no object of the chart's own: four De
 # The chart's own pin, by default: enabled alone runs the image it names.
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" --set codeIndex.enabled=true >"$out/code-index-default.yaml"
 envs code-index-default
-if grep -qF '\"code-index\":{\"digest\":\"sha256:'"$(awk '/^codeIndex:/ {f = 1} f && /^    digest:/ {print $2; exit}' "$chart/values.yaml" | sed 's/^sha256://')"'\",\"tag\":\"'"$(awk '/^codeIndex:/ {f = 1} f && /^    tag:/ {print $2; exit}' "$chart/values.yaml")"'\"}' "$out/code-index-default.env" &&
+if grep -qF '\"code-index\":{\"default\":true,\"digest\":\"sha256:'"$(awk '/^codeIndex:/ {f = 1} f && /^    digest:/ {print $2; exit}' "$chart/values.yaml" | sed 's/^sha256://')"'\",\"tag\":\"'"$(awk '/^codeIndex:/ {f = 1} f && /^    tag:/ {print $2; exit}' "$chart/values.yaml")"'\"}' "$out/code-index-default.env" &&
    grep -qE '^    tag: one-install-[0-9a-f]{7}$' <(sed -n '/^codeIndex:/,/^[a-z]/p' "$chart/values.yaml") &&
    grep -qE '^    digest: sha256:[0-9a-f]{64}$' <(sed -n '/^codeIndex:/,/^[a-z]/p' "$chart/values.yaml"); then
-  ok "codeIndex.enabled alone hands on the chart's own pin, a one-install build by digest"
+  ok "codeIndex.enabled alone hands on the chart's own pin, a one-install build by digest, marked default"
 else bad "codeIndex.enabled alone does not hand on the chart's pin by digest"; fi
+# Only pins that differ from the chart's own defaults are handed on (drift row
+# 53): the defaults file is values.yaml's, and an install on the default images
+# hands no pin of operator, api, ui, mcp or runner, so a chart upgrade moves them.
+if "$root/hack/sync-image-defaults.sh" --check; then ok "files/image-defaults.yaml matches values.yaml's pins"
+else bad "files/image-defaults.yaml is out of date: run hack/sync-image-defaults.sh"; fi
+helm template infrared "$chart" -n infrared --set codeIndex.enabled=true >"$out/code-index-own.yaml"
+envs code-index-own
+for c in operator api ui mcp runner; do
+  if [ "$(grep -cF "\\\"$c\\\":" "$out/code-index-own.env" || true)" = 0 ]; then ok "an install on the chart's own images hands no $c pin"
+  else bad "an install on the chart's own images hands a $c pin"; fi
+done
+if grep -qF '\"code-index\":{\"default\":true,' "$out/code-index-own.env"; then ok "its code index pin is handed, marked default"
+else bad "its code index pin is not handed marked default"; fi
+helm template infrared "$chart" -n infrared --set cloud=aws >"$out/aws-defaults.yaml"
+envs aws-defaults
+check aws-defaults.env "on ECR with the chart's own images, the registry is handed on" '^INFRARED_IMAGE_REGISTRY="977456087177' 1
+check aws-defaults.env "on ECR with the chart's own images, no pin is handed on" '^INFRARED_IMAGES=""$' 1
 # objects <render>: each object's kind and name, sorted.
 objects() { awk '/^---/ {k = ""} /^kind: / {k = $2} /^  name: / && k {print k "/" $2; k = ""}' "$out/$1.yaml" | sort; }
 if diff <(objects stores-adopted) <(objects code-index-adopted) >"$out/code-index.diff"; then

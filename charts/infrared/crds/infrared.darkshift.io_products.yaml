@@ -340,6 +340,23 @@ spec:
                       the first entry of spec.repos.
                     type: string
                 type: object
+              providerRef:
+                description: |-
+                  ProviderRef names the GitProvider, in the org's namespace, that holds the
+                  Product's repos: github or gitea. Empty means the org's forge (gitea when
+                  the org has one, else github). It lets an org with two forges, such as a
+                  platform org on Gitea that also connected a GitHub organization, keep
+                  each Product on one of them. It cannot change once set.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: providerRef.name must be github or gitea
+                  rule: self.name in ['github', 'gitea']
               repos:
                 items:
                   description: ProductRepo is one git repo that makes up a Product.
@@ -534,6 +551,11 @@ spec:
             - displayName
             - repos
             type: object
+            x-kubernetes-validations:
+            - message: 'providerRef cannot change: its kpack Image, Releases and runs
+                name the forge its repos live on; recreate the Product to move it'
+              rule: has(oldSelf.providerRef) == has(self.providerRef) && (!has(self.providerRef)
+                || self.providerRef.name == oldSelf.providerRef.name)
           status:
             description: ProductStatus is the observed state of a Product.
             properties:

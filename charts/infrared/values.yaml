@@ -305,6 +305,16 @@ registryCredentials:
   # -- The namespace the chart makes for them.
   namespace: infrared-registry-credentials
 
+# OpenTofu's state for workload Clusters (spec.provision): each Cluster's state
+# Secret and lock Lease, in a namespace of their own so the tofu Job's
+# ServiceAccount, infrared-tofu, reaches no other Secret (its backend lists
+# Secrets by label, which RBAC cannot limit by name). Handed to the operator as
+# INFRARED_TOFU_STATE_NAMESPACE; an older Cluster's state in Infrared's namespace
+# moves there before its next run.
+tofuState:
+  # -- The namespace the chart makes for it.
+  namespace: infrared-tofu-state
+
 # Generated Secrets. On a plain `helm install`/`helm upgrade` each Secret is
 # generated once and kept across upgrades (looked up with `lookup`). Under
 # Argo CD `lookup` returns nothing, so once Argo CD adopts the release the

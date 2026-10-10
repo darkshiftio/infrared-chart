@@ -1,7 +1,11 @@
 # infrared-tofu runs a workload Cluster's OpenTofu Job (spec.provision).
-# OpenTofu keeps its state in a Secret (tfstate-default-cluster-<cluster>)
-# and locks it with a Lease, both in this namespace; that is all it may touch.
-# Cloud credentials come from the Secret the Cluster names, never from here.
+# OpenTofu keeps its state in a Secret (tfstate-default-cluster-<cluster>) and
+# locks it with a Lease, in a namespace of their own, tofuState.namespace: the
+# kubernetes backend lists Secrets by label, which RBAC cannot limit by name, so
+# the Job may read and write Secrets and Leases there and nowhere else, never
+# Infrared's own. Cloud credentials come from the Secret the Cluster names
+# (envFrom, read by the kubelet), never through this ServiceAccount.
+{{- $ns := .Values.tofuState.namespace }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -9,10 +13,19 @@ metadata:
   labels:
     {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
+    pod-security.kubernetes.io/enforce: restricted
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: infrared-tofu
+  namespace: {{ $ns }}
   labels:
     {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
 rules:
@@ -27,6 +40,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: infrared-tofu
+  namespace: {{ $ns }}
   labels:
     {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
 roleRef:

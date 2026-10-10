@@ -69,6 +69,8 @@ spec:
             # Where the org registries' credential Jobs write their tokens.
             - name: INFRARED_REGISTRY_CREDENTIALS_NAMESPACE
               value: {{ .Values.registryCredentials.namespace | quote }}
+            - name: INFRARED_TOFU_STATE_NAMESPACE
+              value: {{ .Values.tofuState.namespace | quote }}
             # Infrared's chart repository, which Argo CD pulls the chart from.
             - name: INFRARED_CHART_REPO
               value: {{ include "infrared.chartRepository" . | quote }}

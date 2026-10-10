@@ -1036,6 +1036,20 @@ check defaults.yaml "the operator learns the credentials namespace" 'name: INFRA
 check registry-creds.yaml "another namespace: made and handed to the operator" '^  name: ci-registry-creds$|value: "ci-registry-creds"$' 2
 refuse "a credentials namespace that is not a DNS label fails" "at '/registryCredentials/namespace'" \
   --set registryCredentials.namespace=Not_A_Name
+step "OpenTofu's state namespace (workload Clusters)"
+# infrared-tofu reads and writes Secrets and Leases in the state namespace alone:
+# no Role of it in Infrared's own namespace, so it reaches none of its Secrets.
+helm template infrared "$chart" -n infrared --set tofuState.namespace=ci-tofu-state >"$out/tofu-state.yaml"
+check defaults.yaml "the state namespace is made" '^  name: infrared-tofu-state$' 1
+tofu_ns="$(yq 'select(.kind == "Role" and .metadata.name == "infrared-tofu") | .metadata.namespace' "$out/defaults.yaml")"
+if [[ "$tofu_ns" == "infrared-tofu-state" ]]; then ok "infrared-tofu's Role is in the state namespace alone"
+else bad "infrared-tofu's Role is in '$tofu_ns', not infrared-tofu-state"; fi
+subj="$(yq 'select(.kind == "RoleBinding" and .metadata.name == "infrared-tofu") | .subjects[0] | .kind + " " + .namespace + "/" + .name' "$out/defaults.yaml")"
+if [[ "$subj" == "ServiceAccount infrared/infrared-tofu" ]]; then ok "the state RoleBinding's subject is infrared/infrared-tofu"
+else bad "the state RoleBinding binds '$subj', not ServiceAccount infrared/infrared-tofu"; fi
+check defaults.yaml "the operator learns the state namespace" 'name: INFRARED_TOFU_STATE_NAMESPACE$' 1
+check tofu-state.yaml "another state namespace: made and handed to the operator" '^  name: ci-tofu-state$|value: "ci-tofu-state"$' 2
+refuse "a state namespace that is not a DNS label fails" "at '/tofuState/namespace'" --set tofuState.namespace=Not_A_Name
 # The Registry CRD, the Organization's buildRegistry and the operator's rights to Registries.
 check defaults.yaml "the Registry CRD is included" '^    kind: Registry$' 1
 check defaults.yaml "the Organization CRD has buildRegistry" '^              buildRegistry:$' 1

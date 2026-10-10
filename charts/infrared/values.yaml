@@ -45,7 +45,7 @@ gitops:
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
   # to install from a branch of the template. Here feat/one-artifact-per-backup's
   # head, which this branch's operator renders; back to a tag before a release.
-  templateVersion: 078c75b5f5b07fdb57c824dd0f1742587393e8c3
+  templateVersion: 50e3150c141f3be6601ebf2fc62c5092641f9218
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
@@ -453,9 +453,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.152
+    tag: v0.1.0-alpha.153
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:ce7a654085ddf7ce6005b4276e0182130ec70439b916624f296d30f55d8ec442"
+    digest: "sha256:6c5852e9c67609a4589bcdcf67cc5461f899da26ffe26451369f918b59eea493"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []

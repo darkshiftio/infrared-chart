@@ -253,6 +253,19 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              hydratedByChartVersion:
+                description: |-
+                  HydratedByChartVersion is the chart version of the operator that ran the
+                  last hydration. A new operator hydrates again, so the image pins it
+                  renders are its own.
+                type: string
+              hydratedChartVersion:
+                description: |-
+                  HydratedChartVersion is the Infrared chart version the last hydration
+                  rendered into the infrared Application's targetRevision. When the repo
+                  pins another one (an upgrade made in Git), the operator hydrates again,
+                  so the Application's image pins follow the chart version.
+                type: string
               hydratedVersion:
                 description: HydratedVersion is the template version the repo was
                   hydrated from.

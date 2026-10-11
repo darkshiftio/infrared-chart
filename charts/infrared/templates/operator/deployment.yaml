@@ -57,6 +57,13 @@ spec:
             # An umbrella chart's version when one wraps this chart (ADR 0038).
             - name: INFRARED_CHART_VERSION
               value: {{ include "infrared.deployedChartVersion" . | quote }}
+            {{- if include "infrared.underUmbrella" . }}
+            # The name the umbrella knows this chart by: the gitops repo's
+            # infrared Application nests its values under it from the first
+            # hydration, so they reach this chart.
+            - name: INFRARED_CHART_SUBCHART
+              value: {{ .Chart.Name | quote }}
+            {{- end }}
             # The operator's own image, which the backup CronJob runs.
             - name: INFRARED_OPERATOR_IMAGE
               value: {{ include "infrared.operatorImage" . | quote }}

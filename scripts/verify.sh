@@ -1151,6 +1151,14 @@ if grep -q 'sha256:1111' "$out/umbrella.yaml" && grep -q '^  name: infrared-oper
 else bad "the umbrella render lacks its pin or renamed the operator"; fi
 if [[ "$(envv umbrella INFRARED_VERSION)" == v0.1.0-rc.147 ]]; then ok "under an umbrella, INFRARED_VERSION is v<umbrella version>"
 else bad "INFRARED_VERSION under an umbrella is '$(envv umbrella INFRARED_VERSION)'"; fi
+# Under an umbrella the operator learns the name it wraps this chart by, so an
+# install from the umbrella nests the infrared Application's values from its
+# first hydration; alone, nothing.
+if [[ "$(envv umbrella INFRARED_CHART_SUBCHART)" == "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" ]]; then
+  ok "under an umbrella, INFRARED_CHART_SUBCHART is this chart's name"
+else bad "INFRARED_CHART_SUBCHART under an umbrella is '$(envv umbrella INFRARED_CHART_SUBCHART)'"; fi
+if ! grep -q 'INFRARED_CHART_SUBCHART' "$out/defaults.yaml"; then ok "alone, no INFRARED_CHART_SUBCHART"
+else bad "the chart alone hands on INFRARED_CHART_SUBCHART"; fi
 if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && grep -q '^  name: infrared$' "$out/defaults.yaml" && ! grep -q 'name: infrared-core' "$out/defaults.yaml"; then
   ok "the chart is infrared-core, and what it renders is still named infrared"
 else bad "the chart's name leaks into what it renders"; fi

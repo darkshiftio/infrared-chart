@@ -47,7 +47,7 @@ gitops:
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
   # to install from a branch of the template. Here feat/one-artifact-per-backup's
   # head, which this branch's operator renders; back to a tag before a release.
-  templateVersion: 09bf4e0a0b3f1f8e0270015a019e3ab682487b3e
+  templateVersion: 93a6c1477e6378772c5e7d1c40c9fa726fe73745
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

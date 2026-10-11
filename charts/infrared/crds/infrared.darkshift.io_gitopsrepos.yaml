@@ -76,6 +76,13 @@ spec:
               defaultBranch:
                 default: main
                 type: string
+              infraredSubchart:
+                description: |-
+                  InfraredSubchart, when set, says the infrared Application installs an
+                  umbrella chart that wraps Infrared's chart under this name (e.g.
+                  infrared-core): every render nests the Application's chart values
+                  under it. A platform Product's release sets it (ADR 0038).
+                type: string
               mode:
                 default: management
                 description: |-

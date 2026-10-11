@@ -1081,6 +1081,21 @@ if [[ -n "${INFRARED_OPERATOR_DIR:-}" ]]; then
   done
 fi
 
+step "umbrella chart (ADR 0038)"
+# An umbrella wraps this chart: its version is the control plane's, and its pins hand no override on.
+helm template infrared "$chart" -n infrared --set global.deployedChart.version=0.1.0-rc.147 \
+  --set operator.image.tag=v0.1.0-rc.147 --set operator.image.digest=sha256:1111111111111111111111111111111111111111111111111111111111111111 \
+  --set nameOverride=infrared >"$out/umbrella.yaml"
+envv() { awk -v n="$2" '$0 ~ "- name: "n"$" {getline; sub(/^ *value: /, ""); gsub(/"/, ""); print; exit}' "$out/$1.yaml"; }
+if [[ "$(envv umbrella INFRARED_CHART_VERSION)" == 0.1.0-rc.147 ]]; then ok "under an umbrella, INFRARED_CHART_VERSION is the umbrella's version"
+else bad "INFRARED_CHART_VERSION under an umbrella is '$(envv umbrella INFRARED_CHART_VERSION)', not 0.1.0-rc.147"; fi
+if [[ "$(envv defaults INFRARED_CHART_VERSION)" == "$(awk '/^version:/{print $2}' "$chart/Chart.yaml")" ]]; then ok "alone, INFRARED_CHART_VERSION is the chart's own"
+else bad "INFRARED_CHART_VERSION alone is '$(envv defaults INFRARED_CHART_VERSION)'"; fi
+if ! grep -q '"operator"' <<<"$(envv umbrella INFRARED_IMAGES)"; then ok "under an umbrella, the operator's pin is no override"
+else bad "under an umbrella INFRARED_IMAGES still hands on the operator's pin: $(envv umbrella INFRARED_IMAGES)"; fi
+if grep -q 'sha256:1111' "$out/umbrella.yaml" && grep -q '^  name: infrared-operator$' "$out/umbrella.yaml"; then ok "the umbrella's pin is rendered, and names stay infrared-*"
+else bad "the umbrella render lacks its pin or renamed the operator"; fi
+
 step "kubeconform"
 for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"

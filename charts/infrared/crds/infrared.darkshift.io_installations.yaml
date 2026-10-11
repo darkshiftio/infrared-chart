@@ -380,6 +380,35 @@ spec:
                 - domain
                 - signInURL
                 type: object
+              signIn:
+                description: |-
+                  SignIn holds the sign-in settings platform admins change in Infrared,
+                  in Settings, Sign-in: today, which Google Workspace domains may sign in
+                  with Google. The Google OAuth client itself is the install's
+                  configuration (the chart's platformTokens.googleClientId and
+                  googleClientSecret), and so is whether the platform admin's password
+                  still signs in (the chart's signIn.password.enabled). The operator reads
+                  none of it.
+                properties:
+                  google:
+                    description: Google is Sign in with Google.
+                    properties:
+                      allowedDomains:
+                        description: |-
+                          AllowedDomains are the Google Workspace domains whose people may sign
+                          in with Google, such as example.com: a sign-in is accepted only when the
+                          ID token's hd claim and the email address's domain are both on the
+                          list. Lower-case, at least one dot, no wildcard. Empty: nobody signs in
+                          with Google.
+                        items:
+                          maxLength: 253
+                          pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$
+                          type: string
+                        maxItems: 20
+                        type: array
+                        x-kubernetes-list-type: set
+                    type: object
+                type: object
               tokenVerified:
                 description: TokenVerified is set once the one-time setup token has
                   been presented.

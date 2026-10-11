@@ -115,6 +115,11 @@ spec:
                 required:
                 - name
                 type: object
+              recorded:
+                description: |-
+                  Recorded marks a release made outside Infrared, by hand: Infrared
+                  fills its status from the chart's tag and never acts on it.
+                type: boolean
               runRef:
                 description: RunRef is the AgentWorkflowRun whose Change this Release
                   ships.
@@ -153,10 +158,89 @@ spec:
                   with the version.
                 format: date-time
                 type: string
+              chart:
+                description: Chart is the umbrella chart a platform Release published.
+                properties:
+                  commit:
+                    description: Commit and Tag are the git commit and tag of the
+                      chart's version.
+                    type: string
+                  name:
+                    description: Name and Version are the chart's.
+                    type: string
+                  published:
+                    description: Published is the pushed chart, oci://<registry>/<name>:<version>@sha256:...
+                    type: string
+                  publishedAt:
+                    format: date-time
+                    type: string
+                  repo:
+                    description: Repo is owner/name of the repo that holds the chart.
+                    type: string
+                  subchart:
+                    description: Subchart and SubchartVersion are the chart the umbrella
+                      wraps.
+                    type: string
+                  subchartVersion:
+                    type: string
+                  summary:
+                    description: Summary is the release's one line.
+                    type: string
+                  tag:
+                    type: string
+                  url:
+                    description: URL is the chart's version on the forge.
+                    type: string
+                  version:
+                    type: string
+                type: object
               commit:
                 description: Commit is the commit this Release tags, resolved from
                   spec.commit.
                 type: string
+              components:
+                description: |-
+                  Components are a platform Release's components: each one's image and
+                  commit, and whether it changed since the previous release.
+                items:
+                  description: ReleaseComponent is one component in a platform Release.
+                  properties:
+                    build:
+                      description: Build is the kpack Build that made it.
+                      type: string
+                    changed:
+                      description: |-
+                        Changed is true when the Release carries a new image, false when it
+                        keeps the previous release's.
+                      type: boolean
+                    commit:
+                      description: Commit is the commit its image was built from,
+                        when known.
+                      type: string
+                    commits:
+                      description: |-
+                        Commits counts the commits between the previous image's commit and
+                        this one's, when both are known.
+                      format: int32
+                      type: integer
+                    image:
+                      description: Image is the released image, repository:tag@sha256:...
+                      type: string
+                    name:
+                      type: string
+                    previousImage:
+                      description: PreviousImage is the previous release's image.
+                      type: string
+                    repo:
+                      description: Repo is owner/name.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -230,6 +314,9 @@ spec:
               finishedAt:
                 format: date-time
                 type: string
+              guard:
+                description: Guard is the upgrade guard's Job.
+                type: string
               image:
                 description: Image is the released image, repository:version@sha256:...
                 type: string
@@ -264,6 +351,11 @@ spec:
                 type: string
               retriedBy:
                 description: RetriedBy is who asked for the latest retry.
+                type: string
+              rolledBackTo:
+                description: |-
+                  RolledBackTo is the version the upgrade guard rolled the control plane
+                  back to, when the upgrade failed its checks.
                 type: string
               startedAt:
                 format: date-time

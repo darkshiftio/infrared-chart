@@ -53,8 +53,9 @@ spec:
             {{- end }}
             - name: INFRARED_VERSION
               value: {{ .Chart.AppVersion | quote }}
+            # An umbrella chart's version when one wraps this chart (ADR 0038).
             - name: INFRARED_CHART_VERSION
-              value: {{ .Chart.Version | quote }}
+              value: {{ include "infrared.deployedChartVersion" . | quote }}
             # The operator's own image, which the backup CronJob runs.
             - name: INFRARED_OPERATOR_IMAGE
               value: {{ include "infrared.operatorImage" . | quote }}

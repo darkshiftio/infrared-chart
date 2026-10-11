@@ -31,6 +31,24 @@
       "type": "string",
       "pattern": "^(https?://.+)?$"
     },
+    "signIn": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How people sign in to Infrared.",
+      "properties": {
+        "password": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The platform admin's email and password sign-in.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "INFRARED_SIGN_IN_PASSWORD: false turns password sign-in off once Sign in with Google has worked on the install."
+            }
+          }
+        }
+      }
+    },
     "installation": {
       "type": "object",
       "additionalProperties": false,
@@ -287,6 +305,15 @@
         "codeIndexGithubAppPrivateKey": {
           "type": "string",
           "description": "Key code-index-github-app-private-key: that App's private key, PEM, with the other two. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "googleClientId": {
+          "type": "string",
+          "pattern": "^\\s*([0-9]+-[0-9a-z]+\\.apps\\.googleusercontent\\.com)?\\s*$",
+          "description": "Key google-client-id: Sign in with Google's OAuth client ID, ending in .apps.googleusercontent.com, with googleClientSecret. Surrounding whitespace is trimmed."
+        },
+        "googleClientSecret": {
+          "type": "string",
+          "description": "Key google-client-secret: that client's secret, with googleClientId. Pass it with --set-file; surrounding whitespace is trimmed."
         },
         "existingSecret": {
           "type": "string",

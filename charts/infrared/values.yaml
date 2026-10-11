@@ -15,6 +15,21 @@ managementCluster:
 # (INFRARED_EXTERNAL_URL). Optional: Infrared works it out from each request.
 externalURL: ""
 
+# How people sign in to Infrared. Sign in with Google's OAuth client is
+# platformTokens.googleClientId and googleClientSecret; which Google Workspace
+# domains may sign in is a setting in Infrared (Settings, Sign-in). Sign in with
+# GitHub comes from the platform org's GitHub App. After Argo CD adopts the
+# release, set these in the gitops repo's registry/clusters/<cluster>/values/infrared.yaml,
+# which Infrared never writes.
+signIn:
+  password:
+    # -- The platform admin's email and password sign-in (INFRARED_SIGN_IN_PASSWORD,
+    # api). false turns it off, but only once Sign in with Google has worked on
+    # this install with its configured client; until then the password keeps
+    # working, so this value never locks everyone out. Deleting the ConfigMap
+    # infrared-sign-in turns it back on until the next Google sign-in.
+    enabled: true
+
 # What the operator writes to the Installation when it starts, so nobody patches
 # it after the install. It writes each field only while that field is empty, and
 # never overwrites one.
@@ -370,6 +385,15 @@ platformTokens:
   codeIndexGithubAppInstallationId: ""
   # -- The App's private key, PEM (key `code-index-github-app-private-key`).
   codeIndexGithubAppPrivateKey: ""
+  # -- Sign in with Google's OAuth client, a Web application client whose
+  # redirect URIs are <address>/api/v1/auth/google/callback for every address
+  # people open Infrared at: its client ID (key `google-client-id`), with
+  # googleClientSecret. The API reads both at use, so a client set or rotated in
+  # the Secret later needs no restart.
+  googleClientId: ""
+  # -- That client's secret (key `google-client-secret`), with googleClientId.
+  # Pass it with --set-file.
+  googleClientSecret: ""
   # -- `infrared-platform-tokens` when that Secret already exists; the chart then
   # renders none. The name is fixed: the template reads it. With
   # codeIndex.enabled, that Secret holds the code index's five keys too.

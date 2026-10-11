@@ -1,0 +1,8 @@
+# CI: Sign in with Google configured at install, and password sign-in asked off.
+# The client's secret comes with --set-file (scripts/verify.sh), as an install
+# passes it from Secret Manager; the ID may come with surrounding whitespace.
+signIn:
+  password:
+    enabled: false
+platformTokens:
+  googleClientId: " 123456789012-abcdefghijklmnopqrstuvwxyz012345.apps.googleusercontent.com "

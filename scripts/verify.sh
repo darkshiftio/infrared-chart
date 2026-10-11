@@ -1081,6 +1081,42 @@ if [[ -n "${INFRARED_OPERATOR_DIR:-}" ]]; then
   done
 fi
 
+# Sign-in: the platform admin's password is on unless the values turn it off
+# (the API keeps it on until Sign in with Google has worked), and Google's
+# OAuth client goes into infrared-platform-tokens, ID and secret together,
+# trimmed, which the API reads at use; after adoption the Secret is the
+# install's and nothing renders it.
+printf '  GOCSPX-ci-google-secret\n\n' >"$out/ci-google-secret"
+google_secret=(--set-file "platformTokens.googleClientSecret=$out/ci-google-secret")
+helm template infrared "$chart" -n infrared -f "$chart/ci/sign-in-values.yaml" "${google_secret[@]}" >"$out/sign-in.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" -f "$chart/ci/sign-in-values.yaml" "${google_secret[@]}" >"$out/sign-in-install.yaml"
+helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/sign-in-values.yaml" "${google_secret[@]}" \
+  --set platformTokens.existingSecret=infrared-platform-tokens >"$out/sign-in-adopted.yaml"
+if helm lint --strict "$chart" "${install[@]}" -f "$chart/ci/sign-in-values.yaml" "${google_secret[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with Sign in with Google and password sign-in asked off"
+else cat "$out/lint.log"; bad "lint install with Sign in with Google"; fi
+envs sign-in
+has defaults.env "password sign-in on by default" 'INFRARED_SIGN_IN_PASSWORD="true"'
+has sign-in.env "signIn.password.enabled false reaches the API" 'INFRARED_SIGN_IN_PASSWORD="false"'
+check defaults.yaml "no Google client by default" '^  google-client-' 0
+if [[ "$(keys sign-in)" == "google-client-id google-client-secret" &&
+      "$(secret sign-in infrared-platform-tokens google-client-id)" == 123456789012-abcdefghijklmnopqrstuvwxyz012345.apps.googleusercontent.com &&
+      "$(secret sign-in infrared-platform-tokens google-client-secret)" == GOCSPX-ci-google-secret ]]; then
+  ok "the Google client alone renders infrared-platform-tokens: google-client-id and google-client-secret, trimmed"
+else bad "infrared-platform-tokens does not hold the Google client as given, trimmed"; fi
+if [[ "$(keys sign-in-install)" == "cloudflare-api-token backup-access-key-id backup-secret-access-key google-client-id google-client-secret" ]]; then
+  ok "install: the Google client beside the other tokens"
+else bad "install: infrared-platform-tokens' keys are '$(keys sign-in-install)'"; fi
+check sign-in-adopted.yaml "after adoption the Google client renders no Secret" '^kind: Secret$' 0
+check defaults.yaml "the Installation CRD has spec.signIn.google.allowedDomains" '^                      allowedDomains:$' 1
+refuse "a Google client ID without its secret fails" "platformTokens.googleClientId and platformTokens.googleClientSecret go together" \
+  -f "$chart/ci/sign-in-values.yaml"
+refuse "a Google client secret without its ID fails" "platformTokens.googleClientId and platformTokens.googleClientSecret go together" \
+  "${google_secret[@]}"
+refuse "a Google client secret in the client ID's place fails" "at '/platformTokens/googleClientId'" \
+  --set platformTokens.googleClientId=GOCSPX-not-an-id "${google_secret[@]}"
+refuse "signIn.password.enabled as a string fails" "at '/signIn/password/enabled'" --set-string signIn.password.enabled=false
+
 step "umbrella chart (ADR 0038)"
 # An umbrella wraps this chart: its version is the control plane's, and its pins hand no override on.
 helm template infrared "$chart" -n infrared --set global.deployedChart.version=0.1.0-rc.147 \
@@ -1102,7 +1138,7 @@ if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && g
 else bad "the chart's name leaks into what it renders"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

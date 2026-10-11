@@ -138,10 +138,29 @@ index's pin always, as code-index, since the gitops template runs it only while
 that pin is there; marked "default": true when it is the chart's own, which the
 template leaves out of the Application.
 */}}
+{{/*
+The chart version the control plane is installed with (INFRARED_CHART_VERSION):
+an umbrella chart's, global.deployedChart.version, when an umbrella wraps this
+chart (infrared-docs-internal ADR 0038), else this chart's own. The gitops repo's
+infrared Application pins it, and upgrades compare against it.
+*/}}
+{{- define "infrared.deployedChartVersion" -}}
+{{- $v := dig "deployedChart" "version" "" (.Values.global | default dict) }}
+{{- if and $v (ne $v "0.0.0") }}{{ $v }}{{ else }}{{ .Chart.Version }}{{ end }}
+{{- end }}
+
+{{/* Whether an umbrella chart wraps this one (global.deployedChart.version set). */}}
+{{- define "infrared.underUmbrella" -}}
+{{- if ne (include "infrared.deployedChartVersion" .) .Chart.Version }}true{{ end }}
+{{- end }}
+
 {{- define "infrared.imagePins" -}}
 {{- $defaults := .Files.Get "files/image-defaults.yaml" | fromYaml }}
 {{- $pins := dict }}
+{{- /* Under an umbrella its values are the pins every render shares: none is handed on as an override. */}}
+{{- $umbrella := include "infrared.underUmbrella" . }}
 {{- range $c := list "operator" "api" "ui" "mcp" "runner" }}
+{{- if $umbrella }}{{ continue }}{{ end }}
 {{- $img := (index $.Values $c).image }}
 {{- $tag := default $.Chart.AppVersion $img.tag }}
 {{- $digest := default "" $img.digest }}
@@ -154,7 +173,7 @@ template leaves out of the Application.
 {{- $ci := .Values.codeIndex.image }}
 {{- $d := default dict (index $defaults "code-index") }}
 {{- $pin := dict "tag" (default "" $ci.tag) "digest" (default "" $ci.digest) }}
-{{- if and (eq (default "" $ci.tag) (default "" $d.tag)) (eq (default "" $ci.digest) (default "" $d.digest)) }}
+{{- if or $umbrella (and (eq (default "" $ci.tag) (default "" $d.tag)) (eq (default "" $ci.digest) (default "" $d.digest))) }}
 {{- $_ := set $pin "default" true }}
 {{- end }}
 {{- $_ := set $pins "code-index" $pin }}

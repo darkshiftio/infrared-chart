@@ -267,6 +267,14 @@ rules:
 - apiGroups:
   - kpack.io
   resources:
+  - images
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kpack.io
+  resources:
   - sourceresolvers
   verbs:
   - delete

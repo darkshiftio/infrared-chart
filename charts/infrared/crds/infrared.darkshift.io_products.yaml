@@ -326,6 +326,15 @@ spec:
                   themselves. A reviewer's BLOCK, a failed step and a dead-lettered step
                   still stop and wait for a person. Omitted means true.
                 type: boolean
+              kind:
+                description: |-
+                  Kind is app (the default) or platform: Infrared itself, released as
+                  one version of an umbrella chart and delivered by upgrading the
+                  control plane (ADR 0038). Only the platform org may have one.
+                enum:
+                - app
+                - platform
+                type: string
               logo:
                 description: |-
                   Logo says where the Product's logo lives. Omit it to detect the logo in
@@ -341,6 +350,163 @@ spec:
                       Repo is the name of one of spec.repos that holds the logo; empty means
                       the first entry of spec.repos.
                     type: string
+                type: object
+              platform:
+                description: Platform says how a platform Product is built, released
+                  and delivered.
+                properties:
+                  buildsNamespace:
+                    default: infrared-builds
+                    description: |-
+                      BuildsNamespace holds the kpack Images that build the components.
+                      Infrared reads them and never changes them.
+                    type: string
+                  chartRegistry:
+                    description: |-
+                      ChartRegistry is the OCI repository the umbrella chart is published
+                      to, without oci://, e.g. us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts.
+                    minLength: 1
+                    type: string
+                  components:
+                    description: Components are the parts released together, one per
+                      built image.
+                    items:
+                      description: PlatformComponent is one part of a platform Product.
+                      properties:
+                        buildImage:
+                          description: |-
+                            BuildImage is the kpack Image in the builds namespace. Empty means the
+                            component is not built here: its pin is carried from release to
+                            release.
+                          type: string
+                        name:
+                          description: Name, e.g. operator.
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                          type: string
+                        repo:
+                          description: Repo is the component's repo among spec.repos.
+                          minLength: 1
+                          type: string
+                        repository:
+                          description: |-
+                            Repository is the image repository under the release registry. Empty
+                            means infrared-<name>.
+                          type: string
+                        valuesKey:
+                          description: |-
+                            ValuesKey is the subchart values key that pins the image,
+                            <key>.image.tag and <key>.image.digest. Empty means the name.
+                          type: string
+                      required:
+                      - name
+                      - repo
+                      type: object
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  firstVersion:
+                    description: |-
+                      FirstVersion is the umbrella's first release version when it has
+                      none yet, e.g. 0.1.0-rc.147. Later versions add one to its last
+                      number.
+                    pattern: ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$
+                    type: string
+                  historyFrom:
+                    description: |-
+                      HistoryFrom is the subchart's oldest release recorded in the
+                      Product's history, e.g. 0.1.0-alpha.146: each of its git tags from
+                      this one on becomes a recorded Release.
+                    type: string
+                  releaseRegistry:
+                    description: |-
+                      ReleaseRegistry is where released images are copied to, by digest,
+                      tagged with the release version, e.g.
+                      us-central1-docker.pkg.dev/darkshift-preprod/infrared.
+                    minLength: 1
+                    type: string
+                  subchart:
+                    description: |-
+                      Subchart is the chart the umbrella wraps, whose values the umbrella
+                      nests under its name.
+                    properties:
+                      name:
+                        description: Name is the subchart's chart name, e.g. infrared-core.
+                        minLength: 1
+                        type: string
+                      path:
+                        description: Path is the chart's folder in Repo. Empty means
+                          charts/<name>.
+                        type: string
+                      repo:
+                        description: Repo is the git repo that holds it, among spec.repos.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    - repo
+                    type: object
+                  target:
+                    description: Target is the control plane a release upgrades.
+                    properties:
+                      application:
+                        default: infrared
+                        description: Application is the Argo CD Application that installs
+                          the chart.
+                        type: string
+                      cluster:
+                        description: Cluster is the management cluster's name, as
+                          the gitops repo knows it.
+                        minLength: 1
+                        type: string
+                      guardTimeout:
+                        default: 15m
+                        description: |-
+                          GuardTimeout is how long the upgrade guard waits for every check to
+                          pass before it rolls the upgrade back.
+                        type: string
+                      verify:
+                        description: |-
+                          Verify are the checks the upgrade guard makes, besides Argo CD, the
+                          Deployments and the gitops repo, before it calls an upgrade good.
+                        items:
+                          description: |-
+                            ZoneVerify is an HTTP smoke check of a zone, made by the operator from inside
+                            the management cluster.
+                          properties:
+                            contains:
+                              description: Contains is text the response body must
+                                contain.
+                              type: string
+                            expectStatus:
+                              description: ExpectStatus is the HTTP status that passes;
+                                0 means 200.
+                              format: int32
+                              type: integer
+                            soak:
+                              description: Soak is how long the zone must stay Healthy
+                                before the check; empty means 2m.
+                              type: string
+                            url:
+                              description: URL to GET, e.g. http://zippy.zippy-rc.svc/healthz
+                                or the zone's public URL.
+                              pattern: ^https?://
+                              type: string
+                          required:
+                          - url
+                          type: object
+                        type: array
+                    required:
+                    - cluster
+                    type: object
+                required:
+                - chartRegistry
+                - components
+                - firstVersion
+                - releaseRegistry
+                - subchart
+                - target
                 type: object
               providerRef:
                 description: |-
@@ -549,11 +715,40 @@ spec:
                       type: string
                     type: array
                 type: object
+              umbrella:
+                description: |-
+                  Umbrella is where a Product with more than one repo keeps its
+                  umbrella chart. Omit it for the defaults: charts/<product> in the
+                  org's charts repo.
+                properties:
+                  chart:
+                    description: |-
+                      Chart is the chart's name and its folder, charts/<chart>. Empty means
+                      the Product's name.
+                    type: string
+                  disabled:
+                    description: Disabled leaves the Product without an umbrella chart.
+                    type: boolean
+                  repo:
+                    description: |-
+                      Repo is the org's charts repo on the Product's forge; Infrared creates
+                      it when it is missing. Empty means "charts".
+                    type: string
+                type: object
             required:
             - displayName
             - repos
             type: object
             x-kubernetes-validations:
+            - message: 'a platform Product needs spec.platform and takes no spec.delivery:
+                it is delivered by upgrading the control plane'
+              rule: '!has(self.kind) || self.kind != ''platform'' || (has(self.platform)
+                && !has(self.delivery))'
+            - message: spec.platform belongs to a Product of kind platform
+              rule: '!has(self.platform) || (has(self.kind) && self.kind == ''platform'')'
+            - message: 'kind cannot change: recreate the Product'
+              rule: '(has(oldSelf.kind) ? oldSelf.kind : ''app'') == (has(self.kind)
+                ? self.kind : ''app'')'
             - message: 'providerRef cannot change: its kpack Image, Releases and runs
                 name the forge its repos live on; recreate the Product to move it'
               rule: has(oldSelf.providerRef) == has(self.providerRef) && (!has(self.providerRef)
@@ -689,6 +884,181 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              platform:
+                description: |-
+                  Platform is a platform Product's components, builds and running
+                  version.
+                properties:
+                  checkedAt:
+                    format: date-time
+                    type: string
+                  components:
+                    description: Components is each component's latest build and what
+                      is released.
+                    items:
+                      description: PlatformComponentStatus is one component's builds
+                        and pins.
+                      properties:
+                        building:
+                          description: Building names a build in progress.
+                          type: string
+                        builtAt:
+                          format: date-time
+                          type: string
+                        carried:
+                          description: Carried is true for a component not built here.
+                          type: boolean
+                        latestBuild:
+                          description: LatestBuild is the newest successful kpack
+                            Build.
+                          type: string
+                        latestCommit:
+                          description: LatestCommit is the commit it built.
+                          type: string
+                        latestImage:
+                          description: LatestImage is its image, repository@sha256:...
+                          type: string
+                        message:
+                          type: string
+                        name:
+                          type: string
+                        pinnedCommit:
+                          description: PinnedCommit is the commit behind the pinned
+                            image, when known.
+                          type: string
+                        pinnedImage:
+                          description: PinnedImage is what the newest release pins,
+                            repository:tag@sha256:...
+                          type: string
+                        repo:
+                          description: Repo is owner/name.
+                          type: string
+                        unreleased:
+                          description: Unreleased counts commits on the default branch
+                            after PinnedCommit.
+                          format: int32
+                          type: integer
+                        unreleasedCommits:
+                          description: UnreleasedCommits are the newest of them, at
+                            most 20.
+                          items:
+                            description: CommitSummary is one commit, as a list shows
+                              it.
+                            properties:
+                              author:
+                                type: string
+                              date:
+                                format: date-time
+                                type: string
+                              sha:
+                                type: string
+                              subject:
+                                type: string
+                              url:
+                                type: string
+                            required:
+                            - sha
+                            - subject
+                            type: object
+                          type: array
+                      required:
+                      - name
+                      - repo
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  latestVersion:
+                    description: LatestVersion is the umbrella's newest released version.
+                    type: string
+                  message:
+                    type: string
+                  nextVersion:
+                    description: NextVersion is the version the next release takes.
+                    type: string
+                  running:
+                    description: Running is what the target control plane runs.
+                    properties:
+                      chart:
+                        description: Chart and Version are the Application's chart
+                          and its targetRevision.
+                        type: string
+                      checkedAt:
+                        format: date-time
+                        type: string
+                      cluster:
+                        type: string
+                      deployments:
+                        items:
+                          description: DeploymentState is one Deployment of the control
+                            plane.
+                          properties:
+                            desired:
+                              format: int32
+                              type: integer
+                            image:
+                              type: string
+                            name:
+                              type: string
+                            ready:
+                              format: int32
+                              type: integer
+                          required:
+                          - name
+                          type: object
+                        type: array
+                      health:
+                        type: string
+                      operatorChartVersion:
+                        description: |-
+                          OperatorChartVersion is the chart version the running operator was
+                          installed with.
+                        type: string
+                      sync:
+                        description: Sync and Health are Argo CD's words for the Application.
+                        type: string
+                      version:
+                        type: string
+                    required:
+                    - cluster
+                    type: object
+                  unreleased:
+                    description: |-
+                      Unreleased counts the commits on the components' default branches
+                      that no release carries yet.
+                    format: int32
+                    type: integer
+                type: object
+              umbrella:
+                description: Umbrella is the state of the Product's umbrella chart.
+                properties:
+                  checkedAt:
+                    format: date-time
+                    type: string
+                  created:
+                    description: 'Created lists what Infrared made: the repo, the
+                      chart.'
+                    items:
+                      type: string
+                    type: array
+                  message:
+                    type: string
+                  path:
+                    description: Path is the chart's folder, charts/<chart>.
+                    type: string
+                  ready:
+                    description: Ready is true once the repo and the chart exist.
+                    type: boolean
+                  repo:
+                    description: Repo is owner/name of the charts repo.
+                    type: string
+                  url:
+                    description: URL is the chart's folder on the forge.
+                    type: string
+                required:
+                - ready
+                type: object
               zoneFiles:
                 description: |-
                   ZoneFiles reports whether every delivery zone has its files in the

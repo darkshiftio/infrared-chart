@@ -163,7 +163,13 @@ helm template infrared "$chart" -n infrared "${code_index_adopted[@]}" \
 # The name named by hand as well: listed once.
 helm template infrared "$chart" -n infrared --set stores.enabled=true --set registry.address=10.43.0.50:5000 \
   --set 'components.disabled={substrate-test-actors}' >"$out/test-actors-named.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted"
+# The stores on the cluster's one node: at install, once the template's
+# Application carries stores.singleNode, and the setting without the stores.
+helm template infrared "$chart" -n infrared "${install[@]}" --set stores.singleNode=true >"$out/single-node.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
+  -f "$chart/ci/stores-adopted-values.yaml" --set stores.singleNode=true >"$out/single-node-adopted.yaml"
+helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/single-node-no-stores.yaml"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -172,7 +178,8 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted; do envs "$f"; done
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores \
+    code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -292,6 +299,16 @@ for f in install stores-adopted; do
   has "$f.env" "$f: the components left out, as JSON, Substrate's test actors among them by default" \
     'INFRARED_DISABLED_COMPONENTS="[\"infisical\",\"substrate-test-actors\"]"'
 done
+# The stores on one node: handed on only when asked for, and only with the
+# stores, at install and after adoption alike; every other render hands on
+# nothing, so a cluster that never sets it renders as before.
+check defaults.env "the stores spread over the nodes by default" '^INFRARED_STORES_SINGLE_NODE=' 0
+check install.env "the stores spread over the nodes unless singleNode is set" '^INFRARED_STORES_SINGLE_NODE=' 0
+for f in single-node single-node-adopted; do
+  has "$f.env" "$f: the stores on" 'INFRARED_STORES="true"'
+  has "$f.env" "$f: the stores on the cluster's one node" 'INFRARED_STORES_SINGLE_NODE="true"'
+done
+check single-node-no-stores.env "stores.singleNode without the stores hands on nothing" '^INFRARED_STORES(_SINGLE_NODE)?=' 0
 # Substrate's test actors (sandbox-v1 runs any command it is sent) are off
 # unless substrate.testActors is true, at install and after adoption alike;
 # without the stores and a registry the template runs no Substrate, and the
@@ -811,6 +828,7 @@ refuse "a backup endpoint with a path fails" "at '/backup/endpoint'" \
 refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
   --set backup.bucket=CI-Backup,backup.endpoint=https://backup.example.com,backup.region=us-east-1
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
+refuse "stores.singleNode as a string fails" "at '/stores/singleNode'" --set-string stores.singleNode=true
 refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
 refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
 refuse "gitea.enabled as a string fails" "at '/gitea/enabled'" --set-string gitea.enabled=true

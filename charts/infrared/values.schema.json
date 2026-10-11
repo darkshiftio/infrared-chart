@@ -824,6 +824,10 @@
         "enabled": {
           "type": "boolean",
           "description": "Install the platform's stores through the gitops template (INFRARED_STORES)."
+        },
+        "singleNode": {
+          "type": "boolean",
+          "description": "With enabled, the object store runs on the cluster's one node, every file written once (INFRARED_STORES_SINGLE_NODE)."
         }
       }
     },

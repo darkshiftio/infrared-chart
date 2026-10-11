@@ -104,6 +104,13 @@ stores:
   # and one object store in the cluster (INFRARED_STORES, operator). Off leaves
   # them out, as before.
   enabled: false
+  # -- With enabled, the object store runs on the cluster's one node: one
+  # SeaweedFS server of each kind, every file written once
+  # (INFRARED_STORES_SINGLE_NODE, operator), for a cluster that is one machine,
+  # such as a local install on a Mac. Off spreads it over three nodes with
+  # every file on two of them. It is the install's to say, never derived from
+  # the nodes the cluster has at a moment.
+  singleNode: false
 
 # The install's backups, written straight to a bucket outside the cluster, one
 # encrypted artifact per backup (Installation.spec.backup). The operator seeds

@@ -51,8 +51,9 @@ spec:
             - name: INFRARED_PREVIEWS
               value: {{ toJson . | quote }}
             {{- end }}
+            # Under an umbrella chart, its version is Infrared's (ADR 0038).
             - name: INFRARED_VERSION
-              value: {{ .Chart.AppVersion | quote }}
+              value: {{ include "infrared.deployedAppVersion" . | quote }}
             # An umbrella chart's version when one wraps this chart (ADR 0038).
             - name: INFRARED_CHART_VERSION
               value: {{ include "infrared.deployedChartVersion" . | quote }}

@@ -1,4 +1,4 @@
-Infrared {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installed in namespace {{ .Release.Namespace }}
+Infrared {{ include "infrared.deployedAppVersion" . }} (chart {{ .Chart.Name }} {{ .Chart.Version }}) is installed in namespace {{ .Release.Namespace }}
 on management cluster "{{ .Values.managementCluster.name }}".
 
 1. Read the one-time setup token:

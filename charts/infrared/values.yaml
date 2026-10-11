@@ -24,8 +24,10 @@ installation:
   # Envoy Gateway. Empty means traefik. Written to the Installation's `spec.edge`.
   edge: ""
   # -- Preview settings (INFRARED_PREVIEWS, operator, as JSON): `domain` and
-  # `signInURL`, and optionally `ingressHost`, `ingressIP`, `managedRoots` and
-  # `cloudflareTokenSecret`. Written to the Installation's `spec.previews`.
+  # `signInURL`, and optionally `ingressHost`, `ingressIP`, `managedRoots`,
+  # `cloudflareTokenSecret`, `cloudflareTokenKey`, `customHostnames` (a Gateway
+  # edge serves addresses under orgs' own domains as Cloudflare for SaaS custom
+  # hostnames) and `acmeEmail`. Written to the Installation's `spec.previews`.
   # Empty leaves previews to a person, as before.
   previews: {}
   #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
@@ -45,7 +47,7 @@ gitops:
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
   # to install from a branch of the template. Here feat/one-artifact-per-backup's
   # head, which this branch's operator renders; back to a tag before a release.
-  templateVersion: 128d14e34ea46bc68397726ef8a58389887c432f
+  templateVersion: 09bf4e0a0b3f1f8e0270015a019e3ab682487b3e
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
@@ -463,9 +465,9 @@ operator:
     # -- Repository under image.registry.
     repository: infrared-operator
     # -- Tag; empty means the chart appVersion.
-    tag: v0.1.0-alpha.160
+    tag: v0.1.0-alpha.161
     # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
-    digest: "sha256:c6e8a6f952b9b792580bac71ef9a0fcd7893d5dce432065e8f55333cc54a7b2c"
+    digest: "sha256:7c85f48273ba16ce75124396b0157d71125d97281553a3a2931ec74d5aa33ce2"
   replicas: 1
   # -- Extra container args, appended after --leader-elect and the probe address.
   extraArgs: []
@@ -493,8 +495,8 @@ operator:
 api:
   image:
     repository: infrared-api
-    tag: v0.1.0-alpha.159
-    digest: "sha256:abad172db8ad33c238949448f6689176e8a9f28b1f27ebc2abd29815c9be0e64"
+    tag: v0.1.0-alpha.161
+    digest: "sha256:27fa4e3579696513611015e29231b45351fdc176162a3d022c2ad9b4cd28deab"
   replicas: 1
   extraArgs: []
   extraEnv: []
@@ -517,8 +519,8 @@ api:
 ui:
   image:
     repository: infrared-ui
-    tag: v0.1.0-alpha.158
-    digest: "sha256:ca4ba24a01ef73162466e4da4def1aebff9a18c7e617538b588b71c4cc852468"
+    tag: v0.1.0-alpha.161
+    digest: "sha256:f1ab5b3e7c654d7b2a93fe8436899a95bfdcbf104d5337a7f3e6604645489a37"
   replicas: 1
   extraArgs: []
   extraEnv: []

@@ -322,6 +322,11 @@ spec:
                   Previews give pre-release zones a URL behind Infrared sign-in. The
                   operator fills it from INFRARED_PREVIEWS while it is unset.
                 properties:
+                  acmeEmail:
+                    description: |-
+                      ACMEEmail is the address Let's Encrypt writes to about the origin
+                      certificates of custom hostnames, e.g. alerts@example.com.
+                    type: string
                   cloudflareTokenKey:
                     description: |-
                       CloudflareTokenKey is the key of CloudflareTokenSecret that holds the
@@ -333,6 +338,16 @@ spec:
                       CloudflareTokenSecret names a Secret in Infrared's namespace whose
                       CloudflareTokenKey key may edit DNS for the managed roots.
                     type: string
+                  customHostnames:
+                    description: |-
+                      CustomHostnames serves addresses under an org's external Domains on a
+                      Gateway edge behind Cloudflare: each becomes a Cloudflare for SaaS
+                      custom hostname on the zone of the managed root that holds IngressHost,
+                      whose fallback origin is IngressHost, and its origin certificate comes
+                      from Let's Encrypt over HTTP-01 through Cloudflare's proxy. Cloudflare
+                      for SaaS must be on for that zone, and the token needs Zone / SSL and
+                      Certificates / Edit there.
+                    type: boolean
                   domain:
                     description: |-
                       Domain previews live under: zone z is https://<z>.<domain>. A wildcard DNS

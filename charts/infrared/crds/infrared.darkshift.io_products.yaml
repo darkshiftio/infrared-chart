@@ -778,6 +778,14 @@ spec:
                             description: CheckedAt is when the address was last checked.
                             format: date-time
                             type: string
+                          customHostname:
+                            description: |-
+                              CustomHostname is the state of the host's Cloudflare for SaaS custom
+                              hostname, for an address under an external Domain on a Gateway edge:
+                              Cloudflare's own word for it (pending, active, moved, blocked, ...),
+                              then " / certificate " and the state of Cloudflare's edge certificate
+                              for it, or empty when the host has none.
+                            type: string
                           dns:
                             description: |-
                               DNS is true when the host resolves to Infrared's ingress (on a Gateway
@@ -800,6 +808,36 @@ spec:
                             description: Proxied is true when the host's answer is
                               Cloudflare's proxy.
                             type: boolean
+                          records:
+                            description: |-
+                              Records are the DNS records to add at the host's own DNS provider for
+                              it to be served: a CNAME to the installation's ingress host and the
+                              custom hostname's ownership record. Empty when Infrared writes the
+                              host's DNS itself.
+                            items:
+                              description: DNSRecord is a record someone adds at their
+                                DNS provider.
+                              properties:
+                                name:
+                                  type: string
+                                purpose:
+                                  description: Purpose says what the record is for,
+                                    in plain words.
+                                  type: string
+                                type:
+                                  enum:
+                                  - TXT
+                                  - CNAME
+                                  - A
+                                  type: string
+                                value:
+                                  type: string
+                              required:
+                              - name
+                              - type
+                              - value
+                              type: object
+                            type: array
                           serving:
                             description: |-
                               Serving is the HTTP status an HTTPS request for the host got through

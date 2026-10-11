@@ -369,7 +369,7 @@ if [[ -z "$missing" ]] && ! grep -q DISABLE_REGULAR_ORG_CREATION <<<"$cfg"; then
   ok "Gitea: SQLite, memory cache, LevelDB queue, sign-in, no registration, basic auth, no SSH, ROOT_URL is INFRARED_GITEA_URL/"
 else bad "Gitea's settings lack:$missing (or refuse users new organizations, which the API's bot needs)"; fi
 check gitea.yaml "Gitea has no Ingress" '^kind: Ingress$' 0
-check gitea.yaml "no database, cache or test pod of the gitea chart's own" '^# Source: infrared/charts/gitea/charts/|helm\.sh/hook' 0
+check gitea.yaml "no database, cache or test pod of the gitea chart's own" '^# Source: infrared-core/charts/gitea/charts/|helm\.sh/hook' 0
 # What Argo CD renders once it adopts the release: no admin Secret, which Gitea
 # still reads; the address and the Secret's name still handed on; and every
 # object of Gitea's as the install rendered it, so adoption changes nothing.
@@ -378,7 +378,7 @@ check gitea-adopted.yaml "...and Gitea still reads it" '^ +name: infrared-gitea-
 has gitea-adopted.env "after adoption the operator and the API still reach Gitea" "INFRARED_GITEA_URL=\"$gitea_url\"" 2
 has gitea-adopted.env "after adoption the API still reads Gitea's admin Secret" 'INFRARED_GITEA_ADMIN_SECRET="infrared-gitea-admin"'
 check gitea-adopted.yaml "after adoption the only Secrets are Gitea's scripts and settings" '^kind: Secret$' 3
-gitea_objs() { awk '/^---/ {p = 0} /^# Source: infrared\/charts\/gitea\// {p = 1} p' "$out/$1.yaml"; }
+gitea_objs() { awk '/^---/ {p = 0} /^# Source: [^\/]*\/charts\/gitea\// {p = 1} p' "$out/$1.yaml"; }
 if [[ -n "$(gitea_objs gitea)" ]] && diff <(gitea_objs gitea) <(gitea_objs gitea-adopted) >"$out/gitea-adoption.diff"; then
   ok "after adoption every object of Gitea's renders as the install's: adoption changes nothing of it"
 else cat "$out/gitea-adoption.diff"; bad "Argo CD's render of Gitea differs from the install's"; fi
@@ -1095,6 +1095,11 @@ if ! grep -q '"operator"' <<<"$(envv umbrella INFRARED_IMAGES)"; then ok "under 
 else bad "under an umbrella INFRARED_IMAGES still hands on the operator's pin: $(envv umbrella INFRARED_IMAGES)"; fi
 if grep -q 'sha256:1111' "$out/umbrella.yaml" && grep -q '^  name: infrared-operator$' "$out/umbrella.yaml"; then ok "the umbrella's pin is rendered, and names stay infrared-*"
 else bad "the umbrella render lacks its pin or renamed the operator"; fi
+if [[ "$(envv umbrella INFRARED_VERSION)" == v0.1.0-rc.147 ]]; then ok "under an umbrella, INFRARED_VERSION is v<umbrella version>"
+else bad "INFRARED_VERSION under an umbrella is '$(envv umbrella INFRARED_VERSION)'"; fi
+if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && grep -q '^  name: infrared$' "$out/defaults.yaml" && ! grep -q 'name: infrared-core' "$out/defaults.yaml"; then
+  ok "the chart is infrared-core, and what it renders is still named infrared"
+else bad "the chart's name leaks into what it renders"; fi
 
 step "kubeconform"
 for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds; do

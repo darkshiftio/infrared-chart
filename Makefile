@@ -25,7 +25,7 @@ AR_HOST := us-central1-docker.pkg.dev
 AR_CHARTS := oci://$(AR_HOST)/darkshift-preprod/infrared/charts
 GCLOUD_CONFIGURATION ?= darkshift-preprod
 
-publish: package ## push the packaged chart to Artifact Registry ($(AR_CHARTS)/infrared); a release tag's job, run by a person while CI cannot
+publish: package ## push the packaged chart to Artifact Registry ($(AR_CHARTS)/infrared-core, since 0.1.0-alpha.166: the umbrella chart infrared in darkshiftio/charts wraps it, ADR 0038); a release tag's job, run by a person while CI cannot
 	@cfg=$$(mktemp -d)/config.json; \
 	gcloud --configuration=$(GCLOUD_CONFIGURATION) auth print-access-token | helm registry login $(AR_HOST) -u oauth2accesstoken --password-stdin --registry-config $$cfg >/dev/null && \
 	for c in dist/infrared-*.tgz; do helm push $$c $(AR_CHARTS) --registry-config $$cfg; done

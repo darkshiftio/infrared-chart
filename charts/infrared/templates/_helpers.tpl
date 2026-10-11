@@ -1,6 +1,7 @@
 {{/* Chart name, truncated to fit a DNS label. */}}
 {{- define "infrared.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- /* infrared, whatever the chart is called (infrared-core since 0.1.0-alpha.166, ADR 0038): names and selectors never move. */}}
+{{- default "infrared" .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
@@ -12,7 +13,7 @@ Service is `svc/infrared` and the others are `infrared-api`, `infrared-mcp`,
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
-{{- $name := default .Chart.Name .Values.nameOverride }}
+{{- $name := default "infrared" .Values.nameOverride }}
 {{- if contains $name .Release.Name }}
 {{- .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -147,6 +148,11 @@ infrared Application pins it, and upgrades compare against it.
 {{- define "infrared.deployedChartVersion" -}}
 {{- $v := dig "deployedChart" "version" "" (.Values.global | default dict) }}
 {{- if and $v (ne $v "0.0.0") }}{{ $v }}{{ else }}{{ .Chart.Version }}{{ end }}
+{{- end }}
+
+{{/* Infrared's version as people read it: v<umbrella version> under an umbrella, else the chart's appVersion. */}}
+{{- define "infrared.deployedAppVersion" -}}
+{{- if include "infrared.underUmbrella" . }}v{{ include "infrared.deployedChartVersion" . }}{{ else }}{{ .Chart.AppVersion }}{{ end }}
 {{- end }}
 
 {{/* Whether an umbrella chart wraps this one (global.deployedChart.version set). */}}

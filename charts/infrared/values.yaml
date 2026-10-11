@@ -464,6 +464,13 @@ runner:
     # -- Private networks runners may also reach over HTTP(S), e.g. a GitHub
     # Enterprise Server: a list of CIDRs.
     extraEgressCIDRs: []
+  # -- What each org's model key (the Secret model-provider-anthropic, key api-key) is:
+  # api-key, an Anthropic API key, which the runner's model proxy sends as x-api-key;
+  # or claude-code-oauth, a Claude Code OAuth token from `claude setup-token`, which it
+  # sends as a bearer token. claude-code-oauth is for a developer's own subscription on
+  # their own local stack (localred) only, never an install that serves anyone else
+  # (INFRARED_RUNNER_MODEL_AUTH, operator).
+  modelAuth: api-key
 
 summaryvideo:
   # -- Make a short summary video of each Change that finishes or stops, in orgs

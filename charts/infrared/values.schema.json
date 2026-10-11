@@ -1079,6 +1079,14 @@
         "helmImage": {
           "type": "string",
           "minLength": 1
+        },
+        "modelAuth": {
+          "type": "string",
+          "enum": [
+            "api-key",
+            "claude-code-oauth"
+          ],
+          "description": "What each org's model key is: an Anthropic API key, or a Claude Code OAuth token for a developer's own local stack."
         }
       }
     },

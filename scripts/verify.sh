@@ -169,7 +169,11 @@ helm template infrared "$chart" -n infrared "${install[@]}" --set stores.singleN
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
   -f "$chart/ci/stores-adopted-values.yaml" --set stores.singleNode=true >"$out/single-node-adopted.yaml"
 helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/single-node-no-stores.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted"
+# What each org's model key is: an API key unless an install opts in to a
+# Claude Code OAuth token (localred), and api-key named by hand changes nothing.
+helm template infrared "$chart" -n infrared "${install[@]}" --set runner.modelAuth=claude-code-oauth >"$out/model-auth-oauth.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" --set runner.modelAuth=api-key >"$out/model-auth-api-key.yaml"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, model-auth-oauth, model-auth-api-key, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -179,6 +183,7 @@ envs() {
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
     test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores \
+    model-auth-oauth model-auth-api-key \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -309,6 +314,16 @@ for f in single-node single-node-adopted; do
   has "$f.env" "$f: the stores on the cluster's one node" 'INFRARED_STORES_SINGLE_NODE="true"'
 done
 check single-node-no-stores.env "stores.singleNode without the stores hands on nothing" '^INFRARED_STORES(_SINGLE_NODE)?=' 0
+# The model key's kind: nothing handed on for an API key, the default or named,
+# so every install that never sets it renders as before; a Claude Code OAuth
+# token is handed to the operator, for the runner's container alone.
+for f in defaults install model-auth-api-key; do
+  check "$f.env" "$f: an API key, and nothing handed to the operator about it" '^INFRARED_RUNNER_MODEL_AUTH=' 0
+done
+has model-auth-oauth.env "runner.modelAuth claude-code-oauth reaches the operator" 'INFRARED_RUNNER_MODEL_AUTH="claude-code-oauth"'
+if diff <(grep -v '^INFRARED_RUNNER_MODEL_AUTH=' "$out/model-auth-oauth.env") "$out/install.env" >/dev/null; then
+  ok "runner.modelAuth changes nothing else the operator is handed"
+else bad "runner.modelAuth changed more of the operator's env than INFRARED_RUNNER_MODEL_AUTH"; fi
 # Substrate's test actors (sandbox-v1 runs any command it is sent) are off
 # unless substrate.testActors is true, at install and after adoption alike;
 # without the stores and a registry the template runs no Substrate, and the
@@ -829,6 +844,7 @@ refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
   --set backup.bucket=CI-Backup,backup.endpoint=https://backup.example.com,backup.region=us-east-1
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
 refuse "stores.singleNode as a string fails" "at '/stores/singleNode'" --set-string stores.singleNode=true
+refuse "a model key of a kind the runner does not know fails" "at '/runner/modelAuth'" --set runner.modelAuth=oauth
 refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
 refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
 refuse "gitea.enabled as a string fails" "at '/gitea/enabled'" --set-string gitea.enabled=true

@@ -51,6 +51,10 @@ spec:
             - name: INFRARED_EXTERNAL_URL
               value: {{ . | quote }}
             {{- end }}
+            # The platform admin's password sign-in (signIn.password.enabled):
+            # false turns it off once Sign in with Google has worked here.
+            - name: INFRARED_SIGN_IN_PASSWORD
+              value: {{ ternary "true" "false" (ne .Values.signIn.password.enabled false) | quote }}
             {{- if .Values.summaryvideo.enabled }}
             - name: INFRARED_MEDIA_DIR
               value: /var/lib/infrared/media

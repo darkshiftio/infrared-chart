@@ -304,6 +304,7 @@ rendered before.
 ```yaml
 stores:
   enabled: true                      # INFRARED_STORES: one Postgres and one object store in the cluster
+  singleNode: false                  # INFRARED_STORES_SINGLE_NODE: true on a cluster of one node
 backup:                              # INFRARED_BACKUP, as JSON: all three, or none
   bucket: example-backup
   endpoint: https://s3.example.com
@@ -636,6 +637,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `restore.enabled` / `.from` / `.point` | `false` / `""` / `""` | Restore this install from the backup bucket at install (`INFRARED_RESTORE`, operator and API): the backup `point` names by its stamp, or the newest complete one at or before `from` (RFC 3339, UTC), or the newest when both are empty; never both. See "Restore at install" |
 | `restore.postgresImage` | the gitops template's Postgres image, `ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:...` | The restore Job's Postgres sidecar, which restores each consumer database's dump with `pg_restore`: the image the template's Postgres Cluster runs, `name:tag@sha256:digest`, so `pg_restore` and the server share a major; change the two together. See "Restore at install" |
 | `stores.enabled` | `false` | The gitops template installs the platform's stores, one Postgres and one object store (`INFRARED_STORES`, operator). See "The stores, the backup bucket and the components left out" |
+| `stores.singleNode` | `false` | With `stores.enabled`, the object store runs on the cluster's one node, one SeaweedFS server of each kind and every file written once (`INFRARED_STORES_SINGLE_NODE`, operator), as a local install on one machine needs; off, it spreads over three nodes. The install's setting, never derived from the nodes; the gitops template's `infrared` Application carries it |
 | `backup.bucket` / `.endpoint` / `.region` | `""` | The bucket outside the cluster the backups and the stores' mirror go to: its name, its S3 endpoint (`https://` and a host; `https://storage.googleapis.com` for Google Cloud Storage, reached keyless as the Jobs' ServiceAccounts) and the region requests are signed for (for Google Cloud Storage, the bucket's location). All three or none (`INFRARED_BACKUP`, operator, JSON) |
 | `components.disabled` | `[]` | The gitops template's components the install leaves out, by name, e.g. `[infisical]` (`INFRARED_DISABLED_COMPONENTS`, operator, JSON) |
 | `codeIndex.enabled` | `false` | Infrared's code index, which the gitops template runs in the namespace `code-index`: its image is handed to the operator among Infrared's own (`INFRARED_IMAGES`, `code-index`). Needs an `image.registry` other than the default, and a pin. See "The code index" |

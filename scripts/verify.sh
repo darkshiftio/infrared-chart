@@ -120,6 +120,7 @@ helm template infrared "$chart" -n infrared "${backup_key[@]}" >"$out/backup-key
 # Gitea as the forge: a fresh install, and what Argo CD renders once it adopts it.
 helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" >"$out/gitea.yaml"
 helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" >"$out/gitea-adopted.yaml"
+helm template infrared "$chart" -n infrared --set summaryvideo.enabled=false >"$out/no-videos.yaml"
 # Backups: a fresh install with Gitea and every backup setting; without Gitea;
 # and what Argo CD renders once it adopts the first, whose `infrared`
 # Application carries the same backup values. And a restore at install, of the
@@ -268,7 +269,15 @@ check install.yaml "images name the registry without a double slash" 'ghcr\.io/d
 check install.yaml "pull Secret named by imagePullSecrets[0], a dockerconfigjson" '^type: kubernetes\.io/dockerconfigjson$' 1
 check install.yaml "the pull Secret is ghcr-pull" '^  name: ghcr-pull$' 1
 check install.yaml "platform tokens in Secret infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
-check install.yaml "every Secret from values is kept, like the generated ones" '^    helm\.sh/resource-policy: keep$' 7
+check install.yaml "every Secret from values is kept, like the generated ones, and the media volume" '^    helm\.sh/resource-policy: keep$' 8
+# Summary videos are provisioned by default and switched on by a platform admin
+# (Installation spec.summaryVideos); summaryvideo.enabled=false provisions none of them.
+check defaults.yaml "summary videos provisioned by default: the media volume" '^  name: infrared-media$' 1
+check defaults.yaml "the API (for Settings, Install features) and the operator are told the Gemini key's Secret" '^            - name: INFRARED_SUMMARY_VIDEO_GEMINI_SECRET$' 2
+check defaults.yaml "the operator runs the video pipeline" '^            - name: INFRARED_SUMMARY_VIDEO_IMAGE$' 1
+check defaults.yaml "the API with its ReadWriteOnce media volume is recreated" '^    type: Recreate$' 1
+check no-videos.yaml "summaryvideo.enabled=false: no media volume" '^  name: infrared-media$' 0
+check no-videos.yaml "summaryvideo.enabled=false: no video settings for the API or the operator" 'INFRARED_(MEDIA_DIR|SUMMARY_VIDEO_)' 0
 want_auth="$(printf 'ci-reader:ci-password' | base64)"
 got="$(secret install ghcr-pull .dockerconfigjson)"
 if [[ "$got" == "{\"auths\":{\"ghcr.io\":{\"auth\":\"$want_auth\",\"password\":\"ci-password\",\"username\":\"ci-reader\"}}}" ]]; then
@@ -453,7 +462,7 @@ if [[ "$(secret code-index-main infrared-platform-tokens code-index-knowledge-re
   ok "a record with no ref reads main"
 else bad "an empty codeIndex.knowledge.ref is not written as main"; fi
 check install.yaml "without the code index, none of its keys" '^  code-index-' 0
-check code-index-install.yaml "every Secret from values is kept, the tokens' with the code index's keys" '^    helm\.sh/resource-policy: keep$' 7
+check code-index-install.yaml "every Secret from values is kept, the tokens' with the code index's keys, and the media volume" '^    helm\.sh/resource-policy: keep$' 8
 # Argo CD's render never makes the Secret again: the template's Application
 # carries platformTokens.existingSecret with the code index, so even a record
 # in an org's values file renders none; and a template from before that, which

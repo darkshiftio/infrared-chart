@@ -459,11 +459,15 @@ runner:
     extraEgressCIDRs: []
 
 summaryvideo:
-  # -- Make a short summary video of each Change that finishes or stops, in orgs
-  # that turn summary videos on (Settings): a presenter, a narrated scene per step.
-  # Off: no reconciler, no Job and no media volume. The pipeline and its clips are
-  # in github.com/darkshiftio/infrared-summary-video.
-  enabled: false
+  # -- Provision summary videos of Changes (a narrated scene per step) and product
+  # owner announcements: the API's media volume, the operator's pipeline images
+  # and the Gemini key's Secret name. Provisioned, they stay off until a platform
+  # admin turns them on in Settings, Install features (Installation
+  # spec.summaryVideos.enabled), and then each org turns its own on. False: no
+  # reconciler, no Job and no media volume, and the API is rolled on upgrade
+  # rather than recreated. The pipeline and its clips are in
+  # github.com/darkshiftio/infrared-summary-video.
+  enabled: true
   image:
     # -- Repository under image.registry: the pipeline and its reusable clips.
     repository: infrared-summaryvideo

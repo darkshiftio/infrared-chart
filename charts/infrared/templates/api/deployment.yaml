@@ -70,6 +70,9 @@ spec:
             {{- if .Values.summaryvideo.enabled }}
             - name: INFRARED_MEDIA_DIR
               value: /var/lib/infrared/media
+            # Settings, Install features, says whether this Secret has the Gemini key.
+            - name: INFRARED_SUMMARY_VIDEO_GEMINI_SECRET
+              value: {{ .Values.summaryvideo.geminiSecret | quote }}
             {{- end }}
             {{- with .Values.observability.metricsURL }}
             - name: INFRARED_METRICS_URL

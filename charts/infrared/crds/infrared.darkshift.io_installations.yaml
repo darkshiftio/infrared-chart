@@ -409,6 +409,21 @@ spec:
                         x-kubernetes-list-type: set
                     type: object
                 type: object
+              summaryVideos:
+                description: |-
+                  SummaryVideos is whether this install makes summary videos and product
+                  owner announcements at all: platform admins switch it in Infrared, in
+                  Settings, Install features. Off (or unset), no org can make one, and an
+                  org's Settings says why. The chart provisions what the videos need (the
+                  API's media volume, the pipeline's images, the Gemini key's Secret name;
+                  summaryvideo.enabled); this only switches them on.
+                properties:
+                  enabled:
+                    description: |-
+                      Enabled lets orgs that turn summary videos on make them. Each video
+                      spends the platform's Gemini credit, beside the org's own model key.
+                    type: boolean
+                type: object
               tokenVerified:
                 description: TokenVerified is set once the one-time setup token has
                   been presented.

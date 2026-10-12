@@ -582,10 +582,10 @@ ui:
   # ConfigMap, mount or env. `upstream` is an FQDN and port, because nginx's resolver
   # ignores search domains.
   extensions: []
-  # - id: ledger
-  #   title: Ledger
+  # - id: back-office
+  #   title: Back Office
   #   icon: book            # puzzle (default), book, wallet, receipt, users, key, landmark, scroll
-  #   upstream: ledger.ledger.svc.cluster.local:8080
+  #   upstream: back-office.back-office.svc.cluster.local:8080
   #   paths: [v1, ui]       # optional, default [v1, ui]
   #   entry: ""             # optional, default /ext/<id>/ui/entry.js
   extensionsProxySecret:

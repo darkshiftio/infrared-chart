@@ -566,10 +566,10 @@ the chart renders exactly what it renders without it.
 ```yaml
 ui:
   extensions:
-    - id: ledger              # ^[a-z][a-z0-9-]{1,30}$
-      title: Ledger
+    - id: back-office         # ^[a-z][a-z0-9-]{1,30}$
+      title: Back Office
       icon: book              # puzzle (default), book, wallet, receipt, users, key, landmark, scroll
-      upstream: ledger.ledger.svc.cluster.local:8080   # FQDN:port
+      upstream: back-office.back-office.svc.cluster.local:8080   # FQDN:port
       paths: [v1, ui]         # the default
   extensionsProxySecret:
     existingSecret: infrared-ext-proxy   # key `secret`

@@ -1,4 +1,10 @@
 {{- $c := .Values.api }}
+{{- if .Values.summaryvideo.enabled }}
+{{- /* The media volume is the disk's own (root's on GKE's persistent disks): an
+fsGroup makes it the pod's group's to write, whatever uid the image runs as. */}}
+{{- $c = deepCopy .Values.api }}
+{{- $_ := set $c "podSecurityContext" (merge (dict "fsGroup" 65532 "fsGroupChangePolicy" "OnRootMismatch") (deepCopy (default .Values.podSecurityContext .Values.api.podSecurityContext))) }}
+{{- end }}
 {{- $ctx := dict "root" . "c" $c "component" "api" }}
 {{- if .Values.summaryvideo.enabled }}
 {{- $_ := set $ctx "volumes" (list (dict "name" "media" "persistentVolumeClaim" (dict "claimName" (include "infrared.componentName" (dict "root" . "component" "media"))))) }}

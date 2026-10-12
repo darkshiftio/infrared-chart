@@ -192,6 +192,16 @@ spec:
                             Preview gives the zone a URL, https://<zone>.<installation previews domain>,
                             behind Infrared sign-in.
                           type: boolean
+                        primaryAddress:
+                          description: |-
+                            PrimaryAddress is the address the zone is opened at in Infrared (its
+                            tile, its picture, its main link): custom, the first of Addresses that
+                            doesn't redirect, while it serves; or automatic, the zone's address on
+                            the platform domain. Empty means custom.
+                          enum:
+                          - custom
+                          - automatic
+                          type: string
                         public:
                           description: |-
                             Public opens a preview zone to anyone, without Infrared sign-in. Only
@@ -634,6 +644,40 @@ spec:
                               type: string
                           required:
                           - metric
+                          type: object
+                        edgeErrors:
+                          description: |-
+                            EdgeErrors counts the requests the zone answered with a 5xx against all
+                            the edge's Envoy sent it, from Envoy's own metrics: it needs nothing from
+                            the app. Only where the install's edge is the Gateway (spec.edge gateway).
+                          type: object
+                        edgeLatency:
+                          description: |-
+                            EdgeLatency counts the requests the zone answered the edge's Envoy slower
+                            than a threshold against all of them, from Envoy's own metrics. Only
+                            where the install's edge is the Gateway.
+                          properties:
+                            thresholdMS:
+                              description: |-
+                                ThresholdMS is one of Envoy's bucket boundaries in milliseconds:
+                                requests answered at or under it are good.
+                              enum:
+                              - "5"
+                              - "10"
+                              - "25"
+                              - "50"
+                              - "100"
+                              - "250"
+                              - "500"
+                              - "1000"
+                              - "2500"
+                              - "5000"
+                              - "10000"
+                              - "30000"
+                              - "60000"
+                              type: string
+                          required:
+                          - thresholdMS
                           type: object
                         latency:
                           description: Latency counts requests slower than a threshold

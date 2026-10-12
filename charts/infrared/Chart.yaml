@@ -2,8 +2,8 @@ apiVersion: v2
 name: infrared-core
 description: Infrared's core chart, an operator/CRD-driven gitops control plane for agentic change management. Install the umbrella chart infrared, which wraps it and pins every image (ADR 0038).
 type: application
-version: 0.1.0-alpha.172
-appVersion: v0.1.0-alpha.172
+version: 0.1.0-alpha.173
+appVersion: v0.1.0-alpha.173
 kubeVersion: ">=1.30.0-0"
 home: https://github.com/darkshiftio/infrared-chart
 sources:

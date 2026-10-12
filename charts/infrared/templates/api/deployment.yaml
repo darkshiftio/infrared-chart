@@ -20,6 +20,12 @@ metadata:
 spec:
   replicas: {{ $c.replicas }}
   revisionHistoryLimit: 3
+  {{- if .Values.summaryvideo.enabled }}
+  # The media volume is ReadWriteOnce: a rolling update's new pod on another
+  # node could never attach it while the old pod holds it, so the old pod goes first.
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "infrared.selectorLabels" $ctx | nindent 6 }}

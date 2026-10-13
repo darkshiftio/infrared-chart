@@ -441,8 +441,12 @@ spec:
                               left as it was, and why.
                             properties:
                               login:
+                                description: Login is the GitHub login.
                                 type: string
                               reason:
+                                description: |-
+                                  Reason says why in words, and what would change it, e.g. "invited to
+                                  acme-corp: waiting for them to accept".
                                 type: string
                             required:
                             - login

@@ -74,7 +74,7 @@ spec:
               githubApp:
                 description: |-
                   GitHubApp links through an org's GitHub App's OAuth client (kind github
-                  only). darkshift's connector names the platform org.
+                  only). An install's GitHub connector usually names its platform org.
                 properties:
                   organization:
                     description: Organization is the Infrared org whose GitHub App

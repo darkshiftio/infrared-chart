@@ -317,6 +317,41 @@ spec:
                         type: string
                     type: object
                 type: object
+              observability:
+                description: |-
+                  Observability is where the install's own numbers go: the telemetry
+                  plane it is a platform of (infrared-docs-internal ADR 0044). The gitops
+                  template reads it; nothing leaves the cluster while it is unset.
+                properties:
+                  telemetry:
+                    description: |-
+                      Telemetry is the telemetry plane this install writes its metrics to
+                      (ADR 0044): the operator's step series, the API's request series and
+                      what else the install measures, pushed by a vmagent the gitops template
+                      renders while it is set, every series labelled with the platform name.
+                    properties:
+                      platform:
+                        description: |-
+                          Platform is this install's name in the telemetry plane, the platform
+                          label on every series it writes: a DNS label, such as <login>-<stack>
+                          for a stack on a Mac, or the management cluster's name for a hosted
+                          install.
+                        maxLength: 63
+                        pattern: ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$
+                        type: string
+                      url:
+                        description: |-
+                          URL is the remote-write address the install's metrics are pushed to,
+                          such as https://infrared.example.com/api/v1/telemetry/write, under the
+                          telemetry token kept in the cluster.
+                        maxLength: 2048
+                        pattern: ^https?://
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: telemetry takes url and platform together, or neither
+                      rule: has(self.url) == has(self.platform)
+                type: object
               platformOrg:
                 description: PlatformOrg is the Organization that administers this
                   control plane.
@@ -423,8 +458,9 @@ spec:
                         properties:
                           by:
                             description: |-
-                              By is the email of the first active person the platform-admin team's
-                              group resolved, sorted.
+                              By is the email of the first person, sorted, of the platform-admin
+                              team's group who had signed in with Google when the group first
+                              resolved, or "the directory" when none of them had.
                             type: string
                           since:
                             description: Since is when the API set it.

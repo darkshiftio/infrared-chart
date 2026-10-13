@@ -31,6 +31,7 @@ spec:
           args:
             - --leader-elect
             - --health-probe-bind-address=:8081
+            - --metrics-bind-address=:{{ .Values.operator.metricsPort }}
             {{- with $c.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -189,11 +190,25 @@ spec:
             # Alertmanager sends SLO alerts here (/v1/webhooks/alertmanager/<org>).
             - name: INFRARED_API_URL
               value: {{ printf "http://%s.%s.svc:%d" (include "infrared.componentName" (dict "root" . "component" "api")) .Release.Namespace (int .Values.api.service.port) | quote }}
+            {{- with .Values.installation.telemetry }}
+            {{- with .url }}
+            # The telemetry plane (ADR 0044): written to the Installation's spec.observability.telemetry.
+            - name: INFRARED_TELEMETRY_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .platform }}
+            - name: INFRARED_TELEMETRY_PLATFORM
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           ports:
             - name: health
               containerPort: 8081
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.operator.metricsPort }}
               protocol: TCP
           {{- include "infrared.probes" (dict "port" "health") | nindent 10 }}

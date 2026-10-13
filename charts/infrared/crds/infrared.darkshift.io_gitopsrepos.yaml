@@ -297,6 +297,14 @@ spec:
                   renders no restore. A restore that finishes hydrates the repo again,
                   so the restore's pieces leave the cluster.
                 type: string
+              telemetryDigest:
+                description: |-
+                  TelemetryDigest is a digest of the telemetry plane the hydration commit
+                  renders, from the Installation's spec.observability.telemetry: its URL
+                  and platform. Empty when it renders none. A change of the field, set or
+                  cleared, hydrates the repo again, so what the template renders for it
+                  comes and goes with the field (ADR 0044).
+                type: string
               url:
                 description: URL of the repo on the provider.
                 type: string

@@ -1,0 +1,175 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: users.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: User
+    listKind: UserList
+    plural: users
+    singular: user
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.google.email
+      name: Email
+      type: string
+    - jsonPath: .spec.displayName
+      name: Name
+      type: string
+    - jsonPath: .status.directory.suspended
+      name: Suspended
+      type: boolean
+    - jsonPath: .status.lastSignInAt
+      name: Last sign-in
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          User is a person's Infrared user: their Google account, with the git
+          accounts they linked to it (infrared-docs-internal ADR 0042). The API
+          creates it at the person's first Sign in with Google.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              UserSpec is a person's Infrared user: their Google account, and the git
+              accounts they linked to it (infrared-docs-internal ADR 0042).
+            properties:
+              displayName:
+                description: DisplayName is the name Google gives, from the ID token's
+                  name claim.
+                type: string
+              google:
+                description: Google is the person's Google account.
+                properties:
+                  email:
+                    description: Email is the account's address, as last read at sign-in.
+                    format: email
+                    type: string
+                  subject:
+                    description: 'Subject is the ID token''s sub claim: the account''s
+                      stable ID.'
+                    pattern: ^[0-9]{1,64}$
+                    type: string
+                required:
+                - email
+                - subject
+                type: object
+              links:
+                description: Links are the person's git accounts, one per connector.
+                items:
+                  description: UserLink is one git account linked to a User, through
+                    a GitConnector.
+                  properties:
+                    connector:
+                      description: Connector is the GitConnector the account was linked
+                        through.
+                      maxLength: 63
+                      minLength: 1
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    id:
+                      description: ID is the forge's stable numeric user ID.
+                      maxLength: 63
+                      pattern: ^[0-9]+$
+                      type: string
+                    kind:
+                      description: 'Kind is the connector''s kind: github, gitea or
+                        gitlab.'
+                      enum:
+                      - github
+                      - gitea
+                      - gitlab
+                      type: string
+                    linkedAt:
+                      description: LinkedAt is when the person linked it.
+                      format: date-time
+                      type: string
+                    login:
+                      description: Login is the account's login, as last read from
+                        the forge.
+                      minLength: 1
+                      type: string
+                  required:
+                  - connector
+                  - id
+                  - kind
+                  - linkedAt
+                  - login
+                  type: object
+                maxItems: 20
+                type: array
+                x-kubernetes-list-map-keys:
+                - connector
+                x-kubernetes-list-type: map
+            required:
+            - google
+            type: object
+          status:
+            description: UserStatus is what Infrared last saw of the person.
+            properties:
+              directory:
+                description: |-
+                  Directory is what the Workspace directory said of the person, written
+                  by the API's directory loop; infrared-operator's GitHub team sync
+                  reads it.
+                properties:
+                  checkedAt:
+                    description: |-
+                      CheckedAt is when the directory was read. Older than the API's max age
+                      (10 minutes by default), Groups no longer count.
+                    format: date-time
+                    type: string
+                  groups:
+                    description: |-
+                      Groups are the addresses of the mapped Workspace groups the person is
+                      in, directly or through nested groups.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  suspended:
+                    description: |-
+                      Suspended is true when the directory says the account is suspended: the
+                      person holds nothing.
+                    type: boolean
+                required:
+                - checkedAt
+                type: object
+              lastSignInAt:
+                description: LastSignInAt is the person's last Sign in with Google.
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: a User is named google-<spec.google.subject>
+          rule: self.metadata.name == 'google-' + self.spec.google.subject
+    served: true
+    storage: true
+    subresources:
+      status: {}

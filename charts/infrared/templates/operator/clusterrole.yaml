@@ -237,7 +237,9 @@ rules:
   - infrared.darkshift.io
   resources:
   - cloudaccounts
+  - gitconnectors
   - incidents
+  - users
   verbs:
   - get
   - list

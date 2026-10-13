@@ -1,0 +1,219 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: breakglasses.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: BreakGlass
+    listKind: BreakGlassList
+    plural: breakglasses
+    singular: breakglass
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.email
+      name: Email
+      type: string
+    - jsonPath: .status.passwordSetAt
+      name: Password set
+      type: date
+    - jsonPath: .status.useCount
+      name: Uses
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          BreakGlass is the root user: the install's first platform admin, a bot-like
+          account, whose password lives only in a vault outside Infrared
+          (infrared-docs-internal ADR 0042). Infrared keeps a one-way hash, and
+          records every use. One object, named root, written only by the API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              BreakGlassSpec is the root user: the install's first platform admin, a
+              bot-like account, whose password lives only in a vault outside Infrared
+              (infrared-docs-internal ADR 0042). Infrared keeps a one-way hash.
+            properties:
+              email:
+                description: Email is the root user's sign-in address.
+                format: email
+                type: string
+              holdersGroup:
+                description: |-
+                  HoldersGroup is the Workspace group of the people who should be able to
+                  open the vault. It is a record: the vault decides who opens it.
+                type: string
+              item:
+                description: Item is the vault item's name.
+                maxLength: 200
+                type: string
+              passwordHash:
+                description: |-
+                  PasswordHash is the bcrypt hash of the root password; nothing else of it
+                  is kept.
+                pattern: ^\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}$
+                type: string
+              vaults:
+                description: Vaults link to where the password lives. Links only,
+                  never a secret.
+                items:
+                  description: BreakGlassVault is a link to a vault that holds the
+                    root password.
+                  properties:
+                    name:
+                      description: Name is the vault's name, as people know it, e.g.
+                        Break glass.
+                      maxLength: 100
+                      minLength: 1
+                      type: string
+                    url:
+                      description: URL opens the vault.
+                      maxLength: 2048
+                      pattern: ^https://
+                      type: string
+                  required:
+                  - name
+                  - url
+                  type: object
+                maxItems: 5
+                type: array
+            required:
+            - email
+            - passwordHash
+            type: object
+          status:
+            description: |-
+              BreakGlassStatus is what the API records about the root password: when it
+              was set and by whom, and every use. Only the API writes it.
+            properties:
+              generatedPasswordRemoved:
+                description: |-
+                  GeneratedPasswordRemoved is true once the API dropped a generated
+                  plain-text password from the old Secret: rotate the password.
+                type: boolean
+              lastUsedAt:
+                description: LastUsedAt is when the root user was last used.
+                format: date-time
+                type: string
+              migratedFrom:
+                description: |-
+                  MigratedFrom names where the hash was copied from on upgrade, e.g.
+                  Secret infrared/infrared-admin.
+                type: string
+              passwordSetAt:
+                description: |-
+                  PasswordSetAt is when the password was last set. A root session issued
+                  before it is signed out.
+                format: date-time
+                type: string
+              passwordSetBy:
+                description: |-
+                  PasswordSetBy is who set it: a platform admin's email, setup, or
+                  migration.
+                type: string
+              refusals:
+                description: |-
+                  Refusals count the password sign-ins refused, written at most once a
+                  minute.
+                properties:
+                  count:
+                    format: int64
+                    type: integer
+                  lastAt:
+                    format: date-time
+                    type: string
+                type: object
+              rotations:
+                description: Rotations are the password's changes, newest first.
+                items:
+                  description: BreakGlassChange is one change of the root password.
+                  properties:
+                    at:
+                      format: date-time
+                      type: string
+                    by:
+                      description: 'By is who changed it: a platform admin''s email,
+                        setup, or migration.'
+                      type: string
+                  required:
+                  - at
+                  - by
+                  type: object
+                maxItems: 20
+                type: array
+              useCount:
+                description: UseCount counts every use, including those Uses no longer
+                  lists.
+                format: int64
+                type: integer
+              uses:
+                description: Uses are the root user's uses, newest first.
+                items:
+                  description: BreakGlassUse is one use of the root user.
+                  properties:
+                    at:
+                      format: date-time
+                      type: string
+                    client:
+                      description: Client is the caller's address.
+                      type: string
+                    detail:
+                      description: Detail says more, e.g. "token ir-mac-3f2a minted".
+                      type: string
+                    host:
+                      description: Host is the address Infrared was opened at.
+                      type: string
+                    method:
+                      description: 'Method is how: password, sign-in-link or token.'
+                      enum:
+                      - password
+                      - sign-in-link
+                      - token
+                      type: string
+                    userAgent:
+                      description: UserAgent is the caller's user agent, at most 120
+                        characters.
+                      maxLength: 120
+                      type: string
+                  required:
+                  - at
+                  - method
+                  type: object
+                maxItems: 100
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: the break-glass record is a singleton named root
+          rule: self.metadata.name == 'root'
+    served: true
+    storage: true
+    subresources:
+      status: {}

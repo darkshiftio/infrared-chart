@@ -59,15 +59,20 @@ spec:
           spec:
             properties:
               admin:
-                description: InstallationAdmin is the first platform admin, created
-                  by the setup wizard.
+                description: |-
+                  InstallationAdmin is the first platform admin, the root user, created by
+                  the setup wizard. Its password's hash lives in the BreakGlass record named
+                  root (infrared-docs-internal ADR 0042).
                 properties:
                   email:
                     format: email
                     type: string
                   passwordSecretRef:
-                    description: PasswordSecretRef holds the bcrypt hash of the admin
-                      password.
+                    description: |-
+                      PasswordSecretRef held the bcrypt hash of the admin password in a
+                      Secret. Deprecated (ADR 0042): the hash lives in BreakGlass root. The
+                      API copies it from the Secret once, and clears this ref once a person
+                      has deleted the Secret.
                     properties:
                       key:
                         description: Key within the Secret.
@@ -83,7 +88,6 @@ spec:
                     type: object
                 required:
                 - email
-                - passwordSecretRef
                 type: object
               backup:
                 description: |-
@@ -383,10 +387,11 @@ spec:
               signIn:
                 description: |-
                   SignIn holds the sign-in settings platform admins change in Infrared,
-                  in Settings, Sign-in: today, which Google Workspace domains may sign in
-                  with Google. The Google OAuth client itself is the install's
-                  configuration (the chart's platformTokens.googleClientId and
-                  googleClientSecret), and so is whether the platform admin's password
+                  in Settings, Sign-in: which Google Workspace domains may sign in with
+                  Google, and since when Google sign-ins' roles come from Workspace
+                  groups (infrared-docs-internal ADR 0042). The Google OAuth client itself
+                  is the install's configuration (the chart's platformTokens.googleClientId
+                  and googleClientSecret), and so is whether the root user's password
                   still signs in (the chart's signIn.password.enabled). The operator reads
                   none of it.
                 properties:
@@ -407,6 +412,28 @@ spec:
                         maxItems: 20
                         type: array
                         x-kubernetes-list-type: set
+                      groupRoles:
+                        description: |-
+                          GroupRoles is set once, by the API, when a platform-admin team of the
+                          platform org first has a Workspace group that resolves someone: from
+                          then on Google sign-ins' roles come from Workspace groups, and an
+                          allowed domain no longer makes everyone a platform admin (ADR 0042,
+                          replacing ADR 0039's D5). Infrared never clears it; a person can, with
+                          kubectl edit.
+                        properties:
+                          by:
+                            description: |-
+                              By is the email of the first active person the platform-admin team's
+                              group resolved, sorted.
+                            type: string
+                          since:
+                            description: Since is when the API set it.
+                            format: date-time
+                            type: string
+                        required:
+                        - by
+                        - since
+                        type: object
                     type: object
                 type: object
               summaryVideos:

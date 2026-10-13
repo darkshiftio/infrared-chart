@@ -1,0 +1,222 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: gitconnectors.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: GitConnector
+    listKind: GitConnectorList
+    plural: gitconnectors
+    singular: gitconnector
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.kind
+      name: Kind
+      type: string
+    - jsonPath: .spec.baseURL
+      name: Base URL
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          GitConnector is a forge people link their git accounts on, through OAuth
+          (infrared-docs-internal ADR 0042). The API writes it.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              GitConnectorSpec is a forge people link their accounts on (infrared-docs-
+              internal ADR 0042): GitHub, Gitea or GitLab, at any address.
+            properties:
+              baseURL:
+                description: |-
+                  BaseURL is the forge's address in a browser: https://github.com,
+                  https://gitlab.com, https://git.example.com. https only; the API takes
+                  http://localhost and http://127.0.0.1 only where
+                  INFRARED_ALLOW_HTTP_CONNECTORS=true, for tests.
+                maxLength: 2048
+                pattern: ^(https://[^\s/?#]+|http://(localhost|127\.0\.0\.1)(:[0-9]{1,5})?)(/[^\s?#]*)?$
+                type: string
+              displayName:
+                description: DisplayName is what people see, e.g. "GitHub" or "GitLab
+                  at example.com".
+                maxLength: 100
+                minLength: 1
+                type: string
+              githubApp:
+                description: |-
+                  GitHubApp links through an org's GitHub App's OAuth client (kind github
+                  only). darkshift's connector names the platform org.
+                properties:
+                  organization:
+                    description: Organization is the Infrared org whose GitHub App
+                      links accounts.
+                    maxLength: 63
+                    minLength: 1
+                    type: string
+                required:
+                - organization
+                type: object
+              kind:
+                description: 'Kind is the forge: github, gitea or gitlab.'
+                enum:
+                - github
+                - gitea
+                - gitlab
+                type: string
+              managed:
+                description: |-
+                  Managed is true when Infrared registered the OAuth application on its
+                  own Gitea (kind gitea, with oauth).
+                type: boolean
+              oauth:
+                description: OAuth is an OAuth application made on the forge for Infrared.
+                properties:
+                  clientID:
+                    description: ClientID is the application's client ID.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  clientSecretRef:
+                    description: |-
+                      ClientSecretRef names the application's client secret, in Infrared's
+                      namespace: the Secret infrared-git-connectors, key
+                      <connector>.client-secret.
+                    properties:
+                      key:
+                        description: Key within the Secret.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                required:
+                - clientID
+                - clientSecretRef
+                type: object
+            required:
+            - baseURL
+            - displayName
+            - kind
+            type: object
+          status:
+            description: GitConnectorStatus is the API's last check of the connector.
+            properties:
+              checkedAt:
+                description: CheckedAt is when the API last checked it.
+                format: date-time
+                type: string
+              conditions:
+                description: |-
+                  Conditions: Ready is True when the API could reach the forge with the
+                  connector's client.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: 'a GitConnector is named by a DNS label: lower-case letters, digits
+            and hyphens, at most 63 characters'
+          rule: size(self.metadata.name) <= 63 && self.metadata.name.matches('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
+        - message: set exactly one of spec.githubApp and spec.oauth
+          rule: has(self.spec.githubApp) != has(self.spec.oauth)
+        - message: spec.githubApp is for kind github only
+          rule: '!has(self.spec.githubApp) || self.spec.kind == ''github'''
+        - message: spec.managed is for kind gitea only, with spec.oauth
+          rule: '!has(self.spec.managed) || !self.spec.managed || (self.spec.kind
+            == ''gitea'' && has(self.spec.oauth))'
+    served: true
+    storage: true
+    subresources:
+      status: {}

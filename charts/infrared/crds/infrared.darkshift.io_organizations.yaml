@@ -284,16 +284,36 @@ spec:
                 type: object
               teams:
                 description: |-
-                  Teams give people access to the org, by GitHub login. The platform
-                  admin and API tokens have full access without a team.
+                  Teams give people access to the org: the people of a team's Workspace
+                  group when they sign in with Google, and its members by GitHub login
+                  (infrared-docs-internal ADR 0042). The root user, and API tokens with
+                  no owner or the root user's, have full access without a team.
                 items:
                   description: Team is a named group of people with one role in the
                     org.
                   properties:
                     description:
                       type: string
+                    githubTeam:
+                      description: |-
+                        GitHubTeam is the GitHub team, by slug, in the org's GitHub organization (its GitProvider github),
+                        that Infrared keeps in step with this team. Gitea and GitLab teams take sibling fields later.
+                      maxLength: 100
+                      pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                      type: string
+                    googleGroup:
+                      description: |-
+                        GoogleGroup is the Google Workspace group whose people hold this team's role when they sign in
+                        with Google, by its address. Its people's linked GitHub logins then count, and the team's
+                        Members count only for people who sign in with GitHub (ADR 0042).
+                      maxLength: 254
+                      pattern: ^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}$
+                      type: string
                     members:
-                      description: Members by GitHub login.
+                      description: |-
+                        Members by GitHub login: people who sign in with GitHub, and people
+                        who sign in with Google and linked that login, on a team without a
+                        GoogleGroup.
                       items:
                         type: string
                       type: array
@@ -388,6 +408,70 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              teams:
+                description: |-
+                  Teams is what Infrared did for each team: today, infrared-operator's
+                  sync of the team's GitHub team (ADR 0042).
+                items:
+                  description: TeamStatus is what Infrared did for one team, by the
+                    team's name.
+                  properties:
+                    githubTeam:
+                      description: GitHubTeam is the GitHub team infrared-operator
+                        keeps in step with it.
+                      properties:
+                        members:
+                          description: Members are the team's members on GitHub after
+                            the sync, by login.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: set
+                        message:
+                          description: |-
+                            Message says what is wrong when the sync could not run, e.g. that the
+                            App lacks the organization permission Members; empty when it ran.
+                          type: string
+                        skipped:
+                          description: |-
+                            Skipped are the logins the sync wanted and did not add, or found and
+                            did not remove, each with the reason.
+                          items:
+                            description: TeamSkip is a login the GitHub team sync
+                              left as it was, and why.
+                            properties:
+                              login:
+                                type: string
+                              reason:
+                                type: string
+                            required:
+                            - login
+                            - reason
+                            type: object
+                          type: array
+                        slug:
+                          description: Slug is the GitHub team's slug.
+                          type: string
+                        syncedAt:
+                          description: SyncedAt is when the sync last ran to the end.
+                          format: date-time
+                          type: string
+                        url:
+                          description: URL is the team's page on GitHub.
+                          type: string
+                      required:
+                      - slug
+                      type: object
+                    name:
+                      description: Name is the team's name in spec.teams.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec

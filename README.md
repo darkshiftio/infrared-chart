@@ -279,6 +279,56 @@ Orgs add their own cloud accounts to Infrared as `CloudAccount`s (infrared-docs-
 
 Set at most one of the three under `aws`; `gcpServiceAccount` may stand beside any of them. Nothing set: no identity, and every cloud account fails its check.
 
+## Sign-in, roles and git connectors
+
+People sign in with Google or GitHub, take their roles from Google Workspace
+groups, and link their git accounts to their Google user (infrared-docs-internal
+ADR 0042). Most of it is Infrared's own objects, which the API writes and the
+chart never renders: the cluster-scoped `BreakGlass`, `User` and `GitConnector`
+(the CRDs ship in `crds/`), and the Secret `infrared-git-connectors`. The chart's
+part is the API's settings below, each rendered only when set.
+
+- **The root user**, the install's first platform admin, signs in with its email
+  and password: its break glass, which works when Google is down. Its password
+  lives in a vault outside Infrared. The API keeps only a bcrypt hash, in the
+  `BreakGlass` named `root`, never in a Secret, and shows every use to platform
+  admins in Access, Break glass. `signIn.password.enabled` still turns password
+  sign-in off (ADR 0039).
+- **Workspace groups as roles.** A team may name a Workspace group whose people
+  hold its role when they sign in with Google. The API reads the groups as the
+  Google service account `api.directory.serviceAccount` every
+  `api.directory.interval`, impersonating it from its own Workload Identity: no
+  key, and no annotation on the API's ServiceAccount, so its other Google calls
+  stay as they are. A group whose last good read is older than
+  `api.directory.maxAge` gives no role. With `api.directory.api: admin`, the
+  default, a suspended person holds nothing. Until a platform-admin team of the
+  platform org has a group that resolves someone, every Google sign-in from an
+  allowed domain stays a platform admin, as under ADR 0039.
+- **Git connectors.** People link their GitHub, GitLab and Gitea accounts through
+  `GitConnector`s. An OAuth application's client secret is in the Secret
+  `infrared-git-connectors` (key `<connector>.client-secret`), which the API
+  writes in the release namespace and never returns. `gitea.browserURL` lets
+  Infrared register one on the Gitea this chart runs (see "Gitea").
+- **The password sign-in's limits** count a caller's failures by its address:
+  the first `X-Forwarded-For` address, or the header `api.clientAddressHeader`
+  names, such as `CF-Connecting-IP` behind Cloudflare. A caller can send any
+  header, so name one only when the proxy in front sets it on every request.
+
+What Google needs for the directory, with no key anywhere:
+
+| Where | What |
+|---|---|
+| The Google Admin console | The Workspace role Groups Reader, assigned to the service account |
+| The service account's IAM policy | `roles/iam.workloadIdentityUser` for the Workload Identity principal of the API's ServiceAccount, `<fullname>-api` (`infrared-api`) in the release namespace |
+| The service account's project | `admin.googleapis.com` enabled, for `api.directory.api: admin`; or `cloudidentity.googleapis.com`, for `cloud-identity`, the Cloud Identity API, which cannot tell a suspended person |
+
+```yaml
+api:
+  directory:
+    serviceAccount: infrared-directory@example-project.iam.gserviceaccount.com
+  clientAddressHeader: CF-Connecting-IP   # only where every request comes through Cloudflare
+```
+
 ## The Installation's edge and previews
 
 The operator writes `installation.edge` and `installation.previews` to the
@@ -512,7 +562,8 @@ renders none of this.
 install's orgs: the chart's one dependency, the gitea chart 12.7.0 with Gitea
 1.27.3 (`docker.gitea.com/gitea:1.27.3-rootless`, by digest). It is off by
 default, and then the chart renders exactly what it rendered before. Everything
-under `gitea:` but `enabled` is the gitea chart's own values, preset for one pod:
+under `gitea:` but `enabled` and `browserURL` is the gitea chart's own values,
+preset for one pod:
 
 | What | Preset |
 |---|---|
@@ -530,6 +581,15 @@ admin from it and resets the admin's password to it at every start, and the API
 reads it at the setup wizard's forge step to make an org's bot user. Installed in
 a namespace other than `infrared`, set `gitea.gitea.config.server.ROOT_URL` and
 `.DOMAIN` to match.
+
+`gitea.browserURL` is the address browsers open this Gitea at, if they can
+(`INFRARED_GITEA_BROWSER_URL`, rendered only when set, and refused without
+`gitea.enabled`). With it, a platform admin can have Infrared register an OAuth
+application on this Gitea as its site admin, a managed git connector people link
+their Gitea accounts with (see "Sign-in, roles and git connectors"). Linking goes
+through the browser, and Gitea answers browsers at its own `ROOT_URL`, so the two
+name the same address. A Gitea only the cluster reaches leaves it empty, and the
+API refuses that connector.
 
 ```yaml
 gitea:
@@ -585,7 +645,8 @@ it changes. The UI's nginx then:
   extension, nothing else (`[]` without extensions);
 - proxies `/ext/<id>/<path>/` to `<upstream>/<path>/` for each declared path,
   once the API's `GET /v1/auth/check` accepts the session cookie. Only a
-  GitHub sign-in passes. Its login goes upstream as `X-Infrared-Github`,
+  GitHub login passes: a GitHub sign-in's, or the one a person signed in with
+  Google has linked (ADR 0042). It goes upstream as `X-Infrared-Github`,
   together with `X-Infrared-Proxy-Secret`; the browser's `Cookie` and
   `Authorization` do not, and the upstream's `Set-Cookie` never reaches the
   browser;
@@ -620,7 +681,11 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `fullnameOverride` | `""` | Overrides the resource name prefix (`infrared` for a release named infrared) |
 | `managementCluster.name` | `infrared-mgmt` | Management cluster name (`INFRARED_CLUSTER_NAME`) |
 | `externalURL` | `""` | The API's public base URL, ending in `/api` (for example `https://infrared.example.com/api`), if exposed (`INFRARED_EXTERNAL_URL`, api). Usually unnecessary: Infrared works it out from the request |
-| `signIn.password.enabled` | `true` | The platform admin's email and password sign-in (`INFRARED_SIGN_IN_PASSWORD`, api). `false` turns it off once Sign in with Google has worked on the install with its configured client; until then the password keeps working, so this value never locks everyone out. Deleting the ConfigMap `infrared-sign-in` turns it back on until the next Google sign-in |
+| `signIn.password.enabled` | `true` | The root user's email and password sign-in, its break glass (`INFRARED_SIGN_IN_PASSWORD`, api): its password lives in a vault outside Infrared, which keeps only a bcrypt hash, in the BreakGlass `root`. `false` turns it off once Sign in with Google has worked on the install with its configured client; until then the password keeps working, so this value never locks everyone out. Deleting the ConfigMap `infrared-sign-in` turns it back on until the next Google sign-in. See "Sign-in, roles and git connectors" |
+| `api.clientAddressHeader` | `""` | The header that carries a caller's address, which the password sign-in's limits count failures by (`INFRARED_CLIENT_ADDRESS_HEADER`), such as `CF-Connecting-IP` where every request from outside comes through Cloudflare; empty: the first `X-Forwarded-For` address. Rendered only when set |
+| `api.directory.serviceAccount` | `""` | The Google service account the API impersonates to read Workspace groups (`INFRARED_DIRECTORY_SERVICE_ACCOUNT`), `<name>@<project>.iam.gserviceaccount.com`, holding the Workspace role Groups Reader; empty: the directory is off, and no group gives a role. Rendered only when set. See "Sign-in, roles and git connectors" |
+| `api.directory.api` | `admin` | `admin`, the Admin SDK Directory API, which tells a suspended person (who then holds nothing) and needs `admin.googleapis.com` in the account's project; or `cloud-identity` (`INFRARED_DIRECTORY_API`) |
+| `api.directory.interval` / `.maxAge` | `2m` / `10m` | How often the groups are read, and how long a group's last good read gives roles (`INFRARED_DIRECTORY_INTERVAL`, `INFRARED_DIRECTORY_MAX_AGE`), Go durations; each empty one is left to the API, which has the same defaults |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
 | `cloud` | `""` | The control plane's cloud, `gcp` or `aws` (empty is `gcp`): the default image registry and chart repository, Artifact Registry or ECR (ADR 0033) |
@@ -657,6 +722,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `platformTokens.codeIndexGithubAppId` / `.codeIndexGithubAppInstallationId` / `.codeIndexGithubAppPrivateKey` | `""` | The code index's GitHub App, all three or none and only with `codeIndex.enabled`: its ID and its installation's (numbers) and its private key (PEM), rendered into `infrared-platform-tokens`, keys `code-index-github-app-id`, `-installation-id` and `-private-key`; empty for none. Pass them with `--set-file` |
 | `platformTokens.googleClientId` / `.googleClientSecret` | `""` | Sign in with Google's OAuth client (a Web application client), both or neither, rendered into `infrared-platform-tokens`, keys `google-client-id` and `google-client-secret`; the API reads them at use, so a client patched into the Secret later needs no restart. Its redirect URIs are `<address>/api/v1/auth/google/callback` for every address people open Infrared at. Which Google Workspace domains may sign in is a setting in Infrared (Settings, Sign-in). Pass the secret with `--set-file` |
 | `gitea.enabled` | `false` | Run Gitea, the chart's gitea dependency, and hand its address to the operator and the API (`INFRARED_GITEA_URL`) and its admin Secret to the API (`INFRARED_GITEA_ADMIN_SECRET`). See "Gitea" |
+| `gitea.browserURL` | `""` | The address browsers open that Gitea at, `https://` (plain `http://` only for localhost), with `gitea.enabled` only (`INFRARED_GITEA_BROWSER_URL`, api). Set, Infrared may register its own Gitea connector there; empty keeps it off. See "Gitea" |
 | `gitea.persistence.storageClass` / `.size` | `""` / `10Gi` | StorageClass and size of Gitea's volume; empty uses the cluster's default class |
 | `gitea.*` | one pod, SQLite, no Ingress or SSH | The gitea chart's own values, preset as "Gitea" describes. `gitea.fullnameOverride` (`gitea`) and `gitea.gitea.admin.existingSecret` (`infrared-gitea-admin`) are fixed |
 | `giteaAdmin.existingSecret` | `""` | `infrared-gitea-admin` when it already exists, as under Argo CD; the chart then renders none |
@@ -692,7 +758,8 @@ them on every sync (the gitops template syncs the `infrared` Application with
 - **operator**: ClusterRole whose rules are generated from infrared-operator
   `config/rbac/role.yaml` (kubebuilder markers), the backup CronJob's among
   them, plus a Role for leader election in the release namespace.
-- **api**: ClusterRole over every `infrared.darkshift.io` resource and status;
+- **api**: ClusterRole over every `infrared.darkshift.io` resource and status,
+  `BreakGlass`, `User` and `GitConnector` among them;
   zones' Ingresses get/list and, on a Gateway edge, their HTTPRoutes get (a
   zone's links); Deployments, StatefulSets, CronJobs and CloudNativePG
   Clusters and Backups get/list (the platform by layer: Infrared's own

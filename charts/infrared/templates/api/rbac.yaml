@@ -6,7 +6,8 @@ metadata:
     {{- include "infrared.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
 rules:
   # Every Infrared resource (Organization, Cluster, GitopsRepo, AgentRole,
-  # AgentWorkflow, AgentWorkflowRun, CloudAccount, ...) and its status.
+  # AgentWorkflow, AgentWorkflowRun, CloudAccount, BreakGlass, User,
+  # GitConnector, ...) and its status.
   - apiGroups: ["infrared.darkshift.io"]
     resources: ["*", "*/status"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -69,8 +70,9 @@ rules:
     resources: ["namespaces"]
     verbs: ["get", "list", "create"]
   # The API reads and writes Secrets in the release namespace (infrared-setup,
-  # infrared-session, infrared-api-tokens) and in ir-org-* namespaces. RBAC
-  # cannot match a namespace prefix, so this is cluster-wide.
+  # infrared-session, infrared-api-tokens, infrared-git-connectors) and in
+  # ir-org-* namespaces, and deletes none. RBAC cannot match a namespace
+  # prefix, so this is cluster-wide.
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list", "create", "update", "patch"]

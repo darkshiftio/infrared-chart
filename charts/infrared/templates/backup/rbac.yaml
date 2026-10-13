@@ -2,8 +2,9 @@
 The backup Job's account. The Infrared operator writes the CronJob
 infrared-backup from the Installation's spec.backup (the chart renders none),
 and each backup, the Job infrared-backup-<stamp>, exports Infrared's own
-objects as this account: read only, the twelve Infrared kinds with their
-status, and the namespaces, Secrets and ConfigMaps a backup keeps. It is
+objects as this account: read only, every Infrared kind with its status
+(BreakGlass's status is the root user's record of uses), and the namespaces,
+Secrets and ConfigMaps a backup keeps. It is
 rendered whether or not backups are on, because the destination and the
 recipients can be set in Infrared after the install. Its name is fixed: the
 operator's CronJob names it.

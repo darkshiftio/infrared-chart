@@ -483,6 +483,10 @@
           "minimum": 1,
           "maximum": 65535,
           "description": "The manager's metrics endpoint, the Service port named metrics (ADR 0044)."
+        },
+        "metricsSecure": {
+          "type": "boolean",
+          "description": "Serve the manager's metrics over HTTPS with Kubernetes authentication instead of plain HTTP in the cluster (ADR 0044)."
         }
       },
       "required": [

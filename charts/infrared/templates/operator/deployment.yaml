@@ -32,6 +32,12 @@ spec:
             - --leader-elect
             - --health-probe-bind-address=:8081
             - --metrics-bind-address=:{{ .Values.operator.metricsPort }}
+            {{- if not .Values.operator.metricsSecure }}
+            # Plain HTTP in the cluster, as the API's metrics are, so the metrics stack and the telemetry vmagent
+            # scrape it without a client certificate or a token review (controller-runtime serves HTTPS with
+            # authentication by default, which answers a plain scrape with 400).
+            - --metrics-secure=false
+            {{- end }}
             {{- with $c.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

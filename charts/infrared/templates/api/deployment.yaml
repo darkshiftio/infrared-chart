@@ -1,3 +1,6 @@
+{{- if and .Values.gitea.browserURL (not .Values.gitea.enabled) }}
+{{- fail "gitea.browserURL is the address browsers open the Gitea this chart runs at: it needs gitea.enabled" }}
+{{- end }}
 {{- $c := .Values.api }}
 {{- if .Values.summaryvideo.enabled }}
 {{- /* The media volume is the disk's own (root's on GKE's persistent disks): an
@@ -63,10 +66,37 @@ spec:
             - name: INFRARED_EXTERNAL_URL
               value: {{ . | quote }}
             {{- end }}
-            # The platform admin's password sign-in (signIn.password.enabled):
+            # The root user's password sign-in (signIn.password.enabled):
             # false turns it off once Sign in with Google has worked here.
             - name: INFRARED_SIGN_IN_PASSWORD
               value: {{ ternary "true" "false" (ne .Values.signIn.password.enabled false) | quote }}
+            {{- with $c.clientAddressHeader }}
+            # The header that carries a caller's address, which the password
+            # sign-in's limits count failures by (api.clientAddressHeader).
+            - name: INFRARED_CLIENT_ADDRESS_HEADER
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $c.directory }}
+            # Workspace groups as roles (api.directory, ADR 0042): the Google
+            # service account the API reads them as, the API it reads them
+            # through, how often, and how long a read counts. Each only when set.
+            {{- with .serviceAccount }}
+            - name: INFRARED_DIRECTORY_SERVICE_ACCOUNT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .api }}
+            - name: INFRARED_DIRECTORY_API
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .interval }}
+            - name: INFRARED_DIRECTORY_INTERVAL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .maxAge }}
+            - name: INFRARED_DIRECTORY_MAX_AGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.summaryvideo.enabled }}
             - name: INFRARED_MEDIA_DIR
               value: /var/lib/infrared/media
@@ -90,6 +120,13 @@ spec:
               value: {{ include "infrared.giteaURL" . | quote }}
             - name: INFRARED_GITEA_ADMIN_SECRET
               value: "infrared-gitea-admin"
+            {{- with .Values.gitea.browserURL }}
+            # ...and the address browsers open it at (gitea.browserURL): set, the
+            # API may register its own OAuth application there, a Gitea
+            # connector people link their Gitea accounts with (ADR 0042).
+            - name: INFRARED_GITEA_BROWSER_URL
+              value: {{ . | quote }}
+            {{- end }}
             {{- end }}
             {{- if not .Values.codeIndex.enabled }}
             # No code index runs (codeIndex.enabled is false): the code

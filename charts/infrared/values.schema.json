@@ -473,7 +473,136 @@
       ]
     },
     "api": {
-      "$ref": "#/$defs/component"
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/image"
+        },
+        "replicas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "serviceAccount": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            }
+          }
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "podSecurityContext": {
+          "type": "object"
+        },
+        "containerSecurityContext": {
+          "type": "object"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "topologySpreadConstraints": {
+          "type": "array"
+        },
+        "clientAddressHeader": {
+          "type": "string",
+          "pattern": "^([A-Za-z][A-Za-z0-9-]*)?$",
+          "maxLength": 64,
+          "description": "INFRARED_CLIENT_ADDRESS_HEADER: the header that carries a caller's address, which the password sign-in's limits count failures by, such as CF-Connecting-IP behind Cloudflare; empty means the first X-Forwarded-For address."
+        },
+        "directory": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Workspace groups as roles (ADR 0042): how the API reads the groups teams name.",
+          "properties": {
+            "serviceAccount": {
+              "type": "string",
+              "pattern": "^$|^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\\.iam\\.gserviceaccount\\.com$",
+              "description": "INFRARED_DIRECTORY_SERVICE_ACCOUNT: the Google service account the API impersonates to read Workspace groups, <name>@<project>.iam.gserviceaccount.com, holding Groups Reader; empty turns the directory off."
+            },
+            "api": {
+              "type": "string",
+              "enum": [
+                "",
+                "admin",
+                "cloud-identity"
+              ],
+              "description": "INFRARED_DIRECTORY_API: admin, the Admin SDK Directory API, which tells a suspended person, or cloud-identity, the Cloud Identity API; empty is the API's default, admin."
+            },
+            "interval": {
+              "type": "string",
+              "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+              "description": "INFRARED_DIRECTORY_INTERVAL: how often the groups are read, a Go duration such as 2m; empty is the API's default, 2m."
+            },
+            "maxAge": {
+              "type": "string",
+              "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+              "description": "INFRARED_DIRECTORY_MAX_AGE: how long a group's last good read gives roles, a Go duration such as 10m; empty is the API's default, 10m."
+            }
+          }
+        }
+      },
+      "required": [
+        "image",
+        "replicas",
+        "resources",
+        "service"
+      ]
     },
     "ui": {
       "type": "object",
@@ -1113,6 +1242,11 @@
         "enabled": {
           "type": "boolean",
           "description": "Run Gitea, and hand its address (INFRARED_GITEA_URL) and admin Secret (INFRARED_GITEA_ADMIN_SECRET) on."
+        },
+        "browserURL": {
+          "type": "string",
+          "pattern": "^$|^(https://[^\\s/?#]+|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?)(/[^\\s?#]*)?$",
+          "description": "INFRARED_GITEA_BROWSER_URL: the address browsers open this Gitea at, such as https://git.example.com; set, Infrared can register its own Gitea connector (ADR 0042). Needs gitea.enabled."
         },
         "fullnameOverride": {
           "const": "gitea",

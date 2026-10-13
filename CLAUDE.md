@@ -19,6 +19,15 @@ The Helm chart for Infrared (`charts/infrared`), published to
   (`signIn.password.enabled`). The API writes the ConfigMap `infrared-sign-in`
   itself; the chart never renders it. The UI Service is `{{ include "infrared.fullname" . }}`
   (`svc/infrared`), port 80 -> 8080.
+- ADR 0042, the API's side: env `INFRARED_DIRECTORY_SERVICE_ACCOUNT`,
+  `INFRARED_DIRECTORY_API`, `INFRARED_DIRECTORY_INTERVAL`,
+  `INFRARED_DIRECTORY_MAX_AGE` (`api.directory.*`), `INFRARED_CLIENT_ADDRESS_HEADER`
+  (`api.clientAddressHeader`) and `INFRARED_GITEA_BROWSER_URL`
+  (`gitea.browserURL`), each rendered only when set; never
+  `INFRARED_DIRECTORY_BASE_URL` or `INFRARED_ALLOW_HTTP_CONNECTORS`, which are
+  for tests. The API writes the Secret `infrared-git-connectors` (keys
+  `<connector>.client-secret`) and the BreakGlass `root` itself. No Secret holds
+  the root user's password or its hash: no template names `infrared-admin`.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - `make verify` must pass before a PR. Pin every upstream version.

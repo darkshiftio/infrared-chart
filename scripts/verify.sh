@@ -1144,6 +1144,108 @@ refuse "a Google client secret in the client ID's place fails" "at '/platformTok
   --set platformTokens.googleClientId=GOCSPX-not-an-id "${google_secret[@]}"
 refuse "signIn.password.enabled as a string fails" "at '/signIn/password/enabled'" --set-string signIn.password.enabled=false
 
+step "identity (ADR 0042): break glass, Workspace groups, git connectors"
+# The kinds the API writes and the operator's GitHub team sync reads, synced
+# from infrared-operator api/v0.55.0: BreakGlass, the root user's record (a
+# bcrypt hash, never a Secret), a person's User and a forge's GitConnector;
+# teams' Workspace group and GitHub team; the Installation's switch that ends
+# ADR 0039's D5, and its admin with no Secret.
+check defaults.yaml "the BreakGlass, User and GitConnector CRDs are included" '^    kind: (BreakGlass|User|GitConnector)$' 3
+check defaults.yaml "the Organization CRD has teams' googleGroup and githubTeam, and status.teams' githubTeam" \
+  '^                    (googleGroup|githubTeam):$' 3
+check defaults.yaml "the Installation CRD has spec.signIn.google.groupRoles" '^                      groupRoles:$' 1
+if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.admin.required' \
+      "$chart/crds/infrared.darkshift.io_installations.yaml")" == '["email"]' ]]; then
+  ok "the Installation's admin needs its email alone: passwordSecretRef is optional"
+else bad "the Installation CRD still requires spec.admin.passwordSecretRef (run hack/sync-operator.sh)"; fi
+if [[ -n "${INFRARED_OPERATOR_DIR:-}" ]]; then
+  for c in breakglasses users gitconnectors installations; do
+    if cmp -s "$INFRARED_OPERATOR_DIR/config/crd/bases/infrared.darkshift.io_$c.yaml" "$chart/crds/infrared.darkshift.io_$c.yaml"; then
+      ok "the $c CRD matches $INFRARED_OPERATOR_DIR"
+    else bad "the $c CRD differs from $INFRARED_OPERATOR_DIR (run hack/sync-operator.sh)"; fi
+  done
+fi
+# operator_can <resource> <verb>...: the operator's ClusterRole grants each verb
+# on that Infrared resource.
+operator_can() {
+  local res="$1" verbs v; shift
+  verbs="$(yq "select(.kind == \"ClusterRole\" and .metadata.name == \"infrared-operator\") | .rules[]
+    | select(.apiGroups[] == \"infrared.darkshift.io\") | select(.resources[] == \"$res\") | .verbs[]" "$out/defaults.yaml")"
+  for v in "$@"; do grep -qxF -- "$v" <<<"$verbs" || return 1; done
+}
+if operator_can users get list watch && operator_can gitconnectors get list watch &&
+   operator_can organizations/status get update patch; then
+  ok "the operator may read Users and GitConnectors and write Organizations' status, for the GitHub team sync"
+else bad "the operator's ClusterRole cannot read users or gitconnectors, or write organizations/status (run hack/sync-operator.sh)"; fi
+# The API writes the new kinds and their status, and the Secret
+# infrared-git-connectors, with the rules it had: every Infrared kind, and
+# Secrets with no delete. The backup reads every Infrared kind.
+id_api="$(obj defaults ClusterRole infrared-api)"
+if grep -A1 -xF '  - apiGroups: ["infrared.darkshift.io"]' <<<"$id_api" | grep -qxF '    resources: ["*", "*/status"]' &&
+   grep -A1 -xF '    resources: ["secrets"]' <<<"$id_api" | grep -qxF '    verbs: ["get", "list", "create", "update", "patch"]'; then
+  ok "the API may write every Infrared kind and its status, and Secrets, which it never deletes"
+else bad "the API's ClusterRole no longer covers every Infrared kind, or may delete Secrets"; fi
+if grep -A1 -xF '  - apiGroups: ["infrared.darkshift.io"]' <<<"$(obj defaults ClusterRole infrared-backup)" |
+     grep -qxF '    resources: ["*"]'; then
+  ok "the backup reads every Infrared kind: BreakGlass, User and GitConnector among them"
+else bad "the backup's ClusterRole no longer reads every Infrared kind"; fi
+# No Secret holds anything of the root user: no template or value names the
+# old infrared-admin.
+if grep -rlF 'infrared-admin' "$chart/templates" "$chart/values.yaml" "$chart/values.schema.json" >"$out/infrared-admin.log"; then
+  cat "$out/infrared-admin.log"; bad "the chart names the Secret infrared-admin"
+else ok "no template or value names the Secret infrared-admin"; fi
+# A fake directory and plain-http connectors are for tests and a local stack
+# (api.extraEnv), never the chart's.
+if grep -rlE 'INFRARED_(DIRECTORY_BASE_URL|ALLOW_HTTP_CONNECTORS)' "$chart/templates" >"$out/test-only-env.log"; then
+  cat "$out/test-only-env.log"; bad "a template sets INFRARED_DIRECTORY_BASE_URL or INFRARED_ALLOW_HTTP_CONNECTORS"
+else ok "no template sets the API's test-only INFRARED_DIRECTORY_BASE_URL or INFRARED_ALLOW_HTTP_CONNECTORS"; fi
+# The API's settings, each rendered only when set: by default the directory's
+# API, interval and max age, the API's own defaults; set, each reaches the API
+# alone; emptied, none. The API impersonates the directory's account itself, so
+# its ServiceAccount carries no annotation.
+ci_directory=infrared-directory@example-project.iam.gserviceaccount.com
+identity=(--set "api.directory.serviceAccount=$ci_directory,api.directory.api=cloud-identity"
+  --set "api.directory.interval=90s,api.directory.maxAge=5m,api.clientAddressHeader=CF-Connecting-IP"
+  --set gitea.browserURL=https://git.example.com)
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${identity[@]}" >"$out/identity.yaml"
+helm template infrared "$chart" -n infrared --set api.directory.api=,api.directory.interval=,api.directory.maxAge= \
+  >"$out/identity-empty.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" "${identity[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with the directory, the client address header and Gitea's browser address"
+else cat "$out/lint.log"; bad "lint install with the directory, the client address header and Gitea's browser address"; fi
+envs identity; envs identity-empty
+has defaults.env "by default the directory reads through the Admin SDK" 'INFRARED_DIRECTORY_API="admin"'
+has defaults.env "...every two minutes" 'INFRARED_DIRECTORY_INTERVAL="2m"'
+has defaults.env "...and a read gives roles for ten" 'INFRARED_DIRECTORY_MAX_AGE="10m"'
+check defaults.env "no directory account, client address header or Gitea browser address by default" \
+  '^INFRARED_(DIRECTORY_SERVICE_ACCOUNT|CLIENT_ADDRESS_HEADER|GITEA_BROWSER_URL)=' 0
+has identity.env "the directory's account reaches the API" "INFRARED_DIRECTORY_SERVICE_ACCOUNT=\"$ci_directory\""
+has identity.env "...its API" 'INFRARED_DIRECTORY_API="cloud-identity"'
+has identity.env "...its interval" 'INFRARED_DIRECTORY_INTERVAL="90s"'
+has identity.env "...and its max age" 'INFRARED_DIRECTORY_MAX_AGE="5m"'
+has identity.env "the client address header reaches the API" 'INFRARED_CLIENT_ADDRESS_HEADER="CF-Connecting-IP"'
+has identity.env "Gitea's browser address reaches the API" 'INFRARED_GITEA_BROWSER_URL="https://git.example.com"'
+id_env='^            - name: INFRARED_(DIRECTORY_(SERVICE_ACCOUNT|API|INTERVAL|MAX_AGE)|CLIENT_ADDRESS_HEADER|GITEA_BROWSER_URL)$'
+if [[ "$(objn identity Deployment infrared-api "$id_env")" == 6 && "$(grep -cE -- "$id_env" "$out/identity.yaml")" == 6 ]]; then
+  ok "the six reach the API alone"
+else bad "the directory's settings, the client address header or Gitea's browser address reach another container, or not the API"; fi
+check identity-empty.env "emptied, the directory's API, interval and max age are left to the API" '^INFRARED_DIRECTORY_' 0
+if [[ "$(objn identity ServiceAccount infrared-api 'iam\.gke\.io/gcp-service-account')" == 0 ]]; then
+  ok "the API's ServiceAccount carries no Workload Identity annotation for the directory"
+else bad "the API's ServiceAccount is annotated with a Google service account"; fi
+refuse "Gitea's browser address without gitea.enabled fails" \
+  "gitea.browserURL is the address browsers open the Gitea this chart runs at: it needs gitea.enabled" \
+  --set gitea.browserURL=https://git.example.com
+refuse "Gitea's browser address over plain http, other than localhost, fails" "at '/gitea/browserURL'" \
+  "${gitea[@]}" --set gitea.browserURL=http://git.example.com
+refuse "a directory account that is not a Google service account fails" "at '/api/directory/serviceAccount'" \
+  --set api.directory.serviceAccount=someone@example.com
+refuse "a directory API other than admin or cloud-identity fails" "at '/api/directory/api'" --set api.directory.api=ldap
+refuse "a directory interval that is not a Go duration fails" "at '/api/directory/interval'" \
+  --set api.directory.interval=two-minutes
+refuse "a client address header that is not a header name fails" "at '/api/clientAddressHeader'" \
+  --set-string 'api.clientAddressHeader=CF Connecting IP'
+
 step "umbrella chart (ADR 0038)"
 # An umbrella wraps this chart: its version is the control plane's, and its pins hand no override on.
 helm template infrared "$chart" -n infrared --set global.deployedChart.version=0.1.0-rc.147 \
@@ -1173,7 +1275,7 @@ if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && g
 else bad "the chart's name leaks into what it renders"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

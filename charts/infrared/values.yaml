@@ -23,11 +23,13 @@ externalURL: ""
 # which Infrared never writes.
 signIn:
   password:
-    # -- The platform admin's email and password sign-in (INFRARED_SIGN_IN_PASSWORD,
-    # api). false turns it off, but only once Sign in with Google has worked on
-    # this install with its configured client; until then the password keeps
-    # working, so this value never locks everyone out. Deleting the ConfigMap
-    # infrared-sign-in turns it back on until the next Google sign-in.
+    # -- The root user's email and password sign-in (INFRARED_SIGN_IN_PASSWORD,
+    # api): the install's first platform admin and its break glass. Its password
+    # lives in a vault outside Infrared; Infrared keeps only a bcrypt hash, in the
+    # BreakGlass `root` (ADR 0042). false turns it off, but only once Sign in with
+    # Google has worked on this install with its configured client; until then the
+    # password keeps working, so this value never locks everyone out. Deleting the
+    # ConfigMap infrared-sign-in turns it back on until the next Google sign-in.
     enabled: true
 
 # What the operator writes to the Installation when it starts, so nobody patches
@@ -550,6 +552,34 @@ api:
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+  # -- The header that carries a caller's address (INFRARED_CLIENT_ADDRESS_HEADER),
+  # which the password sign-in's limits count failures by: for example
+  # CF-Connecting-IP, where every request from outside comes through Cloudflare.
+  # Empty: the first X-Forwarded-For address. A caller can send any header, so
+  # name one only when the proxy in front sets it on every request.
+  clientAddressHeader: ""
+  # Workspace groups as roles (ADR 0042): a team may name a Google Workspace
+  # group whose people hold its role when they sign in with Google, and the API
+  # reads those groups from Google's directory.
+  directory:
+    # -- The Google service account the API impersonates to read the groups
+    # (INFRARED_DIRECTORY_SERVICE_ACCOUNT), from its own Workload Identity, with
+    # no key: <name>@<project>.iam.gserviceaccount.com, holding the Workspace
+    # role Groups Reader. Empty: the directory is off, and no Workspace group
+    # gives a role.
+    serviceAccount: ""
+    # -- The Google API that reads them (INFRARED_DIRECTORY_API): `admin`, the
+    # Admin SDK Directory API, which also tells a suspended person, who then
+    # holds nothing; or `cloud-identity`, the Cloud Identity API, which cannot.
+    # `admin` needs admin.googleapis.com enabled in the service account's project.
+    api: admin
+    # -- How often the groups are read, a Go duration (INFRARED_DIRECTORY_INTERVAL):
+    # a person taken out of a group loses its role within about this long.
+    interval: 2m
+    # -- How long a group's last good read counts (INFRARED_DIRECTORY_MAX_AGE):
+    # older, the group gives no role until it is read again. infrared-operator's
+    # GitHub team sync keeps its own ten minutes.
+    maxAge: 10m
 
 ui:
   image:
@@ -633,7 +663,8 @@ mcp:
 
 # Gitea, the forge an install may run for its orgs' repos: the chart's `gitea`
 # dependency (gitea chart 12.7.0, Gitea 1.27.3), off by default. Every key below
-# but `enabled` is the gitea chart's own (https://gitea.com/gitea/helm-gitea),
+# but `enabled` and `browserURL` is the gitea chart's own
+# (https://gitea.com/gitea/helm-gitea),
 # preset for one pod: SQLite on one volume, an in-memory cache, a LevelDB queue,
 # no ingress and no SSH, sign-in required and no self-registration. The operator
 # and the API reach it at http://gitea-http.<release namespace>.svc.cluster.local:3000
@@ -643,6 +674,12 @@ gitea:
   # and the API (INFRARED_GITEA_URL) and its admin Secret to the API
   # (INFRARED_GITEA_ADMIN_SECRET).
   enabled: false
+  # -- The address browsers open this Gitea at, such as https://git.example.com
+  # (INFRARED_GITEA_BROWSER_URL, api). Set, a platform admin can have Infrared
+  # register its own OAuth application on this Gitea, a git connector people
+  # link their Gitea accounts with (ADR 0042). Empty keeps that off, as for a
+  # Gitea only the cluster reaches. Needs `enabled`.
+  browserURL: ""
   # -- Fixed: the Deployment is `gitea` and its Service `gitea-http`.
   fullnameOverride: gitea
   replicaCount: 1

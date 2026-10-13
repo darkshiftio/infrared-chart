@@ -110,6 +110,20 @@
               ]
             }
           ]
+        },
+        "telemetry": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "spec.observability.telemetry (INFRARED_TELEMETRY_URL, INFRARED_TELEMETRY_PLATFORM): the telemetry plane an install without the metrics stack writes to, and its platform label (ADR 0044).",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string",
+              "pattern": "^$|^[a-z0-9][a-z0-9-]{0,62}$"
+            }
+          }
         }
       }
     },
@@ -463,6 +477,12 @@
               }
             }
           }
+        },
+        "metricsPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "The manager's metrics endpoint, the Service port named metrics (ADR 0044)."
         }
       },
       "required": [
@@ -595,6 +615,12 @@
               "description": "INFRARED_DIRECTORY_MAX_AGE: how long a group's last good read gives roles, a Go duration such as 10m; empty is the API's default, 10m."
             }
           }
+        },
+        "metricsPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "INFRARED_METRICS_ADDR: the API's own metrics, the Service port named metrics (ADR 0044)."
         }
       },
       "required": [
@@ -1217,6 +1243,10 @@
       "properties": {
         "metricsURL": {
           "type": "string"
+        },
+        "metricsWriteURL": {
+          "type": "string",
+          "description": "INFRARED_METRICS_WRITE_URL: where remote-write bodies at POST /api/v1/telemetry/write are forwarded; empty means metricsURL plus /api/v1/write (ADR 0044)."
         }
       }
     },

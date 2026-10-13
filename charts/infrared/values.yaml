@@ -49,6 +49,18 @@ installation:
   previews: {}
   #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
   #   signInURL: https://infrared.example.com  # where preview visitors sign in
+  # The telemetry plane (infrared-docs-internal ADR 0044): where an install without
+  # the metrics stack sends its numbers, and the platform label every series
+  # carries, <login>-<stack> for a Mac's stack (INFRARED_TELEMETRY_URL and
+  # INFRARED_TELEMETRY_PLATFORM, operator). Written to the Installation's
+  # `spec.observability.telemetry`; the gitops template then renders one vmagent
+  # that writes there. Empty: no telemetry component. `ir local telemetry connect`
+  # sets both on a local stack and writes the token's Secret.
+  telemetry:
+    # -- The remote-write address: hosted's `https://<host>/api/v1/telemetry/write`.
+    url: ""
+    # -- The platform label, lowercase letters, digits and hyphens.
+    platform: ""
 
 # -- The control plane's cloud (ADR 0033): "gcp" or "aws"; empty is "gcp". It
 # picks the default image registry and chart repository: darkshift's Artifact
@@ -443,6 +455,10 @@ observability:
   # -- Prometheus-compatible query URL the API reads SLO error ratios from (INFRARED_METRICS_URL).
   # The default is the VictoriaMetrics single node the gitops template installs; empty reports every SLO as no-data.
   metricsURL: "http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428"
+  # -- Where the API forwards remote-write bodies that arrive at POST /api/v1/telemetry/write
+  # (INFRARED_METRICS_WRITE_URL, ADR 0044). Empty: metricsURL plus `/api/v1/write`, the
+  # VictoriaMetrics single's own write path. A later ingest elsewhere is a change here alone.
+  metricsWriteURL: ""
 
 runner:
   image:
@@ -523,6 +539,10 @@ operator:
     annotations: {}
   service:
     port: 8081
+  # -- The manager's metrics endpoint (--metrics-bind-address), served on the Service's port
+  # named `metrics`: step attempts, duration, tokens and cost by org, workflow, role and model
+  # (ADR 0044). The metrics stack and the telemetry vmagent scrape every port so named.
+  metricsPort: 8080
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
@@ -547,6 +567,9 @@ api:
     annotations: {}
   service:
     port: 8080
+  # -- The API's own Prometheus metrics (INFRARED_METRICS_ADDR), on a port of their own off the
+  # public listener, served on the Service's port named `metrics` (ADR 0044).
+  metricsPort: 9090
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []

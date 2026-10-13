@@ -108,6 +108,13 @@ spec:
             - name: INFRARED_METRICS_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.observability.metricsWriteURL }}
+            - name: INFRARED_METRICS_WRITE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            # The API's own Prometheus metrics, on a port of their own off the public listener (ADR 0044).
+            - name: INFRARED_METRICS_ADDR
+              value: {{ printf ":%d" (int .Values.api.metricsPort) | quote }}
             {{- with .Values.registry.address }}
             # The install's own registry, where steps publish and Releases take images from.
             - name: INFRARED_REGISTRY
@@ -147,5 +154,8 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.api.metricsPort }}
               protocol: TCP
           {{- include "infrared.probes" (dict "port" "http") | nindent 10 }}

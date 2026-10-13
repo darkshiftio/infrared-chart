@@ -14,3 +14,7 @@ spec:
       port: {{ .Values.operator.service.port }}
       targetPort: health
       protocol: TCP
+    - name: metrics
+      port: {{ .Values.operator.metricsPort }}
+      targetPort: metrics
+      protocol: TCP

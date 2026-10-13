@@ -543,6 +543,9 @@ operator:
   # named `metrics`: step attempts, duration, tokens and cost by org, workflow, role and model
   # (ADR 0044). The metrics stack and the telemetry vmagent scrape every port so named.
   metricsPort: 8080
+  # -- Serve the manager's metrics over HTTPS with Kubernetes authentication (controller-runtime's default) instead of
+  # plain HTTP in the cluster. Off: the metrics stack and the telemetry vmagent scrape the port as they scrape the API's.
+  metricsSecure: false
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []

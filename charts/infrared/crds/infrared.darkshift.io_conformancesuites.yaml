@@ -1,0 +1,306 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: conformancesuites.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: ConformanceSuite
+    listKind: ConformanceSuiteList
+    plural: conformancesuites
+    shortNames:
+    - confsuite
+    singular: conformancesuite
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.trialSpentUSD
+      name: Trial spent
+      type: string
+    - jsonPath: .status.monthSpentUSD
+      name: Month spent
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ConformanceSuite proves cluster templates on a schedule (ADR
+          0047).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ConformanceSuiteSpec is a suite of templates proven on a
+              schedule.
+            properties:
+              monthlyCapUSD:
+                description: |-
+                  MonthlyCapUSD is what the suite's runs may cost in a calendar month
+                  (UTC) once the trial is over, e.g. "60".
+                type: string
+              schedule:
+                description: |-
+                  Schedule is the steady cadence (the owner: twice daily, on his word
+                  at the trial's end). Empty: no runs once the trial is over.
+                properties:
+                  at:
+                    description: At runs each template at these times of day, UTC,
+                      e.g. ["03:00","15:00"].
+                    items:
+                      type: string
+                    type: array
+                  every:
+                    description: Every runs each template at this interval, e.g. 2h.
+                    type: string
+                type: object
+              suspend:
+                description: Suspend stops scheduling every template's runs; runs
+                  going finish.
+                type: boolean
+              templates:
+                description: Templates are the cluster templates the suite proves.
+                items:
+                  description: ConformanceTemplate is one cluster template a suite
+                    proves.
+                  properties:
+                    cloudAccount:
+                      description: |-
+                        CloudAccount is the platform org's CloudAccount the run builds
+                        through.
+                      type: string
+                    flavor:
+                      description: 'Flavor is the Cluster''s flavor: eks on EKS, empty
+                        on GKE.'
+                      enum:
+                      - k3s
+                      - eks
+                      type: string
+                    hourlyUSD:
+                      description: |-
+                        HourlyUSD is what a run's cluster costs an hour while it stands, in US
+                        dollars, e.g. "0.17": runs are priced from it, and the cap with them.
+                      type: string
+                    module:
+                      description: 'Module is the template under test: gcp/gke-cluster
+                        or aws/eks-cluster.'
+                      type: string
+                    name:
+                      description: |-
+                        Name is the template's short name in the suite, e.g. gke or eks: a DNS
+                        label, used in its runs' and Clusters' names.
+                      pattern: ^[a-z0-9]([-a-z0-9]{0,10}[a-z0-9])?$
+                      type: string
+                    provider:
+                      description: Provider is gcp or aws.
+                      enum:
+                      - gcp
+                      - aws
+                      type: string
+                    region:
+                      description: Region is the Cluster's region.
+                      type: string
+                    suspend:
+                      description: Suspend stops scheduling this template's runs.
+                      type: boolean
+                    variables:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        Variables are the template's inputs. The run adds name, its labels and
+                        the API's allowed addresses (the management cluster's nodes).
+                      type: object
+                    version:
+                      description: Version is the infrared-iac-modules tag under test,
+                        e.g. v0.15.0.
+                      type: string
+                  required:
+                  - cloudAccount
+                  - hourlyUSD
+                  - module
+                  - name
+                  - provider
+                  - version
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              timeLimit:
+                description: |-
+                  TimeLimit is a run's whole time limit before its cluster is deleted;
+                  default 90m.
+                type: string
+              triage:
+                description: Triage answers a failed run; empty answers none.
+                properties:
+                  product:
+                    description: Product is the platform org's Product whose QA answers.
+                    type: string
+                  repo:
+                    description: Repo is the Product's repo the triage reads (the
+                      template's).
+                    type: string
+                required:
+                - product
+                - repo
+                type: object
+              trial:
+                description: Trial is the first cadence and its budget.
+                properties:
+                  budgetUSD:
+                    description: BudgetUSD is what the trial's runs may cost together,
+                      e.g. "60".
+                    type: string
+                  schedule:
+                    description: 'Schedule is the trial''s cadence (the owner: every
+                      two hours).'
+                    properties:
+                      at:
+                        description: At runs each template at these times of day,
+                          UTC, e.g. ["03:00","15:00"].
+                        items:
+                          type: string
+                        type: array
+                      every:
+                        description: Every runs each template at this interval, e.g.
+                          2h.
+                        type: string
+                    type: object
+                  until:
+                    description: Until is when the trial ends; after it the suite's
+                      schedule applies.
+                    format: date-time
+                    type: string
+                required:
+                - budgetUSD
+                - schedule
+                - until
+                type: object
+              ttl:
+                description: |-
+                  TTL is how long after its start a run's cluster expires, for the
+                  sweeper; default 4h.
+                type: string
+              workload:
+                description: Workload is what each run deploys and smoke checks.
+                properties:
+                  expect:
+                    description: Expect is text the page must contain.
+                    type: string
+                  path:
+                    description: Path is its directory in the repository.
+                    type: string
+                  repoURL:
+                    description: RepoURL is the git repository Argo CD reads it from.
+                    type: string
+                  revision:
+                    description: Revision is the branch or commit; empty means main.
+                    type: string
+                required:
+                - expect
+                - path
+                - repoURL
+                type: object
+            required:
+            - monthlyCapUSD
+            - templates
+            - workload
+            type: object
+          status:
+            description: ConformanceSuiteStatus is what the suite has run and spent.
+            properties:
+              message:
+                description: Message says what the suite is doing, or why it is not
+                  running.
+                type: string
+              monthSpentUSD:
+                description: MonthSpentUSD is what this month's runs have cost.
+                type: string
+              swept:
+                description: Swept are the expired clusters the sweeper deleted, newest
+                  first.
+                items:
+                  type: string
+                type: array
+              sweptAt:
+                description: SweptAt is when the sweeper last looked for expired clusters.
+                format: date-time
+                type: string
+              templates:
+                items:
+                  description: ConformanceTemplateStatus is one template's record
+                    in its suite.
+                  properties:
+                    lastPassed:
+                      description: LastPassed is when a run last passed.
+                      format: date-time
+                      type: string
+                    lastResult:
+                      description: LastResult is the newest finished run's phase.
+                      type: string
+                    lastRun:
+                      description: LastRun is the newest run's name.
+                      type: string
+                    lastSlot:
+                      description: LastSlot is the newest schedule slot the suite
+                        answered, by a run or a skip.
+                      format: date-time
+                      type: string
+                    name:
+                      type: string
+                    nextAt:
+                      description: NextAt is the next slot.
+                      format: date-time
+                      type: string
+                    refused:
+                      description: Refused counts slots refused by the budget or the
+                        cap.
+                      format: int32
+                      type: integer
+                    skipped:
+                      description: Skipped counts slots skipped because the previous
+                        run was still going.
+                      format: int32
+                      type: integer
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              trialSpentUSD:
+                description: TrialSpentUSD is what the trial's runs have cost.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

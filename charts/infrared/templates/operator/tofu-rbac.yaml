@@ -4,7 +4,10 @@
 # kubernetes backend lists Secrets by label, which RBAC cannot limit by name, so
 # the Job may read and write Secrets and Leases there and nowhere else, never
 # Infrared's own. Cloud credentials come from the Secret the Cluster names
-# (envFrom, read by the kubelet), never through this ServiceAccount.
+# (envFrom, read by the kubelet), never through this ServiceAccount. A build
+# from gcp/gke-cluster or aws/eks-cluster also writes the new cluster's token
+# kubeconfig (cluster-<cluster>-kubeconfig) here, which the operator adopts as
+# the Cluster's connection (ADR 0047).
 {{- $ns := .Values.tofuState.namespace }}
 apiVersion: v1
 kind: ServiceAccount
@@ -31,7 +34,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [get, list, create, update, delete]
+    verbs: [get, list, create, update, patch, delete]
   - apiGroups: [coordination.k8s.io]
     resources: [leases]
     verbs: [get, list, create, update, delete]

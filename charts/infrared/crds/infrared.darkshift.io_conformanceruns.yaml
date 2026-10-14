@@ -1,0 +1,208 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: conformanceruns.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: ConformanceRun
+    listKind: ConformanceRunList
+    plural: conformanceruns
+    shortNames:
+    - confrun
+    singular: conformancerun
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.template.name
+      name: Template
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.costUSD
+      name: Cost
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ConformanceRun is one run of one cluster template (ADR 0047).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ConformanceRunSpec is one run of one template.
+            properties:
+              suite:
+                description: Suite is the ConformanceSuite that started it.
+                type: string
+              template:
+                description: Template is the template under test, as the suite named
+                  it then.
+                properties:
+                  cloudAccount:
+                    description: |-
+                      CloudAccount is the platform org's CloudAccount the run builds
+                      through.
+                    type: string
+                  flavor:
+                    description: 'Flavor is the Cluster''s flavor: eks on EKS, empty
+                      on GKE.'
+                    enum:
+                    - k3s
+                    - eks
+                    type: string
+                  hourlyUSD:
+                    description: |-
+                      HourlyUSD is what a run's cluster costs an hour while it stands, in US
+                      dollars, e.g. "0.17": runs are priced from it, and the cap with them.
+                    type: string
+                  module:
+                    description: 'Module is the template under test: gcp/gke-cluster
+                      or aws/eks-cluster.'
+                    type: string
+                  name:
+                    description: |-
+                      Name is the template's short name in the suite, e.g. gke or eks: a DNS
+                      label, used in its runs' and Clusters' names.
+                    pattern: ^[a-z0-9]([-a-z0-9]{0,10}[a-z0-9])?$
+                    type: string
+                  provider:
+                    description: Provider is gcp or aws.
+                    enum:
+                    - gcp
+                    - aws
+                    type: string
+                  region:
+                    description: Region is the Cluster's region.
+                    type: string
+                  suspend:
+                    description: Suspend stops scheduling this template's runs.
+                    type: boolean
+                  variables:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Variables are the template's inputs. The run adds name, its labels and
+                      the API's allowed addresses (the management cluster's nodes).
+                    type: object
+                  version:
+                    description: Version is the infrared-iac-modules tag under test,
+                      e.g. v0.15.0.
+                    type: string
+                required:
+                - cloudAccount
+                - hourlyUSD
+                - module
+                - name
+                - provider
+                - version
+                type: object
+              trigger:
+                description: Trigger is schedule, trial or manual.
+                type: string
+            required:
+            - suite
+            - template
+            type: object
+          status:
+            description: ConformanceRunStatus is a run's record.
+            properties:
+              address:
+                description: Address is the workload's load balancer address.
+                type: string
+              cluster:
+                description: Cluster is the Cluster the run built.
+                type: string
+              costUSD:
+                description: |-
+                  CostUSD is the run's estimate: the hours its cluster stood at the
+                  template's hourly rate.
+                type: string
+              expiresAt:
+                description: ExpiresAt is when its cluster expires for the sweeper.
+                format: date-time
+                type: string
+              failedStep:
+                description: FailedStep is the first step that failed.
+                type: string
+              finishedAt:
+                format: date-time
+                type: string
+              leaks:
+                description: Leaks are what the cluster's deletion reported it may
+                  have left.
+                items:
+                  type: string
+                type: array
+              message:
+                description: Message says what the run is doing now.
+                type: string
+              phase:
+                description: Phase is Pending, Running, Deleting, Passed or Failed.
+                type: string
+              signature:
+                description: 'Signature names the failure: template, step and first
+                  error.'
+                type: string
+              startedAt:
+                format: date-time
+                type: string
+              steps:
+                items:
+                  description: ConformanceStep is one step of a run.
+                  properties:
+                    finishedAt:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    name:
+                      type: string
+                    startedAt:
+                      format: date-time
+                      type: string
+                    state:
+                      description: State is Pending, Running, Done, Failed or Skipped.
+                      type: string
+                  required:
+                  - name
+                  - state
+                  type: object
+                type: array
+              triage:
+                description: Triage is the QA triage run a failure started, if any.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

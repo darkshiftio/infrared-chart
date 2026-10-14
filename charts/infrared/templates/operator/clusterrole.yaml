@@ -179,6 +179,7 @@ rules:
   - agentroles
   - agentvms
   - agentvms/status
+  - clusters
   - gitopsrepos
   - gitproviders
   - installations
@@ -212,6 +213,8 @@ rules:
   - agentworkflows/status
   - cloudaccounts/status
   - clusters/status
+  - conformanceruns/status
+  - conformancesuites/status
   - domains/status
   - gitopsrepos/status
   - gitproviders/status
@@ -228,7 +231,8 @@ rules:
   - infrared.darkshift.io
   resources:
   - agentworkflowruns
-  - clusters
+  - conformanceruns
+  - conformancesuites
   verbs:
   - create
   - get

@@ -1094,6 +1094,10 @@ check defaults.yaml "the state namespace is made" '^  name: infrared-tofu-state$
 tofu_ns="$(yq 'select(.kind == "Role" and .metadata.name == "infrared-tofu") | .metadata.namespace' "$out/defaults.yaml")"
 if [[ "$tofu_ns" == "infrared-tofu-state" ]]; then ok "infrared-tofu's Role is in the state namespace alone"
 else bad "infrared-tofu's Role is in '$tofu_ns', not infrared-tofu-state"; fi
+# A build writes the new cluster's kubeconfig there with the kubernetes provider, which patches (ADR 0047).
+verbs="$(yq 'select(.kind == "Role" and .metadata.name == "infrared-tofu") | .rules[] | select(.resources[0] == "secrets") | .verbs | join(",")' "$out/defaults.yaml")"
+if [[ "$verbs" == "get,list,create,update,patch,delete" ]]; then ok "infrared-tofu may write the built cluster's kubeconfig Secret beside its state"
+else bad "infrared-tofu's Secret verbs are '$verbs'"; fi
 subj="$(yq 'select(.kind == "RoleBinding" and .metadata.name == "infrared-tofu") | .subjects[0] | .kind + " " + .namespace + "/" + .name' "$out/defaults.yaml")"
 if [[ "$subj" == "ServiceAccount infrared/infrared-tofu" ]]; then ok "the state RoleBinding's subject is infrared/infrared-tofu"
 else bad "the state RoleBinding binds '$subj', not ServiceAccount infrared/infrared-tofu"; fi

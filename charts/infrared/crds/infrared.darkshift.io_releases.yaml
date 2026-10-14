@@ -380,6 +380,84 @@ spec:
                       type: string
                     environment:
                       type: string
+                    guard:
+                      description: Guard is what the zone's release guard found (ADR
+                        0046).
+                      properties:
+                        checks:
+                          description: Checks are each check's latest answer, in the
+                            zone's order.
+                          items:
+                            description: GuardCheckResult is one release guard check's
+                              latest answer.
+                            properties:
+                              at:
+                                description: At is when it was last tried.
+                                format: date-time
+                                type: string
+                              attempts:
+                                description: Attempts counts tries that did not pass.
+                                format: int32
+                                type: integer
+                              message:
+                                description: Message says what the latest try found.
+                                type: string
+                              passed:
+                                description: Passed is true once the latest try passed.
+                                type: boolean
+                              status:
+                                description: Status is the HTTP status of the latest
+                                  try; 0 when it got none.
+                                format: int32
+                                type: integer
+                              url:
+                                type: string
+                            required:
+                            - url
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        failedAt:
+                          description: FailedAt is when the guard failed.
+                          format: date-time
+                          type: string
+                        hold:
+                          description: Hold is the hold the guard applied.
+                          type: string
+                        holdStartedAt:
+                          description: HoldStartedAt is when the zone had passed its
+                            checks and the hold began.
+                          format: date-time
+                          type: string
+                        passedAt:
+                          description: PassedAt is when the zone held for its hold
+                            with every check passing.
+                          format: date-time
+                          type: string
+                        reason:
+                          description: Reason says why the guard failed.
+                          type: string
+                        result:
+                          description: Result is Watching while the guard runs, then
+                            Passed or Failed.
+                          enum:
+                          - Watching
+                          - Passed
+                          - Failed
+                          type: string
+                        rollback:
+                          description: 'Rollback is the zone''s rollback mode when
+                            the guard started: notify.'
+                          type: string
+                        unhealthySince:
+                          description: |-
+                            UnhealthySince is when Argo CD last stopped reporting the zone Synced
+                            and Healthy on the release during the hold; a minute of that fails it.
+                          format: date-time
+                          type: string
+                      required:
+                      - result
+                      type: object
                     healthyAt:
                       description: |-
                         HealthyAt is when Argo CD reported the zone Synced and Healthy on the
@@ -398,6 +476,7 @@ spec:
                       - Promoting
                       - Syncing
                       - Verifying
+                      - Holding
                       - Healthy
                       - Failed
                       type: string

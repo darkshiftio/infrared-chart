@@ -334,6 +334,12 @@ spec:
                     description: |-
                       Owner is the product owner a product owner announcement opens with:
                       their image is kept by the API (never at a public URL), with consent.
+                      infrared-operator migrates it to a Human that owns the org's Products,
+                      annotated infrared.darkshift.io/migrated-from: summaryVideos.owner, and
+                      falls back on it for a Product without an owner; infrared-api removes it
+                      once it has moved the image.
+
+                      Deprecated: the product owner moves to Product.spec.owner, a Human (ADR 0049 D6).
                     properties:
                       consentAt:
                         format: date-time

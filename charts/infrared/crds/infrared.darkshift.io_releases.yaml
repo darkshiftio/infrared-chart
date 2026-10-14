@@ -355,7 +355,8 @@ spec:
               rolledBackTo:
                 description: |-
                   RolledBackTo is the version the upgrade guard rolled the control plane
-                  back to, when the upgrade failed its checks.
+                  back to, when the upgrade failed its checks; for an app Product, the
+                  version a zone's release guard put back (zones[].rolledBackTo).
                 type: string
               startedAt:
                 format: date-time
@@ -446,8 +447,9 @@ spec:
                           - Failed
                           type: string
                         rollback:
-                          description: 'Rollback is the zone''s rollback mode when
-                            the guard started: notify.'
+                          description: |-
+                            Rollback is the zone's rollback mode when the guard started: notify or
+                            rollback.
                           type: string
                         unhealthySince:
                           description: |-
@@ -479,13 +481,56 @@ spec:
                       - Holding
                       - Healthy
                       - Failed
+                      - RollingBack
+                      - RolledBack
                       type: string
+                    previous:
+                      description: |-
+                        Previous is what the zone ran before this Release: what a rollback
+                        puts back.
+                      properties:
+                        image:
+                          type: string
+                        release:
+                          description: Release is the Release that put them there.
+                          type: string
+                        version:
+                          type: string
+                      required:
+                      - image
+                      - version
+                      type: object
                     pullRequest:
                       description: PullRequest is the pull request on the gitops repo
                         that promoted to the zone.
                       format: int32
                       type: integer
                     pullRequestURL:
+                      type: string
+                    rollback:
+                      description: Rollback is the rollback's progress in the zone.
+                      properties:
+                        finishedAt:
+                          description: FinishedAt is when Argo CD ran the previous
+                            image Synced and Healthy.
+                          format: date-time
+                          type: string
+                        pullRequest:
+                          description: |-
+                            PullRequest is the pull request on the gitops repo that put the
+                            previous pin back.
+                          format: int32
+                          type: integer
+                        pullRequestURL:
+                          type: string
+                        startedAt:
+                          format: date-time
+                          type: string
+                      type: object
+                    rolledBackTo:
+                      description: |-
+                        RolledBackTo is the version the release guard put back in the zone
+                        after the zone failed it.
                       type: string
                     startedAt:
                       format: date-time

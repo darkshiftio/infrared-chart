@@ -1165,6 +1165,19 @@ check defaults.yaml "the BreakGlass, User and GitConnector CRDs are included" '^
 check defaults.yaml "the Organization CRD has accessGroups' and teams' googleGroup and githubTeam, and their statuses' githubTeam" \
   '^                    (googleGroup|githubTeam):$' 6
 check defaults.yaml "the Installation CRD has spec.signIn.google.groupRoles" '^                      groupRoles:$' 1
+# ADR 0046 phase 3: a zone's guard may roll back, and a Release's zone may be RollingBack or RolledBack.
+if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.delivery.properties.zones.items.properties.guard.properties.rollback.enum' \
+      "$chart/crds/infrared.darkshift.io_products.yaml")" == '["notify","rollback"]' ]]; then
+  ok "the Product CRD's guard.rollback takes notify and rollback"
+else
+  bad "the Product CRD's guard.rollback takes notify and rollback"
+fi
+if yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.status.properties.zones.items.properties.phase.enum' \
+    "$chart/crds/infrared.darkshift.io_releases.yaml" | grep -q '"RolledBack"'; then
+  ok "the Release CRD's zone phase takes RollingBack and RolledBack"
+else
+  bad "the Release CRD's zone phase takes RollingBack and RolledBack"
+fi
 if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.admin.required' \
       "$chart/crds/infrared.darkshift.io_installations.yaml")" == '["email"]' ]]; then
   ok "the Installation's admin needs its email alone: passwordSecretRef is optional"

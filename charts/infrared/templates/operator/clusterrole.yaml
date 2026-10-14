@@ -186,6 +186,7 @@ rules:
   - installations
   - releases
   - socials
+  - teams
   verbs:
   - create
   - delete
@@ -226,6 +227,7 @@ rules:
   - products/status
   - registries/status
   - releases/status
+  - teams/status
   verbs:
   - get
   - patch

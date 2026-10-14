@@ -1,0 +1,291 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: teams.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: Team
+    listKind: TeamList
+    plural: teams
+    shortNames:
+    - irteam
+    singular: team
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display name
+      type: string
+    - jsonPath: .spec.discipline
+      name: Discipline
+      type: string
+    - jsonPath: .spec.manager
+      name: Manager
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Team is the space where humans and agents work together under one
+          discipline: a charter, a manager, its Humans and AgentRoles, the Products it
+          owns or contributes to, a default human policy template that is never
+          enforced, and its own context folder (infrared-docs-internal ADR 0049 D1).
+          It lives in the org's namespace. It grants nothing, and it is not an access
+          group (D2).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TeamSpec is a space where humans and agents work under one
+              discipline.
+            properties:
+              agents:
+                description: Agents are the AgentRoles of the org that work on the
+                  team, by name.
+                items:
+                  maxLength: 63
+                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                  type: string
+                maxItems: 100
+                type: array
+                x-kubernetes-list-type: set
+              charter:
+                description: Charter is what the team is for, in words.
+                maxLength: 4000
+                type: string
+              context:
+                description: Context is the team's own folder in the org gitops repo.
+                properties:
+                  path:
+                    description: |-
+                      Path is the folder in the org gitops repo, relative to its root and
+                      ending in /. Empty means teams/<name>/.
+                    maxLength: 200
+                    pattern: ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/$
+                    type: string
+                    x-kubernetes-validations:
+                    - message: path must not contain . or .. segments
+                      rule: '!self.split(''/'').exists(s, s == ''..'' || s == ''.'')'
+                type: object
+              discipline:
+                description: Discipline is the team's discipline, e.g. engineering,
+                  sre or qa.
+                maxLength: 40
+                type: string
+              displayName:
+                description: DisplayName is the team's name as people see it, e.g.
+                  Site reliability.
+                maxLength: 100
+                minLength: 1
+                type: string
+              humans:
+                description: Humans are the team's Humans, by name.
+                items:
+                  maxLength: 63
+                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                  type: string
+                maxItems: 200
+                type: array
+                x-kubernetes-list-type: set
+              manager:
+                description: Manager is the Human who manages the team, by name.
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              policyTemplate:
+                description: |-
+                  PolicyTemplate is the team's default human policy template: stored and
+                  shown only; never enforced (ADR 0049 D1).
+                properties:
+                  description:
+                    description: Description says what the template is for, in words.
+                    maxLength: 4000
+                    type: string
+                  grants:
+                    description: Grants are the default accesses, stored and shown
+                      only; never enforced.
+                    items:
+                      description: PolicyGrant is one default access a Team's members
+                        should have.
+                      properties:
+                        access:
+                          description: Access is read, write or admin.
+                          enum:
+                          - read
+                          - write
+                          - admin
+                          type: string
+                        resource:
+                          description: |-
+                            Resource is what the access is to: kubernetes, cloud, forge,
+                            observability or other.
+                          enum:
+                          - kubernetes
+                          - cloud
+                          - forge
+                          - observability
+                          - other
+                          type: string
+                        scope:
+                          description: Scope narrows it, in words or a name, e.g.
+                            workload-clusters or all.
+                          maxLength: 200
+                          type: string
+                      required:
+                      - access
+                      - resource
+                      type: object
+                    maxItems: 50
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
+              products:
+                description: Products are the Products the team owns or contributes
+                  to.
+                items:
+                  description: TeamProduct is a Product a Team works on, and what
+                    it is responsible for.
+                  properties:
+                    product:
+                      description: Product is the Product's name in the org.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    responsibility:
+                      description: Responsibility is own or contribute. A Product
+                        has at most one owning Team.
+                      enum:
+                      - own
+                      - contribute
+                      type: string
+                  required:
+                  - product
+                  - responsibility
+                  type: object
+                maxItems: 200
+                type: array
+                x-kubernetes-list-map-keys:
+                - product
+                x-kubernetes-list-type: map
+            required:
+            - displayName
+            type: object
+          status:
+            description: TeamStatus is what Infrared derived about a Team.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              missing:
+                description: |-
+                  Missing are the references that do not exist in the org, each as
+                  <kind>/<name>: human/<name> (a member or the manager),
+                  agentRole/<name> or product/<name>.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              observedGeneration:
+                format: int64
+                type: integer
+              policyTemplate:
+                description: TeamPolicyTemplateStatus says what Infrared does with
+                  the policy template.
+                properties:
+                  enforced:
+                    description: |-
+                      Enforced is always false: the template is stored and shown only
+                      (ADR 0049 D1).
+                    type: boolean
+                required:
+                - enforced
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

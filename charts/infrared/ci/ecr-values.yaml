@@ -1,6 +1,5 @@
-# CI: images from darkshift's preprod ECR registry, as on infrared-mgmt. That
-# node runs the kubelet ECR credential provider (infrared-iac-modules
-# aws/k3s-node, ecr_access = "pull"), so no imagePullSecrets are needed.
+# CI: images from an ECR registry on a cluster whose nodes may pull from it
+# (an EKS node role with ECR read access), so no imagePullSecrets are needed.
 # Pins (tag + digest) come from darkshiftio/gitops scripts/release-tag.sh.
 managementCluster:
   name: infrared-mgmt

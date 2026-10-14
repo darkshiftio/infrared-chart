@@ -92,6 +92,17 @@ spec:
                     required:
                     - kind
                     type: object
+                  strategy:
+                    description: |-
+                      Strategy is isolated (the default: a Release ships one commit of Repo
+                      and pins its image into each zone's chart) or umbrella (a Release ships
+                      one version of the Product's umbrella chart in its org's charts repo,
+                      each repo's newest build changed or its previous pin carried, and each
+                      zone deploys that chart version) (ADR 0046 D2).
+                    enum:
+                    - isolated
+                    - umbrella
+                    type: string
                   zones:
                     description: |-
                       Zones in promotion order. A release reaches a zone only after every
@@ -1354,6 +1365,11 @@ spec:
                         - host
                         type: object
                       type: array
+                    chart:
+                      description: |-
+                        Chart is the umbrella chart's tag the zone deploys, <chart>-<version>,
+                        for a Product with umbrella delivery; empty for isolated delivery.
+                      type: string
                     image:
                       description: Image is the pin the zone runs, repository:tag@sha256:...
                       type: string

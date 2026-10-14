@@ -104,11 +104,13 @@ spec:
                   action:
                     default: plan
                     description: |-
-                      Action is plan (show what would be built, the default) or apply (build it).
-                      Apply creates billable cloud resources.
+                      Action is plan (show what would be built, the default), apply (build
+                      it) or destroy (lift the template's guards and destroy what it built).
+                      Apply creates billable cloud resources; destroy deletes them.
                     enum:
                     - plan
                     - apply
+                    - destroy
                     type: string
                   cloudAccount:
                     description: |-
@@ -254,6 +256,230 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              deletion:
+                description: |-
+                  Deletion is the cluster's deletion, phase by phase, once it has
+                  started (ADR 0048).
+                properties:
+                  backup:
+                    description: Backup is whether the volumes are backed up first.
+                    type: boolean
+                  by:
+                    type: string
+                  forcedAt:
+                    description: ForcedAt is when the last Force was honoured.
+                    type: string
+                  inventory:
+                    description: Inventory is what the cluster held when the deletion
+                      started.
+                    properties:
+                      applications:
+                        description: Applications are the Argo CD Applications that
+                          deploy to the cluster.
+                        items:
+                          description: InventoryApplication is an Argo CD Application
+                            that deploys to the cluster.
+                          properties:
+                            controller:
+                              description: |-
+                                Controller is true for a controller that owns cloud resources (a load
+                                balancer controller, external-dns, a CSI driver): deletion takes it
+                                last, so it can delete what it made.
+                              type: boolean
+                            name:
+                              type: string
+                            wave:
+                              description: Wave is its sync wave; deletion takes the
+                                highest first.
+                              format: int32
+                              type: integer
+                            zone:
+                              description: Zone is the Product zone the Application
+                                is, as <product>/<zone>.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                      built:
+                        description: |-
+                          Built is true when Infrared built the cluster from its template (it has
+                          OpenTofu state), so deleting it destroys the cloud resources; false
+                          when it was only registered, so deleting it only disconnects it.
+                        type: boolean
+                      hourlyCost:
+                        description: |-
+                          HourlyCost is an estimate of what the cluster costs an hour while it
+                          exists, from its template; empty when unknown.
+                        type: string
+                      loadBalancers:
+                        description: |-
+                          LoadBalancers are the Services of type LoadBalancer, Ingresses and
+                          Gateways with an address: each holds a cloud load balancer.
+                        items:
+                          description: InventoryLoadBalancer is an object on the cluster
+                            that holds a cloud load balancer.
+                          properties:
+                            address:
+                              description: Address is its IP address or host name.
+                              type: string
+                            kind:
+                              description: Kind is Service, Ingress or Gateway.
+                              type: string
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          required:
+                          - kind
+                          - name
+                          - namespace
+                          type: object
+                        type: array
+                      message:
+                        description: Message says what could not be read, if anything.
+                        type: string
+                      observedAt:
+                        description: ObservedAt is when the cluster was read.
+                        format: date-time
+                        type: string
+                      volumes:
+                        description: Volumes are the persistent volumes bound to claims.
+                        items:
+                          description: InventoryVolume is a persistent volume bound
+                            to a claim.
+                          properties:
+                            claim:
+                              type: string
+                            deletes:
+                              description: |-
+                                Deletes is true when the volume's reclaim policy is Delete, so its
+                                disk goes with its claim.
+                              type: boolean
+                            handle:
+                              description: |-
+                                Handle is the cloud disk behind it: projects/<p>/zones/<z>/disks/<d>
+                                on Google Cloud, vol-<id> on AWS; empty for a volume no cloud holds.
+                              type: string
+                            namespace:
+                              type: string
+                            size:
+                              description: Size is the volume's capacity, e.g. 10Gi.
+                              type: string
+                            storageClass:
+                              type: string
+                            volume:
+                              description: Volume is the PersistentVolume's name.
+                              type: string
+                          required:
+                          - claim
+                          - namespace
+                          - volume
+                          type: object
+                        type: array
+                    required:
+                    - built
+                    - observedAt
+                    type: object
+                  leaks:
+                    description: |-
+                      Leaks are what the deletion may have left behind: forced steps'
+                      resources and what the sweep found.
+                    items:
+                      description: |-
+                        ClusterLeak is a resource a cluster's deletion may have left in the cloud
+                        or on the cluster.
+                      properties:
+                        id:
+                          description: 'ID is how to find it: a cloud ID, an address
+                            or a name.'
+                          type: string
+                        kind:
+                          description: 'Kind is what it is: a disk, a load balancer,
+                            an Application, a forwarding rule.'
+                          type: string
+                        message:
+                          type: string
+                      required:
+                      - id
+                      - kind
+                      type: object
+                    type: array
+                  mode:
+                    description: |-
+                      Mode is destroy (Infrared built the cluster: its cloud resources go)
+                      or disconnect (it was registered: Infrared lets go of it and deletes
+                      only what it deployed there).
+                    enum:
+                    - destroy
+                    - disconnect
+                    type: string
+                  phase:
+                    description: Phase is the step running now, or Done.
+                    type: string
+                  snapshots:
+                    description: Snapshots are the backups of the cluster's volumes.
+                    items:
+                      description: |-
+                        VolumeSnapshotRecord is a cloud snapshot of one of the cluster's volumes,
+                        kept after the cluster is gone.
+                      properties:
+                        claim:
+                          type: string
+                        handle:
+                          description: Handle is the disk the snapshot is of.
+                          type: string
+                        id:
+                          description: 'ID is the snapshot: its name on Google Cloud,
+                            snap-<id> on AWS.'
+                          type: string
+                        message:
+                          type: string
+                        namespace:
+                          type: string
+                        state:
+                          description: State is Creating, Ready or Failed.
+                          type: string
+                      required:
+                      - claim
+                      - handle
+                      - namespace
+                      type: object
+                    type: array
+                  startedAt:
+                    format: date-time
+                    type: string
+                  steps:
+                    description: Steps are the deletion's steps in order.
+                    items:
+                      description: ClusterDeletionStep is one step of a cluster's
+                        deletion.
+                      properties:
+                        finishedAt:
+                          format: date-time
+                          type: string
+                        message:
+                          type: string
+                        name:
+                          type: string
+                        startedAt:
+                          format: date-time
+                          type: string
+                        state:
+                          description: State is Pending, Running, Waiting, Stuck,
+                            Done, Skipped, Failed or Forced.
+                          type: string
+                      required:
+                      - name
+                      - state
+                      type: object
+                    type: array
+                required:
+                - backup
+                - mode
+                - phase
+                - steps
+                type: object
               detected:
                 description: Detected is True for the cluster Infrared found itself
                   running on.
@@ -262,6 +488,119 @@ spec:
                 description: GitopsPath is the directory in the gitops repo whose
                   Applications land on this cluster.
                 type: string
+              inventory:
+                description: |-
+                  Inventory is what the cluster holds that its deletion would remove,
+                  read from it every ten minutes while it is reachable.
+                properties:
+                  applications:
+                    description: Applications are the Argo CD Applications that deploy
+                      to the cluster.
+                    items:
+                      description: InventoryApplication is an Argo CD Application
+                        that deploys to the cluster.
+                      properties:
+                        controller:
+                          description: |-
+                            Controller is true for a controller that owns cloud resources (a load
+                            balancer controller, external-dns, a CSI driver): deletion takes it
+                            last, so it can delete what it made.
+                          type: boolean
+                        name:
+                          type: string
+                        wave:
+                          description: Wave is its sync wave; deletion takes the highest
+                            first.
+                          format: int32
+                          type: integer
+                        zone:
+                          description: Zone is the Product zone the Application is,
+                            as <product>/<zone>.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  built:
+                    description: |-
+                      Built is true when Infrared built the cluster from its template (it has
+                      OpenTofu state), so deleting it destroys the cloud resources; false
+                      when it was only registered, so deleting it only disconnects it.
+                    type: boolean
+                  hourlyCost:
+                    description: |-
+                      HourlyCost is an estimate of what the cluster costs an hour while it
+                      exists, from its template; empty when unknown.
+                    type: string
+                  loadBalancers:
+                    description: |-
+                      LoadBalancers are the Services of type LoadBalancer, Ingresses and
+                      Gateways with an address: each holds a cloud load balancer.
+                    items:
+                      description: InventoryLoadBalancer is an object on the cluster
+                        that holds a cloud load balancer.
+                      properties:
+                        address:
+                          description: Address is its IP address or host name.
+                          type: string
+                        kind:
+                          description: Kind is Service, Ingress or Gateway.
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - kind
+                      - name
+                      - namespace
+                      type: object
+                    type: array
+                  message:
+                    description: Message says what could not be read, if anything.
+                    type: string
+                  observedAt:
+                    description: ObservedAt is when the cluster was read.
+                    format: date-time
+                    type: string
+                  volumes:
+                    description: Volumes are the persistent volumes bound to claims.
+                    items:
+                      description: InventoryVolume is a persistent volume bound to
+                        a claim.
+                      properties:
+                        claim:
+                          type: string
+                        deletes:
+                          description: |-
+                            Deletes is true when the volume's reclaim policy is Delete, so its
+                            disk goes with its claim.
+                          type: boolean
+                        handle:
+                          description: |-
+                            Handle is the cloud disk behind it: projects/<p>/zones/<z>/disks/<d>
+                            on Google Cloud, vol-<id> on AWS; empty for a volume no cloud holds.
+                          type: string
+                        namespace:
+                          type: string
+                        size:
+                          description: Size is the volume's capacity, e.g. 10Gi.
+                          type: string
+                        storageClass:
+                          type: string
+                        volume:
+                          description: Volume is the PersistentVolume's name.
+                          type: string
+                      required:
+                      - claim
+                      - namespace
+                      - volume
+                      type: object
+                    type: array
+                required:
+                - built
+                - observedAt
+                type: object
               kubernetesVersion:
                 type: string
               nodes:

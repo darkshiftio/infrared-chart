@@ -244,6 +244,12 @@ spec:
                 description: Release is the Release the run's promote steps created
                   for the merge.
                 type: string
+              returnRounds:
+                description: |-
+                  ReturnRounds counts how often a QA step sent the run back to the
+                  builder with CODE CHANGE NEEDED (ADR 0047, C10).
+                format: int32
+                type: integer
               startedAt:
                 format: date-time
                 type: string
@@ -458,6 +464,87 @@ spec:
                             type: string
                         required:
                         - question
+                        type: object
+                      type: array
+                    rounds:
+                      description: |-
+                        Rounds are the step's earlier rounds, oldest first: each time a later
+                        step (QA) sent the run back to the builder with CODE CHANGE NEEDED, the
+                        step's result until then was kept here before it ran again.
+                      items:
+                        description: |-
+                          StepRound is how a step ended in one round, before a QA step sent the run
+                          back to the builder (ADR 0047, C10).
+                        properties:
+                          attempts:
+                            description: Attempts the step made in the round.
+                            format: int32
+                            type: integer
+                          evidence:
+                            items:
+                              description: EvidenceRef points at a proof captured
+                                during a step.
+                              properties:
+                                capturedAt:
+                                  format: date-time
+                                  type: string
+                                criteria:
+                                  items:
+                                    description: CriterionResult is one success criterion
+                                      and whether evidence met it.
+                                    properties:
+                                      note:
+                                        type: string
+                                      passed:
+                                        type: boolean
+                                      text:
+                                        type: string
+                                    required:
+                                    - passed
+                                    - text
+                                    type: object
+                                  type: array
+                                kind:
+                                  type: string
+                                title:
+                                  type: string
+                                uri:
+                                  description: URI of the stored artifact.
+                                  type: string
+                              required:
+                              - kind
+                              - title
+                              type: object
+                            type: array
+                          finishedAt:
+                            format: date-time
+                            type: string
+                          message:
+                            type: string
+                          phase:
+                            description: RunPhase is the state of an AgentWorkflowRun
+                              or one of its steps.
+                            enum:
+                            - Queued
+                            - Running
+                            - DeadLettered
+                            - AwaitingApproval
+                            - Succeeded
+                            - Failed
+                            - Cancelled
+                            - Skipped
+                            type: string
+                          round:
+                            description: Round counts from 1.
+                            format: int32
+                            type: integer
+                          startedAt:
+                            format: date-time
+                            type: string
+                          verdict:
+                            type: string
+                        required:
+                        - round
                         type: object
                       type: array
                     startedAt:

@@ -1191,6 +1191,15 @@ if [[ "$(yq '.spec.versions[0].schema.openAPIV3Schema.properties.status.properti
 else
   bad "the Release CRD's zone pins name the umbrella chart's tag (run hack/sync-operator.sh)"
 fi
+# ADR 0046 phase 5: a zone may target the control plane, and the delivery carries the charts it publishes.
+if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.delivery.properties.zones.items.properties.target.enum' \
+      "$chart/crds/infrared.darkshift.io_products.yaml")" == '["controlPlane"]' ]] &&
+   [[ "$(yq '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.delivery.properties.charts.properties.chartRegistry.type' \
+      "$chart/crds/infrared.darkshift.io_products.yaml")" == "string" ]]; then
+  ok "the Product CRD's zones may target the control plane, with the delivery's charts"
+else
+  bad "the Product CRD's zones may target the control plane, with the delivery's charts (run hack/sync-operator.sh)"
+fi
 if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.admin.required' \
       "$chart/crds/infrared.darkshift.io_installations.yaml")" == '["email"]' ]]; then
   ok "the Installation's admin needs its email alone: passwordSecretRef is optional"

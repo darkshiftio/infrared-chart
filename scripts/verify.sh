@@ -625,6 +625,12 @@ if grep -A12 -xF -- '- apiGroups:' <<<"$op_rules" | awk '/^- apiGroups:/ {g = ""
     && [[ "$(awk '/^  - cronjobs$/ {f = 1; next} f && /^  verbs:/ {v = 1; next} v && /^  - / {printf "%s ", $2; next} v {exit}' <<<"$op_rules")" == "create delete get list patch update watch " ]]; then
   ok "the operator may create, update and delete CronJobs, for the backup CronJob it writes"
 else bad "the operator's generated rules do not cover cronjobs (run hack/sync-operator.sh against an operator that has them)"; fi
+# The operator moves the AgentWorkflows an org never edited to the current catalog
+# with an update. Without the right every upgrade of one is forbidden, and the
+# Organization is Degraded (SeedFailed) instead of taking the new catalog.
+if [[ "$(awk '/^  - agentworkflows$/ {f = 1; next} f && /^  verbs:/ {v = 1; next} v && /^  - / {printf "%s ", $2; next} v {exit}' <<<"$op_rules")" == "create get list update watch " ]]; then
+  ok "the operator may update AgentWorkflows, for the catalog upgrades it makes"
+else bad "the operator's generated rules do not let it update AgentWorkflows (run hack/sync-operator.sh against an operator that has the right)"; fi
 # The Installation keeps spec.backup and status.backup: without them in the CRD
 # the API server would drop what the operator seeds and reports.
 check defaults.yaml "Installation CRD has spec.backup and status.backup" '^              backup:$' 2

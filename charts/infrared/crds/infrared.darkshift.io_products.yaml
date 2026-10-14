@@ -67,6 +67,111 @@ spec:
                       BuildImage is the kpack Image in namespace builds that builds Repo;
                       empty means the Product's name.
                     type: string
+                  charts:
+                    description: |-
+                      Charts says where an umbrella release's images and chart go: the
+                      release and chart registries, the chart it wraps, its first version.
+                      Read for a Product with a control plane zone, which needs it.
+                    properties:
+                      buildsNamespace:
+                        description: |-
+                          BuildsNamespace holds the kpack Images that build the components.
+                          Infrared reads them and never changes them. Empty means infrared-builds.
+                        type: string
+                      chartRegistry:
+                        description: |-
+                          ChartRegistry is the OCI repository the umbrella chart is published
+                          to, without oci://.
+                        minLength: 1
+                        type: string
+                      firstVersion:
+                        description: |-
+                          FirstVersion is the umbrella's first release version when it has
+                          none yet. Later versions add one to its last number.
+                        pattern: ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$
+                        type: string
+                      historyFrom:
+                        description: |-
+                          HistoryFrom is the subchart's oldest release recorded in the
+                          Product's history: each of its git tags from this one on becomes a
+                          recorded Release.
+                        type: string
+                      releaseRegistry:
+                        description: |-
+                          ReleaseRegistry is where released images are copied to, by digest,
+                          tagged with the release version, e.g.
+                          us-central1-docker.pkg.dev/darkshift-preprod/infrared.
+                        minLength: 1
+                        type: string
+                      subchart:
+                        description: |-
+                          Subchart is the chart the umbrella wraps, whose values the umbrella
+                          nests under its name.
+                        properties:
+                          name:
+                            description: Name is the subchart's chart name, e.g. infrared-core.
+                            minLength: 1
+                            type: string
+                          path:
+                            description: Path is the chart's folder in Repo. Empty
+                              means charts/<name>.
+                            type: string
+                          repo:
+                            description: Repo is the git repo that holds it, among
+                              spec.repos.
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
+                        - repo
+                        type: object
+                    required:
+                    - chartRegistry
+                    - firstVersion
+                    - releaseRegistry
+                    - subchart
+                    type: object
+                  components:
+                    description: |-
+                      Components are the parts an umbrella release pins, one per image, each
+                      built by its own kpack Image in charts.buildsNamespace or carried from
+                      release to release. Read for a Product with a control plane zone; any
+                      other umbrella Product pins one image per repo (ADR 0046 phase 5).
+                    items:
+                      description: PlatformComponent is one part of a platform Product.
+                      properties:
+                        buildImage:
+                          description: |-
+                            BuildImage is the kpack Image in the builds namespace. Empty means the
+                            component is not built here: its pin is carried from release to
+                            release.
+                          type: string
+                        name:
+                          description: Name, e.g. operator.
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                          type: string
+                        repo:
+                          description: Repo is the component's repo among spec.repos.
+                          minLength: 1
+                          type: string
+                        repository:
+                          description: |-
+                            Repository is the image repository under the release registry. Empty
+                            means infrared-<name>.
+                          type: string
+                        valuesKey:
+                          description: |-
+                            ValuesKey is the subchart values key that pins the image,
+                            <key>.image.tag and <key>.image.digest. Empty means the name.
+                          type: string
+                      required:
+                      - name
+                      - repo
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
                   repo:
                     description: |-
                       Repo is the Product repo whose commits are released; empty means the
@@ -163,6 +268,21 @@ spec:
                             Cluster is the Cluster the zone runs on; empty means the gitops repo's
                             management cluster. The Cluster must be on the org's cluster allowlist.
                           type: string
+                        controlPlane:
+                          description: ControlPlane are the upgrade's settings for
+                            a control plane zone.
+                          properties:
+                            application:
+                              description: |-
+                                Application is the Argo CD Application that installs the chart.
+                                Empty means infrared.
+                              type: string
+                            guardTimeout:
+                              description: |-
+                                GuardTimeout is how long the upgrade guard waits for every check to
+                                pass before it rolls the upgrade back. Empty means 15m.
+                              type: string
+                          type: object
                         env:
                           description: |-
                             Env are the zone's plain environment variables, written to its values
@@ -354,6 +474,20 @@ spec:
                           x-kubernetes-list-map-keys:
                           - name
                           x-kubernetes-list-type: map
+                        target:
+                          description: |-
+                            Target is what the zone deploys to: empty for a namespace of the
+                            Product's, or controlPlane, the install's own control plane (ADR 0046
+                            D5). A release upgrades the control plane to the umbrella chart's
+                            version behind the upgrade guard, a Job running the operator that was
+                            there before, which rolls a bad upgrade back. Only the install's
+                            platform org may hold such a zone, as the Product's one zone, with
+                            umbrella delivery, components and charts. The zone's name is the
+                            management cluster's, unless cluster names it; its checks (verify and
+                            guard.checks) are the guard's own HTTP checks.
+                          enum:
+                          - controlPlane
+                          type: string
                         valuesPath:
                           description: |-
                             ValuesPath is the zone's values file in the gitops repo, holding the
@@ -389,6 +523,10 @@ spec:
                       required:
                       - name
                       type: object
+                      x-kubernetes-validations:
+                      - message: controlPlane belongs to a zone whose target is controlPlane
+                        rule: '!has(self.controlPlane) || (has(self.target) && self.target
+                          == ''controlPlane'')'
                     minItems: 1
                     type: array
                 required:
@@ -412,6 +550,10 @@ spec:
                   Kind is app (the default) or platform: Infrared itself, released as
                   one version of an umbrella chart and delivered by upgrading the
                   control plane (ADR 0038). Only the platform org may have one.
+                  Deprecated: nothing sets it since ADR 0046 phase 5. A Product with
+                  umbrella delivery and a zone whose target is controlPlane does what
+                  platform did; a platform Product may be converted to one, which clears
+                  kind and platform.
                 enum:
                 - app
                 - platform
@@ -442,8 +584,10 @@ spec:
                 pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                 type: string
               platform:
-                description: Platform says how a platform Product is built, released
-                  and delivered.
+                description: |-
+                  Platform says how a platform Product is built, released and delivered.
+                  Deprecated: see Kind; spec.delivery's components, charts and control
+                  plane zone replace it (ADR 0046 phase 5).
                 properties:
                   buildsNamespace:
                     default: infrared-builds
@@ -870,9 +1014,12 @@ spec:
                 && !has(self.delivery))'
             - message: spec.platform belongs to a Product of kind platform
               rule: '!has(self.platform) || (has(self.kind) && self.kind == ''platform'')'
-            - message: 'kind cannot change: recreate the Product'
+            - message: 'kind cannot change, except a platform Product converted to
+                umbrella delivery with a control plane zone (ADR 0046 phase 5): recreate
+                the Product'
               rule: '(has(oldSelf.kind) ? oldSelf.kind : ''app'') == (has(self.kind)
-                ? self.kind : ''app'')'
+                ? self.kind : ''app'') || (has(oldSelf.kind) && oldSelf.kind == ''platform''
+                && (!has(self.kind) || self.kind == ''app'') && !has(self.platform))'
             - message: 'providerRef cannot change: its kpack Image, Releases and runs
                 name the forge its repos live on; recreate the Product to move it'
               rule: has(oldSelf.providerRef) == has(self.providerRef) && (!has(self.providerRef)

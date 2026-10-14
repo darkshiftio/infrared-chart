@@ -231,12 +231,15 @@ spec:
                               type: string
                             rollback:
                               description: |-
-                                Rollback is what the guard does when the zone fails it. notify reports
-                                the failure on the Release and leaves the zone on the new release, which
-                                stops the Release there. Rolling back arrives with ADR 0046's phase 3.
-                                Empty means notify.
+                                Rollback is what the guard does when the zone fails it. rollback puts
+                                back what the zone ran before, through a pull request to the gitops
+                                repo, and stops the Release there; notify reports the failure and leaves
+                                the zone on the new release. Neither touches data: volumes, databases
+                                and buckets keep what the new release wrote. Empty means notify; the
+                                API sets rollback on a zone it adds (ADR 0046).
                               enum:
                               - notify
+                              - rollback
                               type: string
                           type: object
                         name:
@@ -418,6 +421,15 @@ spec:
                       the first entry of spec.repos.
                     type: string
                 type: object
+              owner:
+                description: |-
+                  Owner is the Product's product owner: a Human's name in the org. A
+                  product owner announcement uses their presenter image, name and job
+                  role, and their avatar's voice (infrared-docs-internal ADR 0049 D6).
+                  Without one, no announcement is made.
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
               platform:
                 description: Platform says how a platform Product is built, released
                   and delivered.
@@ -1131,6 +1143,28 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              teams:
+                description: |-
+                  Teams are the Teams that own or contribute to the Product, sorted by
+                  name; written by infrared-operator from the Teams (ADR 0049 D1).
+                items:
+                  description: ProductTeam is a Team that works on a Product, and
+                    its responsibility.
+                  properties:
+                    name:
+                      description: Name is the Team's name.
+                      type: string
+                    responsibility:
+                      description: Responsibility is own or contribute.
+                      type: string
+                  required:
+                  - name
+                  - responsibility
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               umbrella:
                 description: Umbrella is the state of the Product's umbrella chart.
                 properties:

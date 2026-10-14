@@ -341,8 +341,23 @@ spec:
                   type: string
                 type: array
                 x-kubernetes-list-type: set
+              ownedProducts:
+                description: OwnedProducts are the Products whose product owner they
+                  are.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               reports:
                 description: Reports are the Humans whose manager they are.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              teams:
+                description: |-
+                  Teams are the Teams that list them among their humans or have them as
+                  manager.
                 items:
                   type: string
                 type: array

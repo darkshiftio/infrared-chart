@@ -379,6 +379,13 @@ spec:
                     finishedAt:
                       format: date-time
                       type: string
+                    lostAttempts:
+                      description: |-
+                        LostAttempts counts the attempts whose AgentVM was Lost: a pool's lease
+                        lapsed or was given back. They count apart from the agent's own
+                        failures, against AgentVMMaxLost rather than the step's maxAttempts.
+                      format: int32
+                      type: integer
                     message:
                       type: string
                     model:

@@ -1,0 +1,302 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: agentvms.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: AgentVM
+    listKind: AgentVMList
+    plural: agentvms
+    shortNames:
+    - irvm
+    singular: agentvm
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.template
+      name: Template
+      type: string
+    - jsonPath: .status.pool
+      name: Pool
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.exitCode
+      name: Exit
+      type: integer
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AgentVM is one desired VM on one Mac: its template, what it is for (a
+          step's attempt, or an ad hoc agent), what it mounts, and what became of it.
+          Agent Substrate's Actor, as a record in Infrared (localred plan, phase 2).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AgentVMSpec is one desired VM on one Mac.
+            properties:
+              deadlineSeconds:
+                description: |-
+                  DeadlineSeconds is how long the VM may run before its node agent kills
+                  it: the step's timeout, at most the runner Job's hour. Zero for an ad hoc
+                  AgentVM, which runs until the person ends it.
+                format: int32
+                maximum: 86400
+                minimum: 0
+                type: integer
+              env:
+                description: Env are the plain variables the runner gets, e.g. INFRARED_FORGE.
+                items:
+                  description: |-
+                    AgentVMEnvVar is a variable an AgentVM's runner gets. Plain values only: a
+                    secret travels in the lease answer, or comes from the Mac, never here.
+                  properties:
+                    name:
+                      maxLength: 128
+                      pattern: ^[A-Z_][A-Z0-9_]*$
+                      type: string
+                    value:
+                      maxLength: 4096
+                      type: string
+                  required:
+                  - name
+                  type: object
+                maxItems: 32
+                type: array
+              mounts:
+                description: Mounts are the Mac's directories an ad hoc AgentVM mounts.
+                items:
+                  description: AgentVMMount is a directory of the Mac an ad hoc AgentVM
+                    mounts.
+                  properties:
+                    readOnly:
+                      type: boolean
+                    source:
+                      description: Source is the Mac's path.
+                      maxLength: 1024
+                      minLength: 1
+                      type: string
+                    target:
+                      description: Target is the path in the VM.
+                      maxLength: 1024
+                      pattern: ^/
+                      type: string
+                  required:
+                  - source
+                  - target
+                  type: object
+                maxItems: 16
+                type: array
+              pool:
+                description: |-
+                  Pool is the RunnerPool that runs the AgentVM. Empty on a step's AgentVM:
+                  any alive pool that allows its template and takes its mode may lease it.
+                maxLength: 253
+                type: string
+              purpose:
+                description: Purpose is the step attempt it runs, or an ad hoc agent.
+                properties:
+                  adhoc:
+                    description: AgentVMAdhoc is an ad hoc agent a person runs.
+                    properties:
+                      command:
+                        description: Command is what runs in the VM in place of the
+                          template's default.
+                        items:
+                          type: string
+                        maxItems: 64
+                        type: array
+                      requestedBy:
+                        description: 'RequestedBy is who asked for it: a GitHub login
+                          or an email.'
+                        maxLength: 254
+                        type: string
+                    required:
+                    - requestedBy
+                    type: object
+                  step:
+                    description: AgentVMStep is the step attempt an AgentVM runs.
+                    properties:
+                      attempt:
+                        description: Attempt is the step's attempt, from 1.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      mode:
+                        description: Mode is the step's mode, which a pool's takes
+                          match.
+                        enum:
+                        - build
+                        - review
+                        - issue
+                        - resolve
+                        - report
+                        type: string
+                      run:
+                        description: Run is the AgentWorkflowRun's name.
+                        type: string
+                      step:
+                        description: Step is the workflow step's name.
+                        type: string
+                    required:
+                    - attempt
+                    - mode
+                    - run
+                    - step
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: an AgentVM is for a step or ad hoc, exactly one
+                  rule: has(self.step) != has(self.adhoc)
+              template:
+                description: Template is the RunnerTemplate the VM is made from.
+                maxLength: 253
+                minLength: 1
+                type: string
+              ttlSeconds:
+                description: |-
+                  TTLSeconds is how long the lease lives without a heartbeat before the
+                  AgentVM is Lost. Default AgentVMDefaultTTL.
+                format: int32
+                maximum: 3600
+                minimum: 60
+                type: integer
+            required:
+            - purpose
+            - template
+            type: object
+          status:
+            description: AgentVMStatus is the VM as the node agent reported it.
+            properties:
+              artifactChunks:
+                description: |-
+                  ArtifactChunks is how many artifacts ConfigMaps the result has
+                  (AgentVMArtifactsName 0 to n-1).
+                format: int32
+                type: integer
+              container:
+                description: Container is the VM's ID in Apple's runtime.
+                type: string
+              exitCode:
+                description: ExitCode is the VM's main process's exit code.
+                format: int32
+                type: integer
+              finishedAt:
+                format: date-time
+                type: string
+              lease:
+                description: |-
+                  AgentVMLease is the hold of the pool that leased the AgentVM. The Lease
+                  object of the same name is the lock; this is the record.
+                properties:
+                  lastHeartbeat:
+                    description: LastHeartbeat is the node agent's last heartbeat.
+                    format: date-time
+                    type: string
+                  leasedAt:
+                    description: LeasedAt is when the pool took it.
+                    format: date-time
+                    type: string
+                  ticketHash:
+                    description: |-
+                      TicketHash is the SHA-256 of the lease's ticket, in hex. The ticket is
+                      only ever in the lease answer and the node agent's memory; the API never
+                      serves this field.
+                    pattern: ^[0-9a-f]{64}$
+                    type: string
+                type: object
+              message:
+                description: Message says why it is in its phase, in plain words.
+                maxLength: 1024
+                type: string
+              phase:
+                description: |-
+                  Phase is where the AgentVM is; empty is Pending (the status not yet
+                  written after the create).
+                enum:
+                - Pending
+                - Leased
+                - Running
+                - Succeeded
+                - Failed
+                - Lost
+                type: string
+              pool:
+                description: Pool is the RunnerPool that holds it.
+                type: string
+              result:
+                description: |-
+                  Result is the name of the ConfigMap that holds the VM's result, for a
+                  step's AgentVM that finished (AgentVMResultName).
+                type: string
+              startedAt:
+                format: date-time
+                type: string
+              stats:
+                description: |-
+                  AgentVMStats are the VM's measures as the node agent last sampled them
+                  from Apple's runtime (container stats).
+                properties:
+                  cpuMillis:
+                    description: CPUMillis is the CPU time the VM used, in milliseconds.
+                    format: int64
+                    type: integer
+                  memoryBytes:
+                    description: MemoryBytes is the memory in use at the last sample.
+                    format: int64
+                    type: integer
+                  networkRxBytes:
+                    description: NetworkRxBytes and NetworkTxBytes are the bytes the
+                      VM received and sent.
+                    format: int64
+                    type: integer
+                  networkTxBytes:
+                    format: int64
+                    type: integer
+                  peakMemoryBytes:
+                    description: PeakMemoryBytes is the most memory in use at any
+                      sample.
+                    format: int64
+                    type: integer
+                  sampledAt:
+                    description: SampledAt is when they were sampled.
+                    format: date-time
+                    type: string
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

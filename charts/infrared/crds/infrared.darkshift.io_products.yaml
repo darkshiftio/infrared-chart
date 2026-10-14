@@ -53,6 +53,55 @@ spec:
             description: 'ProductSpec defines a Product: one or more repos released
               together.'
             properties:
+              announcements:
+                description: |-
+                  Announcements says who presents the Product's announcements. Omit it
+                  for the org's announcement presenter.
+                properties:
+                  presenter:
+                    description: Presenter overrides the org's announcement presenter
+                      for this Product.
+                    properties:
+                      consentAt:
+                        format: date-time
+                        type: string
+                      consentBy:
+                        maxLength: 254
+                        type: string
+                      contentType:
+                        description: |-
+                          ContentType, ConsentBy and ConsentAt describe the Product's character's
+                          presenter image; the API sets them when it stores the image, with consent.
+                        enum:
+                        - image/png
+                        - image/jpeg
+                        type: string
+                      name:
+                        description: Name, Title and Voice are the Product's own character's,
+                          for source product.
+                        maxLength: 80
+                        type: string
+                      source:
+                        description: Source is character (the default), owner or product.
+                        enum:
+                        - character
+                        - owner
+                        - product
+                        type: string
+                      title:
+                        maxLength: 80
+                        type: string
+                      voice:
+                        maxLength: 32
+                        pattern: ^[A-Za-z]+$
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: a Product's own character (source product) needs a
+                        name
+                      rule: '!has(self.source) || self.source != ''product'' || (has(self.name)
+                        && size(self.name) > 0)'
+                type: object
               currentRelease:
                 description: CurrentRelease is the release in progress, e.g. "2.4".
                 type: string
@@ -576,10 +625,9 @@ spec:
                 type: object
               owner:
                 description: |-
-                  Owner is the Product's product owner: a Human's name in the org. A
-                  product owner announcement uses their presenter image, name and job
-                  role, and their avatar's voice (infrared-docs-internal ADR 0049 D6).
-                  Without one, no announcement is made.
+                  Owner is the Product's product owner: a Human's name in the org
+                  (infrared-docs-internal ADR 0049 D6). They present the Product's
+                  announcements only when spec.announcements.presenter.source is owner.
                 maxLength: 63
                 pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                 type: string

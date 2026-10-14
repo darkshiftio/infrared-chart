@@ -1,0 +1,114 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: socials.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: Social
+    listKind: SocialList
+    plural: socials
+    shortNames:
+    - irsocial
+    singular: social
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display name
+      type: string
+    - jsonPath: .spec.kind
+      name: Kind
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Social is a platform an org registers so that each Human can register a
+          handle on it: Slack, LinkedIn, X, a forge, Google (ADR 0049). It lives in
+          the org's namespace.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SocialSpec is a platform an org reaches its people on.
+            properties:
+              displayName:
+                description: DisplayName is the platform's name as people see it,
+                  e.g. Slack.
+                maxLength: 63
+                minLength: 1
+                type: string
+              handlePattern:
+                description: |-
+                  HandlePattern is a regular expression every handle on this Social must
+                  match, e.g. ^U[A-Z0-9]{8,}$ for a Slack member ID. Empty takes any.
+                maxLength: 256
+                type: string
+              icon:
+                description: Icon names the platform's mark in the app, e.g. slack.
+                maxLength: 32
+                type: string
+              kind:
+                description: |-
+                  Kind is what the platform is: slack, linkedin, x, bluesky, mastodon,
+                  github, gitlab, gitea, google or custom.
+                enum:
+                - slack
+                - linkedin
+                - x
+                - bluesky
+                - mastodon
+                - github
+                - gitlab
+                - gitea
+                - google
+                - custom
+                type: string
+              profileURLTemplate:
+                description: |-
+                  ProfileURLTemplate links a handle to its profile: the URL with
+                  {handle} where the handle goes, e.g. https://x.com/{handle}.
+                maxLength: 512
+                type: string
+              slackWorkspace:
+                description: |-
+                  SlackWorkspace names the org's connected Slack workspace a slack Social
+                  reaches people through, so the app can message a handle.
+                maxLength: 63
+                type: string
+            required:
+            - displayName
+            - kind
+            type: object
+            x-kubernetes-validations:
+            - message: profileURLTemplate must contain {handle}, e.g. https://x.com/{handle}
+              rule: '!has(self.profileURLTemplate) || self.profileURLTemplate == ''''
+                || self.profileURLTemplate.contains(''{handle}'')'
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

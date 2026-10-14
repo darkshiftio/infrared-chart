@@ -182,8 +182,10 @@ rules:
   - clusters
   - gitopsrepos
   - gitproviders
+  - humans
   - installations
   - releases
+  - socials
   verbs:
   - create
   - delete
@@ -218,6 +220,7 @@ rules:
   - domains/status
   - gitopsrepos/status
   - gitproviders/status
+  - humans/status
   - installations/status
   - organizations/status
   - products/status

@@ -1,0 +1,360 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: humans.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: Human
+    listKind: HumanList
+    plural: humans
+    shortNames:
+    - irhuman
+    singular: human
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display name
+      type: string
+    - jsonPath: .spec.jobRole
+      name: Job role
+      type: string
+    - jsonPath: .spec.manager
+      name: Manager
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Human is a person in an org: their profile, one job role, their manager,
+          their handles on the org's Socials, their avatar, presenter image and
+          preferences (infrared-docs-internal ADR 0049). It lives in the org's
+          namespace. It grants nothing: access comes from access groups.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: HumanSpec is a person in the org.
+            properties:
+              availability:
+                description: HumanAvailability is when a Human can be reached.
+                properties:
+                  googleCalendar:
+                    description: |-
+                      GoogleCalendar turns on reading their free and busy times from Google
+                      Calendar. Planned, not live: nothing reads it yet (ADR 0049 phase 7).
+                    type: boolean
+                  timeZone:
+                    description: TimeZone is an IANA zone, e.g. Europe/London.
+                    maxLength: 64
+                    type: string
+                  workingHours:
+                    description: WorkingHours are when a Human usually works, in their
+                      time zone.
+                    properties:
+                      days:
+                        description: Days are the days they work.
+                        items:
+                          enum:
+                          - mon
+                          - tue
+                          - wed
+                          - thu
+                          - fri
+                          - sat
+                          - sun
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: set
+                      end:
+                        description: End is the time their day ends, HH:MM.
+                        pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+                        type: string
+                      start:
+                        description: Start is the time their day starts, HH:MM.
+                        pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+                        type: string
+                    required:
+                    - end
+                    - start
+                    type: object
+                type: object
+              avatar:
+                description: |-
+                  HumanAvatar is a Human's own playful character, drawn by the app from its
+                  parts. It is not their presenter image (ADR 0049 D5).
+                properties:
+                  colors:
+                    additionalProperties:
+                      type: string
+                    description: 'Colors color each feature, by part name, as #rrggbb.'
+                    maxProperties: 16
+                    type: object
+                  parts:
+                    additionalProperties:
+                      type: string
+                    description: 'Parts pick each feature, by part name, e.g. hair:
+                      bob.'
+                    maxProperties: 16
+                    type: object
+                  style:
+                    description: Style is the avatar's drawing style.
+                    enum:
+                    - pixel
+                    - round
+                    - block
+                    type: string
+                  voice:
+                    description: |-
+                      Voice is a Gemini voice name the avatar speaks with in animations.
+                      Planned, not live (ADR 0049 phase 7).
+                    maxLength: 32
+                    type: string
+                type: object
+              bio:
+                maxLength: 2000
+                type: string
+              displayName:
+                description: DisplayName is the name they go by.
+                maxLength: 100
+                minLength: 1
+                type: string
+              handles:
+                description: Handles are who they are on each of the org's Socials.
+                items:
+                  description: HumanHandle is a Human's handle on one of the org's
+                    Socials.
+                  properties:
+                    handle:
+                      description: 'Handle is who they are there: a login, a member
+                        ID, an address.'
+                      maxLength: 254
+                      minLength: 1
+                      type: string
+                    social:
+                      description: Social is the Social's name in the org, e.g. github
+                        or slack.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                  required:
+                  - handle
+                  - social
+                  type: object
+                maxItems: 32
+                type: array
+                x-kubernetes-list-map-keys:
+                - social
+                x-kubernetes-list-type: map
+              jobRole:
+                description: JobRole is their one job role, e.g. Site reliability
+                  engineer.
+                maxLength: 100
+                type: string
+              manager:
+                description: Manager is the Human they report to, by name. Their reports
+                  are derived.
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              preferences:
+                description: HumanPreferences are a Human's own choices; only they
+                  change them.
+                properties:
+                  dailySummary:
+                    description: DailySummary has the team manager write their daily
+                      record (ADR 0049 D8).
+                    type: boolean
+                  libraryVisibility:
+                    description: 'LibraryVisibility is who may read their library:
+                      private, team or org.'
+                    enum:
+                    - private
+                    - team
+                    - org
+                    type: string
+                  standupDraft:
+                    description: 'StandupDraft is where their standup draft goes:
+                      off, slack or library.'
+                    enum:
+                    - "off"
+                    - slack
+                    - library
+                    type: string
+                  summaryTime:
+                    description: SummaryTime is when, in their time zone, the summary
+                      is written, HH:MM.
+                    pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+                    type: string
+                type: object
+              presenterImage:
+                description: |-
+                  PresenterImage records a Human's presenter image: the likeness a product
+                  owner announcement uses (ADR 0049 D5, D6). The image itself is on the API's
+                  media volume.
+                properties:
+                  consentAt:
+                    description: ConsentAt is when.
+                    format: date-time
+                    type: string
+                  consentBy:
+                    description: ConsentBy is who confirmed the person agreed to its
+                      use.
+                    maxLength: 254
+                    minLength: 1
+                    type: string
+                  contentType:
+                    enum:
+                    - image/png
+                    - image/jpeg
+                    type: string
+                required:
+                - consentAt
+                - consentBy
+                - contentType
+                type: object
+              pronouns:
+                maxLength: 40
+                type: string
+              skills:
+                items:
+                  maxLength: 50
+                  type: string
+                maxItems: 50
+                type: array
+                x-kubernetes-list-type: set
+              userRef:
+                description: UserRef is their Infrared User, google-<subject>, once
+                  they have signed in.
+                maxLength: 80
+                pattern: ^google-[0-9A-Za-z]+$
+                type: string
+            required:
+            - displayName
+            type: object
+          status:
+            description: HumanStatus is what Infrared derived about a Human.
+            properties:
+              accessGroups:
+                description: |-
+                  AccessGroups are the org's access groups that hold them: by a handle's
+                  login in its members, or by their User's Workspace groups.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              missingHandles:
+                description: MissingHandles are the org's Socials they have no handle
+                  on.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              observedGeneration:
+                format: int64
+                type: integer
+              orphanedHandles:
+                description: OrphanedHandles are their handles on Socials the org
+                  no longer has.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              reports:
+                description: Reports are the Humans whose manager they are.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: a Human cannot be their own manager
+          rule: '!has(self.spec.manager) || self.spec.manager != self.metadata.name'
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1161,8 +1161,9 @@ step "identity (ADR 0042): break glass, Workspace groups, git connectors"
 # teams' Workspace group and GitHub team; the Installation's switch that ends
 # ADR 0039's D5, and its admin with no Secret.
 check defaults.yaml "the BreakGlass, User and GitConnector CRDs are included" '^    kind: (BreakGlass|User|GitConnector)$' 3
-check defaults.yaml "the Organization CRD has teams' googleGroup and githubTeam, and status.teams' githubTeam" \
-  '^                    (googleGroup|githubTeam):$' 3
+# accessGroups (ADR 0049) beside the deprecated teams, for one release: each has both.
+check defaults.yaml "the Organization CRD has accessGroups' and teams' googleGroup and githubTeam, and their statuses' githubTeam" \
+  '^                    (googleGroup|githubTeam):$' 6
 check defaults.yaml "the Installation CRD has spec.signIn.google.groupRoles" '^                      groupRoles:$' 1
 if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.admin.required' \
       "$chart/crds/infrared.darkshift.io_installations.yaml")" == '["email"]' ]]; then

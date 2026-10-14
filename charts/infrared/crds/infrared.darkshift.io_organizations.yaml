@@ -55,6 +55,64 @@ spec:
             description: 'OrganizationSpec defines an org: the tenancy and RBAC boundary
               in Infrared.'
             properties:
+              accessGroups:
+                description: |-
+                  AccessGroups give people access to the org: the people of a group's
+                  Workspace group when they sign in with Google, and its members by
+                  GitHub login (infrared-docs-internal ADR 0042, renamed from teams by ADR
+                  0049). The root user, and API tokens with no owner or the root user's,
+                  have full access without one.
+                items:
+                  description: |-
+                    AccessGroup is a named group of people with one role in the org: what
+                    ADR 0042 called a team. It grants a role and nothing else; it is not the
+                    Team of ADR 0049, where humans and agents work.
+                  properties:
+                    description:
+                      type: string
+                    githubTeam:
+                      description: |-
+                        GitHubTeam is the GitHub team, by slug, in the org's GitHub organization (its GitProvider github),
+                        that Infrared keeps in step with this team. Gitea and GitLab teams take sibling fields later.
+                      maxLength: 100
+                      pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                      type: string
+                    googleGroup:
+                      description: |-
+                        GoogleGroup is the Google Workspace group whose people hold this team's role when they sign in
+                        with Google, by its address. Its people's linked GitHub logins then count, and the team's
+                        Members count only for people who sign in with GitHub (ADR 0042).
+                      maxLength: 254
+                      pattern: ^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}$
+                      type: string
+                    members:
+                      description: |-
+                        Members by GitHub login: people who sign in with GitHub, and people
+                        who sign in with Google and linked that login, on a team without a
+                        GoogleGroup.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
+                    name:
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    role:
+                      enum:
+                      - platform-admin
+                      - org-admin
+                      - member
+                      - viewer
+                      type: string
+                  required:
+                  - name
+                  - role
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               agentSteps:
                 description: |-
                   AgentSteps says where the org's agentRole steps run: as runner Jobs in
@@ -309,13 +367,16 @@ spec:
                 type: object
               teams:
                 description: |-
-                  Teams give people access to the org: the people of a team's Workspace
-                  group when they sign in with Google, and its members by GitHub login
-                  (infrared-docs-internal ADR 0042). The root user, and API tokens with
-                  no owner or the root user's, have full access without a team.
+                  Teams is the deprecated name of AccessGroups, read only while
+                  AccessGroups is empty and removed one release after ADR 0049's rename.
+                  The two cannot both be set.
+
+                  Deprecated: use AccessGroups.
                 items:
-                  description: Team is a named group of people with one role in the
-                    org.
+                  description: |-
+                    AccessGroup is a named group of people with one role in the org: what
+                    ADR 0042 called a team. It grants a role and nothing else; it is not the
+                    Team of ADR 0049, where humans and agents work.
                   properties:
                     description:
                       type: string
@@ -368,6 +429,74 @@ spec:
           status:
             description: OrganizationStatus is the observed state of an org.
             properties:
+              accessGroups:
+                description: |-
+                  AccessGroups is what Infrared did for each access group: today,
+                  infrared-operator's sync of the group's GitHub team (ADR 0042).
+                items:
+                  description: AccessGroupStatus is what Infrared did for one access
+                    group, by its name.
+                  properties:
+                    githubTeam:
+                      description: GitHubTeam is the GitHub team infrared-operator
+                        keeps in step with it.
+                      properties:
+                        members:
+                          description: Members are the team's members on GitHub after
+                            the sync, by login.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: set
+                        message:
+                          description: |-
+                            Message says what is wrong when the sync could not run, e.g. that the
+                            App lacks the organization permission Members; empty when it ran.
+                          type: string
+                        skipped:
+                          description: |-
+                            Skipped are the logins the sync wanted and did not add, or found and
+                            did not remove, each with the reason.
+                          items:
+                            description: TeamSkip is a login the GitHub team sync
+                              left as it was, and why.
+                            properties:
+                              login:
+                                description: Login is the GitHub login.
+                                type: string
+                              reason:
+                                description: |-
+                                  Reason says why in words, and what would change it, e.g. "invited to
+                                  acme-corp: waiting for them to accept".
+                                type: string
+                            required:
+                            - login
+                            - reason
+                            type: object
+                          type: array
+                        slug:
+                          description: Slug is the GitHub team's slug.
+                          type: string
+                        syncedAt:
+                          description: SyncedAt is when the sync last ran to the end.
+                          format: date-time
+                          type: string
+                        url:
+                          description: URL is the team's page on GitHub.
+                          type: string
+                      required:
+                      - slug
+                      type: object
+                    name:
+                      description: Name is the access group's name in spec.accessGroups.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -435,11 +564,13 @@ spec:
                 type: integer
               teams:
                 description: |-
-                  Teams is what Infrared did for each team: today, infrared-operator's
-                  sync of the team's GitHub team (ADR 0042).
+                  Teams is the deprecated name of AccessGroups. infrared-operator no
+                  longer writes it and clears it on its next sync.
+
+                  Deprecated: use AccessGroups.
                 items:
-                  description: TeamStatus is what Infrared did for one team, by the
-                    team's name.
+                  description: AccessGroupStatus is what Infrared did for one access
+                    group, by its name.
                   properties:
                     githubTeam:
                       description: GitHubTeam is the GitHub team infrared-operator
@@ -492,7 +623,7 @@ spec:
                       - slug
                       type: object
                     name:
-                      description: Name is the team's name in spec.teams.
+                      description: Name is the access group's name in spec.accessGroups.
                       type: string
                   required:
                   - name
@@ -514,6 +645,10 @@ spec:
             ''builds'', ''build-credentials'', ''default'', ''system'', ''admin'',
             ''root'', ''public'', ''public-docs'', ''cert-manager'', ''kpack'', ''monitoring'',
             ''products'', ''new''])'
+        - message: 'spec.teams is the deprecated name of spec.accessGroups: set one,
+            not both (ADR 0049)'
+          rule: '!has(self.spec.teams) || size(self.spec.teams) == 0 || !has(self.spec.accessGroups)
+            || size(self.spec.accessGroups) == 0'
     served: true
     storage: true
     subresources:

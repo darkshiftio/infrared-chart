@@ -167,7 +167,8 @@ spec:
                   iac module) that built the cluster.
                 properties:
                   module:
-                    description: Module path within infrared-iac-modules, e.g. aws/k3s-node.
+                    description: 'Module path within infrared-iac-modules: gcp/gke-cluster
+                      or aws/eks-cluster.'
                     type: string
                   version:
                     type: string

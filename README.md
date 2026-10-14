@@ -40,20 +40,18 @@ is also handed to the operator (`INFRARED_IMAGE_PULL_SECRET`) for the clusters
 it bootstraps, and for runner Jobs: the operator copies the Secret into each
 org namespace and sets it on every Job, so the runner image pulls with it too.
 
-**darkshift's own builds are in ECR.** kpack on darkshift-build pushes every
-component to `977456087177.dkr.ecr.us-east-1.amazonaws.com/infrared-<component>`
-(darkshift preprod; darkshiftio/gitops). On a cluster whose nodes run the kubelet
-ECR credential provider with an instance role allowed to pull (infrared-iac-modules
-`aws/k3s-node`, `ecr_access = "pull"`, e.g. infrared-mgmt), point the chart at it
-and set **no** pull secret:
+**Images from ECR.** For images in an ECR registry, such as
+`<account>.dkr.ecr.us-east-1.amazonaws.com/infrared-<component>`, on a cluster whose nodes may pull from it
+(an EKS node role with ECR read access), point the chart at it and set **no** pull
+secret:
 
 ```yaml
 image:
-  registry: 977456087177.dkr.ecr.us-east-1.amazonaws.com
+  registry: <account>.dkr.ecr.us-east-1.amazonaws.com
 operator:
   image:
     tag: v0.1.0
-    digest: sha256:...     # from gitops scripts/release-tag.sh
+    digest: sha256:...
 ```
 
 A release that moves a default pin in `values.yaml` also runs `hack/sync-image-defaults.sh`,

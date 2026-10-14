@@ -232,6 +232,7 @@ rules:
   - create
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - infrared.darkshift.io

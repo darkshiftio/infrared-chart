@@ -1178,6 +1178,19 @@ if yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.status.p
 else
   bad "the Release CRD's zone phase takes RollingBack and RolledBack"
 fi
+# ADR 0046 phase 4: a Product delivers isolated or umbrella, and a zone's pin names the umbrella chart's tag.
+if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.delivery.properties.strategy.enum' \
+      "$chart/crds/infrared.darkshift.io_products.yaml")" == '["isolated","umbrella"]' ]]; then
+  ok "the Product CRD's delivery.strategy takes isolated and umbrella"
+else
+  bad "the Product CRD's delivery.strategy takes isolated and umbrella (run hack/sync-operator.sh)"
+fi
+if [[ "$(yq '.spec.versions[0].schema.openAPIV3Schema.properties.status.properties.zones.items.properties.previous.properties.chart.type' \
+      "$chart/crds/infrared.darkshift.io_releases.yaml")" == "string" ]]; then
+  ok "the Release CRD's zone pins name the umbrella chart's tag"
+else
+  bad "the Release CRD's zone pins name the umbrella chart's tag (run hack/sync-operator.sh)"
+fi
 if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.admin.required' \
       "$chart/crds/infrared.darkshift.io_installations.yaml")" == '["email"]' ]]; then
   ok "the Installation's admin needs its email alone: passwordSecretRef is optional"

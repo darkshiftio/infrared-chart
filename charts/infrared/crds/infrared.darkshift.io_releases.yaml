@@ -489,6 +489,11 @@ spec:
                         Previous is what the zone ran before this Release: what a rollback
                         puts back.
                       properties:
+                        chart:
+                          description: |-
+                            Chart is the umbrella chart's tag, <chart>-<version>, for umbrella
+                            delivery: the zone's Application deploys the chart at that tag.
+                          type: string
                         image:
                           type: string
                         release:

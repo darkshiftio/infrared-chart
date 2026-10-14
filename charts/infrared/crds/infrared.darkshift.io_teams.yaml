@@ -92,6 +92,30 @@ spec:
                     - message: path must not contain . or .. segments
                       rule: '!self.split(''/'').exists(s, s == ''..'' || s == ''.'')'
                 type: object
+              dailyStatus:
+                description: |-
+                  DailyStatus has the team-manager AgentRole write each member's daily
+                  record and the team's rollup. It spends Anthropic tokens; off by
+                  default (ADR 0049 D8).
+                properties:
+                  enabled:
+                    description: |-
+                      Enabled starts the daily-status AgentWorkflow for this Team once a day,
+                      while the org's scheduled runs are on. Each run spends Anthropic tokens,
+                      so it is off by default (ADR 0049 D8), and only an org admin turns it on.
+                    type: boolean
+                  hour:
+                    description: Hour is when the run starts, HH:MM in TimeZone. Empty
+                      means 08:00.
+                    pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+                    type: string
+                  timeZone:
+                    description: |-
+                      TimeZone is an IANA zone, e.g. Europe/London. Empty means the org's
+                      scheduling time zone, else UTC.
+                    maxLength: 64
+                    type: string
+                type: object
               discipline:
                 description: Discipline is the team's discipline, e.g. engineering,
                   sre or qa.

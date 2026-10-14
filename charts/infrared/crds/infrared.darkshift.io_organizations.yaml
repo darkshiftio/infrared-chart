@@ -332,14 +332,11 @@ spec:
                     type: string
                   owner:
                     description: |-
-                      Owner is the product owner a product owner announcement opens with:
-                      their image is kept by the API (never at a public URL), with consent.
-                      infrared-operator migrates it to a Human that owns the org's Products,
-                      annotated infrared.darkshift.io/migrated-from: summaryVideos.owner, and
-                      falls back on it for a Product without an owner; infrared-api removes it
-                      once it has moved the image.
+                      Owner is the org's announcement presenter as it was first set, under
+                      the name product owner. It is read as Presenter while Presenter is
+                      unset, and infrared-operator copies it to Presenter.
 
-                      Deprecated: the product owner moves to Product.spec.owner, a Human (ADR 0049 D6).
+                      Deprecated: use Presenter (ADR 0049 D6, revised 2026-10-14).
                     properties:
                       consentAt:
                         format: date-time
@@ -363,6 +360,48 @@ spec:
                     - consentAt
                     - consentBy
                     - contentType
+                    - name
+                    type: object
+                  presenter:
+                    description: |-
+                      Presenter is the org's announcement presenter: the character who
+                      presents its Products' announcements, unless a Product chooses its owner
+                      or its own character (Product.spec.announcements.presenter). Its
+                      presenter image is kept by the API (never at a public URL), set with
+                      consent (infrared-docs-internal ADR 0049 D6, revised 2026-10-14).
+                    properties:
+                      consentAt:
+                        format: date-time
+                        type: string
+                      consentBy:
+                        description: ConsentBy is who confirmed the image may be animated,
+                          and ConsentAt when.
+                        maxLength: 254
+                        type: string
+                      contentType:
+                        description: |-
+                          ContentType is the presenter image's type: image/png or image/jpeg.
+                          Empty means no image is on file.
+                        enum:
+                        - image/png
+                        - image/jpeg
+                        type: string
+                      name:
+                        description: Name goes on the announcement's lower third.
+                        maxLength: 80
+                        minLength: 1
+                        type: string
+                      title:
+                        maxLength: 80
+                        type: string
+                      voice:
+                        description: |-
+                          Voice is the Gemini text-to-speech voice it speaks with, e.g. Fenrir
+                          (the default when empty).
+                        maxLength: 32
+                        pattern: ^[A-Za-z]+$
+                        type: string
+                    required:
                     - name
                     type: object
                   timeZone:

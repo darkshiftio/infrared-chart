@@ -135,6 +135,16 @@ rules:
   - update
   - watch
 - apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
   - external-secrets.io
   resources:
   - externalsecrets
@@ -167,6 +177,8 @@ rules:
   - infrared.darkshift.io
   resources:
   - agentroles
+  - agentvms
+  - agentvms/status
   - gitopsrepos
   - gitproviders
   - installations
@@ -240,6 +252,8 @@ rules:
   - cloudaccounts
   - gitconnectors
   - incidents
+  - runnerpools
+  - runnertemplates
   - users
   verbs:
   - get

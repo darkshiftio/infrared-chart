@@ -55,6 +55,31 @@ spec:
             description: 'OrganizationSpec defines an org: the tenancy and RBAC boundary
               in Infrared.'
             properties:
+              agentSteps:
+                description: |-
+                  AgentSteps says where the org's agentRole steps run: as runner Jobs in
+                  the cluster (the default), or leased to RunnerPools on people's Macs
+                  (localred plan, phase 2).
+                properties:
+                  fallback:
+                    description: |-
+                      Fallback is what a step placed on the pools does when no pool that
+                      takes it is alive: jobs (run it as a Job, the default) or wait.
+                    enum:
+                    - jobs
+                    - wait
+                    type: string
+                  placement:
+                    default: jobs
+                    description: |-
+                      Placement is jobs (runner Jobs in the cluster) or pools (AgentVMs the
+                      org's RunnerPools lease). A step that publishes, delivers to Slack or
+                      names an MCP server runs as a Job either way.
+                    enum:
+                    - jobs
+                    - pools
+                    type: string
+                type: object
               announcements:
                 description: |-
                   Announcements configures announcement drafting (release notes, blog,

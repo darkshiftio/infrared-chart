@@ -69,6 +69,13 @@ rules:
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["get", "list", "create"]
+  # Runner pools (localred plan, phase 2): the API takes an AgentVM for a pool
+  # by creating its Lease, coordination.k8s.io/v1, of the same name in the
+  # org's namespace (one create wins), renews it on each heartbeat, and deletes
+  # it when the node agent reports or gives the lease back.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "create", "update", "delete"]
   # The API reads and writes Secrets in the release namespace (infrared-setup,
   # infrared-session, infrared-api-tokens, infrared-git-connectors) and in
   # ir-org-* namespaces, and deletes none. RBAC cannot match a namespace

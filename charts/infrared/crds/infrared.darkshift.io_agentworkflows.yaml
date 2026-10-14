@@ -55,6 +55,32 @@ spec:
             description: AgentWorkflowSpec is the ordered steps a Change (or a scheduled
               job) moves through.
             properties:
+              budget:
+                description: |-
+                  Budget caps the weekly spend of this workflow's runs, with the others
+                  of its group. Omitted means no cap beyond each step's.
+                properties:
+                  group:
+                    description: |-
+                      Group names the budget; every AgentWorkflow in the org with the same
+                      group shares it, e.g. qa for QA's triage and its weekly sweep.
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                    type: string
+                  scheduled:
+                    description: |-
+                      Scheduled runs the workflow's cron triggers even while the org's
+                      scheduling is off: the budget, not the switch, bounds what it spends.
+                    type: boolean
+                  weeklyUSD:
+                    description: |-
+                      WeeklyUSD is what the group's runs may spend in the last seven days,
+                      as a decimal string.
+                    pattern: ^[0-9]+(\.[0-9]{1,2})?$
+                    type: string
+                required:
+                - group
+                - weeklyUSD
+                type: object
               deadLetter:
                 description: DeadLetterPolicy routes work an agent can't finish to
                   a human.
@@ -140,6 +166,22 @@ spec:
                       format: int32
                       minimum: 1
                       type: integer
+                    maxBudgetUSD:
+                      description: |-
+                        MaxBudgetUSD caps what one attempt of this step may spend on the model,
+                        as a decimal string; it wins over the AgentRole's model.maxBudgetUSD.
+                        Only agentRole steps.
+                      pattern: ^[0-9]+(\.[0-9]{1,2})?$
+                      type: string
+                    maxReturns:
+                      description: |-
+                        MaxReturns bounds how often this step may send the run back to
+                        returnTo; the next CODE CHANGE NEEDED fails the step, and onFailure
+                        hands the Change to a person. Omitted means 2.
+                      format: int32
+                      maximum: 5
+                      minimum: 1
+                      type: integer
                     minApprovals:
                       description: |-
                         MinApprovals is how many approvals from approvers a human step needs.
@@ -189,6 +231,15 @@ spec:
                     required:
                       description: Required steps can't be disabled per release.
                       type: boolean
+                    returnTo:
+                      description: |-
+                        ReturnTo names an earlier agentRole step the run goes back to when this
+                        step ends with the verdict CODE CHANGE NEEDED: QA found that the product
+                        code, not the test, is wrong, so the builder fixes it on the same branch
+                        and every step from it runs again (ADR 0047, C10). The earlier rounds
+                        stay on each step as its rounds. Only agentRole steps.
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
                     timeout:
                       description: |-
                         Timeout bounds how long the step may take before onFailure applies, e.g.

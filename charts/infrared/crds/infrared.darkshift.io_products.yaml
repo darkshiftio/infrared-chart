@@ -183,6 +183,62 @@ spec:
                           - pre-release
                           - release
                           type: string
+                        guard:
+                          description: |-
+                            Guard is the zone's release guard (ADR 0046): after a Release reaches
+                            the zone, the zone must run it Synced and Healthy, pass every check and
+                            stay that way for the hold before the Release moves on. Empty means a
+                            hold of 5 minutes, Verify as the only check, and notify.
+                          properties:
+                            checks:
+                              description: |-
+                                Checks are HTTP checks the zone must pass, after Verify when both are
+                                set. Each is tried up to three times, 30 seconds apart, after its soak,
+                                and once more at the end of the hold.
+                              items:
+                                description: |-
+                                  ZoneVerify is an HTTP smoke check of a zone, made by the operator from inside
+                                  the management cluster.
+                                properties:
+                                  contains:
+                                    description: Contains is text the response body
+                                      must contain.
+                                    type: string
+                                  expectStatus:
+                                    description: ExpectStatus is the HTTP status that
+                                      passes; 0 means 200.
+                                    format: int32
+                                    type: integer
+                                  soak:
+                                    description: Soak is how long the zone must stay
+                                      Healthy before the check; empty means 2m.
+                                    type: string
+                                  url:
+                                    description: URL to GET, e.g. http://zippy.zippy-rc.svc/healthz
+                                      or the zone's public URL.
+                                    pattern: ^https?://
+                                    type: string
+                                required:
+                                - url
+                                type: object
+                              maxItems: 10
+                              type: array
+                            hold:
+                              description: |-
+                                Hold is how long the zone must stay Synced and Healthy on the Release,
+                                its checks passing, before the Release moves on: empty means 5m, 0s
+                                none.
+                              type: string
+                            rollback:
+                              description: |-
+                                Rollback is what the guard does when the zone fails it. notify reports
+                                the failure on the Release and leaves the zone on the new release, which
+                                stops the Release there. Rolling back arrives with ADR 0046's phase 3.
+                                Empty means notify.
+                              enum:
+                              - notify
+                              type: string
+                          type: object
                         name:
                           description: 'Name of the zone: its namespace, e.g. checkout-rc.'
                           minLength: 1
@@ -292,7 +348,8 @@ spec:
                         verify:
                           description: |-
                             Verify is a smoke check that must pass after Argo CD reports the zone
-                            Healthy, before the Release moves on to the next zone.
+                            Healthy, before the Release moves on to the next zone. It is the release
+                            guard's first check; guard.checks adds more.
                           properties:
                             contains:
                               description: Contains is text the response body must

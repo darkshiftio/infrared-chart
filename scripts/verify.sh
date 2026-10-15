@@ -809,6 +809,28 @@ refuse() {
   elif grep -qF -- "$want" "$out/refuse.log"; then ok "$desc"
   else cat "$out/refuse.log"; bad "$desc (wrong error)"; fi
 }
+# The licence (license.key or license.existingSecret): the Secret the API and
+# the operator read, rendered only from a licence passed with --set-file and
+# kept like every Secret from values; or another Secret's name handed to both.
+step "licence"
+printf '  irl1.ci-payload.ci-signature\n\n' >"$out/ci-license"
+helm template infrared "$chart" -n infrared --set-file "license.key=$out/ci-license" >"$out/license.yaml"
+helm template infrared "$chart" -n infrared --set license.existingSecret=ci-license >"$out/license-existing.yaml"
+check defaults.yaml "no licence Secret by default" '^  name: infrared-license$' 0
+check defaults.yaml "no licence Secret name handed on by default" 'INFRARED_LICENSE_SECRET' 0
+check license.yaml "license.key renders Secret infrared-license" '^  name: infrared-license$' 1
+keeps="$(grep -cE '^    helm\.sh/resource-policy: keep$' "$out/defaults.yaml" || true)"
+check license.yaml "the licence Secret is kept, like every Secret from values" '^    helm\.sh/resource-policy: keep$' "$((keeps + 1))"
+if [[ "$(secret license infrared-license license)" == irl1.ci-payload.ci-signature ]]; then
+  ok "the licence under key license, whitespace trimmed"
+else bad "infrared-license's license is not the licence, trimmed"; fi
+check license-existing.yaml "license.existingSecret renders no licence Secret" '^  name: infrared-license$' 0
+check license-existing.yaml "license.existingSecret is handed to the API and the operator" '^            - name: INFRARED_LICENSE_SECRET$' 2
+check license-existing.yaml "as the Secret's name" '^              value: "ci-license"$' 2
+refuse "license.key with license.existingSecret fails" "license.key and license.existingSecret are two places for the licence" \
+  --set-file "license.key=$out/ci-license" --set license.existingSecret=ci-license
+refuse "a license.key that is not a licence fails" "license.key is not an Infrared licence" --set license.key=not-a-licence
+
 ext='ui.extensions[0].id=back-office,ui.extensions[0].title=Back Office,ui.extensions[0].upstream=back-office.back-office.svc.cluster.local:8080'
 refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"
 refuse "a bucket key with Google Cloud Storage fails" "Google Cloud Storage (backup.endpoint https://storage.googleapis.com) takes none" \

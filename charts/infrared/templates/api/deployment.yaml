@@ -54,6 +54,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            {{- with .Values.license.existingSecret }}
+            # The Secret the install's licence is in (license.existingSecret);
+            # unset, infrared-license.
+            - name: INFRARED_LICENSE_SECRET
+              value: {{ . | quote }}
+            {{- end }}
             - name: INFRARED_GITOPS_TEMPLATE_VERSION
               value: {{ .Values.gitops.templateVersion | quote }}
             {{- with include "infrared.cloudIdentity" . }}

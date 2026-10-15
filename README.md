@@ -159,7 +159,7 @@ With them set, the chart renders no Secret at all and the ones from the first
 
 ## Secrets from values
 
-Two Secrets that a person used to make by hand before `helm install` can come from
+Three Secrets that a person used to make by hand before `helm install` can come from
 values. Each is rendered only when its value is set, so by default the chart
 renders neither. Pass the values with `--set-file`, so they are never written into
 a values file; the chart trims surrounding whitespace, such as a file's final
@@ -169,6 +169,7 @@ newline.
 |---|---|---|---|
 | The name in `imagePullSecrets[0]` | `kubernetes.io/dockerconfigjson`, `.dockerconfigjson`: one entry for `imageCredentials.registry` (default `ghcr.io`) | `imageCredentials.username` and `imageCredentials.password`, both or neither. Neither: the Secret must already exist, as before | The kubelet for every pod; the operator for Argo CD's chart repository Secret and for runner Jobs, which it copies the Secret to |
 | `infrared-platform-tokens` | `Opaque`: `cloudflare-api-token`, `backup-access-key-id` and `backup-secret-access-key`, `google-client-id` and `google-client-secret`, a key for each token set; with `codeIndex.enabled`, also the code index's five keys (see "The code index") | `platformTokens.cloudflareApiToken`; `platformTokens.backupAccessKeyId` and `platformTokens.backupSecretAccessKey`, both or neither; `platformTokens.googleClientId` and `platformTokens.googleClientSecret`, both or neither; the code index's record (`codeIndex.knowledge`) and GitHub App (`platformTokens.codeIndexGithubAppId`, `.codeIndexGithubAppInstallationId` and `.codeIndexGithubAppPrivateKey`, all three or none); `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it. The API reads the Google client itself |
+| `infrared-license` | `Opaque`, `license`: the install's licence, one line starting `irl1.` | `license.key` (`--set-file license.key=<file>`); refused with `license.existingSecret`, which names a Secret of your own with key `license` instead and renders none | The API (`GET`/`PUT /v1/license`, Settings) and the operator, which pause new agent steps and promotions to production zones without a valid licence once the 48-hour trial ends; both read `license.existingSecret`'s Secret when it is set (`INFRARED_LICENSE_SECRET`) |
 
 ```bash
 helm install infrared oci://ghcr.io/darkshiftio/charts/infrared --version <version> \
@@ -726,6 +727,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `giteaAdmin.existingSecret` | `""` | `infrared-gitea-admin` when it already exists, as under Argo CD; the chart then renders none |
 | `setup.token` / `setup.existingSecret` | `""` | Setup token override / existing Secret (see above) |
 | `session.key` / `session.existingSecret` | `""` | Session key override / existing Secret |
+| `license.key` / `license.existingSecret` | `""` | The licence (`--set-file`), rendered into Secret `infrared-license` and kept; or an existing Secret with key `license`, handed to the API and the operator as `INFRARED_LICENSE_SECRET`. Not both |
 | `mcp.token` / `mcp.existingSecret` | `""` | MCP token override / existing Secret |
 | `mcp.access.token` / `mcp.access.existingSecret` | `""` | Bearer token MCP clients must send to `/mcp` / existing Secret |
 | `observability.metricsURL` | `http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428` | Where the API reads SLO error ratios (`INFRARED_METRICS_URL`); empty reports every SLO as no-data |

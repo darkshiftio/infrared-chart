@@ -1,0 +1,29 @@
+{{- /*
+The install's licence, in the Secret `infrared-license`, key `license`, which
+the API and the operator read (infrared-api PUT /v1/license writes the same
+Secret). Rendered only when license.key is set; kept on uninstall and when the
+values stop carrying it, like the platform tokens, so a licence installed later
+in Settings stays. With license.existingSecret the chart renders none and the
+API and the operator read that Secret instead (INFRARED_LICENSE_SECRET).
+*/}}
+{{- $key := trim (default "" .Values.license.key) }}
+{{- if and $key .Values.license.existingSecret }}
+{{- fail "license.key and license.existingSecret are two places for the licence: pass the licence with --set-file license.key, or name the Secret that holds it in license.existingSecret, not both" }}
+{{- end }}
+{{- if and $key (not (hasPrefix "irl1." $key)) }}
+{{- fail "license.key is not an Infrared licence: a licence from darkshift is one line starting irl1." }}
+{{- end }}
+{{- if $key }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: infrared-license
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  license: {{ $key | b64enc | quote }}
+{{- end }}

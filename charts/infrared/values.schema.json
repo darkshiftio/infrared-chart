@@ -291,6 +291,21 @@
         }
       }
     },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The install's licence: rendered into Secret infrared-license from key, or read from existingSecret.",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "A licence (irl1.), passed with --set-file."
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "An existing Secret with key license; handed to the API and operator as INFRARED_LICENSE_SECRET."
+        }
+      }
+    },
     "platformTokens": {
       "type": "object",
       "additionalProperties": false,

@@ -372,6 +372,26 @@ session:
   # -- Name of an existing Secret with key `key`; when set, the chart renders no session Secret.
   existingSecret: ""
 
+# The install's Infrared licence (infrared-docs operate/licensing). The API and
+# the operator read it from the Secret `infrared-license`, key `license`, in the
+# release namespace, or from the Secret existingSecret names. Without a valid
+# licence an install runs a 48-hour trial, then pauses new agent steps and
+# promotions to production zones until one is installed. Install one here, in
+# Settings, or with `ir license install`.
+license:
+  # -- A licence from darkshift (one line starting `irl1.`), for the Secret
+  # `infrared-license`, key `license`. Pass it with --set-file so it is never in
+  # a values file; surrounding whitespace is trimmed. The Secret is rendered only
+  # when this is set, and kept on uninstall and when the values stop carrying it
+  # (as under Argo CD after adoption), so a licence installed later in Settings
+  # stays until a later upgrade passes this again.
+  key: ""
+  # -- Name of an existing Secret in the release namespace with key `license`
+  # (one External Secrets keeps, say). The chart then renders no licence Secret
+  # and hands the name to the API and the operator as INFRARED_LICENSE_SECRET;
+  # Settings installs a licence into that Secret. Not with key.
+  existingSecret: ""
+
 # Tokens the platform's own components use, kept in one Secret,
 # `infrared-platform-tokens`, in the release namespace. The gitops template's
 # External Secrets component reads it through the ClusterSecretStore

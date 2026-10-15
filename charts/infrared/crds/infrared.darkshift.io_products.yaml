@@ -1063,11 +1063,13 @@ spec:
             - message: spec.platform belongs to a Product of kind platform
               rule: '!has(self.platform) || (has(self.kind) && self.kind == ''platform'')'
             - message: 'kind cannot change, except a platform Product converted to
-                umbrella delivery with a control plane zone (ADR 0046 phase 5): recreate
-                the Product'
+                umbrella delivery with a control plane zone, and back (ADR 0046 phase
+                5): recreate the Product'
               rule: '(has(oldSelf.kind) ? oldSelf.kind : ''app'') == (has(self.kind)
                 ? self.kind : ''app'') || (has(oldSelf.kind) && oldSelf.kind == ''platform''
-                && (!has(self.kind) || self.kind == ''app'') && !has(self.platform))'
+                && (!has(self.kind) || self.kind == ''app'') && !has(self.platform))
+                || (has(self.kind) && self.kind == ''platform'' && has(oldSelf.delivery)
+                && has(oldSelf.delivery.charts))'
             - message: 'providerRef cannot change: its kpack Image, Releases and runs
                 name the forge its repos live on; recreate the Product to move it'
               rule: has(oldSelf.providerRef) == has(self.providerRef) && (!has(self.providerRef)

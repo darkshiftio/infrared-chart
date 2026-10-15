@@ -184,6 +184,13 @@ spec:
                   type: string
                 type: array
                 x-kubernetes-list-type: set
+              clusterSelfService:
+                description: |-
+                  ClusterSelfService lets the org's admins register and build workload
+                  clusters of their own (infrared-docs-internal ADR 0052): by kubeconfig,
+                  or from a cluster template through one of the org's own cloud accounts.
+                  Set by a platform admin. Off by default.
+                type: boolean
               displayName:
                 minLength: 1
                 type: string

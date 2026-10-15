@@ -193,6 +193,11 @@ spec:
               value: {{ .Values.runner.networkPolicy.enabled | quote }}
             - name: INFRARED_RUNNER_EGRESS_CIDRS
               value: {{ join "," .Values.runner.networkPolicy.extraEgressCIDRs | quote }}
+            {{- with .Values.observability.metricsURL }}
+            # The release guard's error budget check reads VictoriaMetrics (ADR 0046 phase 6).
+            - name: INFRARED_METRICS_URL
+              value: {{ . | quote }}
+            {{- end }}
             # Alertmanager sends SLO alerts here (/v1/webhooks/alertmanager/<org>).
             - name: INFRARED_API_URL
               value: {{ printf "http://%s.%s.svc:%d" (include "infrared.componentName" (dict "root" . "component" "api")) .Release.Namespace (int .Values.api.service.port) | quote }}

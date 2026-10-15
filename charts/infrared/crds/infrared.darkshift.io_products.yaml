@@ -421,6 +421,31 @@ spec:
                               - notify
                               - rollback
                               type: string
+                            sloBurn:
+                              description: |-
+                                SLOBurn is the error budget check (ADR 0046 phase 6): during the hold
+                                the guard reads each of the zone's SLOs over the hold so far, and fails
+                                the zone when one burns its error budget at the threshold or faster
+                                and worse than in the hour before the release. Empty means on, with
+                                every SLO of the zone and the fast-burn threshold 14.4.
+                              properties:
+                                slos:
+                                  description: |-
+                                    SLOs names the SLOs the check reads; empty means every SLO of the
+                                    zone, the defaults included.
+                                  items:
+                                    type: string
+                                  maxItems: 20
+                                  type: array
+                                threshold:
+                                  description: |-
+                                    Threshold is the burn rate that fails the zone: the error ratio over
+                                    the hold divided by the SLO's error budget. Empty means 14.4, the fast
+                                    burn that spends 2% of a 30-day budget in an hour; "0" turns the check
+                                    off.
+                                  pattern: ^[0-9]{1,4}(\.[0-9]{1,3})?$
+                                  type: string
+                              type: object
                           type: object
                         name:
                           description: 'Name of the zone: its namespace, e.g. checkout-rc.'

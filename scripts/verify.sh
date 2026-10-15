@@ -201,7 +201,7 @@ check defaults.yaml "default images are the pinned preprod builds" 'image: us-ce
 check defaults.yaml "operator runs steps in the pinned runner" 'value: "us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-runner:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
 check defaults.yaml "Go toolchain image pinned by digest" 'value: "golang:[0-9.]+@sha256:[0-9a-f]{64}"$' 1
 check defaults.yaml "operator knows the API's cluster address for alert webhooks" 'value: "http://infrared-api.infrared.svc:8080"$' 1
-check defaults.yaml "API reads SLOs from VictoriaMetrics" 'value: "http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428"$' 1
+check defaults.yaml "the API and the operator's release guard read SLOs from VictoriaMetrics" 'value: "http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428"$' 2
 check defaults.yaml "API reads runner pod logs" '^    resources: \["pods/log"\]$' 1
 check defaults.yaml "four Deployments" '^kind: Deployment$' 4
 check defaults.yaml "generated Secrets: setup, session, mcp token, api tokens" '^  name: infrared-(setup|session|mcp-token|api-tokens)$' 4

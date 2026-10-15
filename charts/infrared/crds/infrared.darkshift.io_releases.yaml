@@ -451,6 +451,61 @@ spec:
                             Rollback is the zone's rollback mode when the guard started: notify or
                             rollback.
                           type: string
+                        slos:
+                          description: |-
+                            SLOs are the error budget check's latest reading of each SLO of the
+                            zone (ADR 0046 phase 6).
+                          items:
+                            description: |-
+                              GuardSLOResult is the error budget check's latest reading of one SLO.
+                              Ratios and burn rates are decimal strings.
+                            properties:
+                              at:
+                                description: At is when it was read.
+                                format: date-time
+                                type: string
+                              baseline:
+                                description: Baseline is the share of bad events in
+                                  the hour before the release.
+                                type: string
+                              burnRate:
+                                description: BurnRate is ErrorRatio divided by the
+                                  SLO's error budget.
+                                type: string
+                              errorRatio:
+                                description: |-
+                                  ErrorRatio is the share of bad events over Window; empty when there
+                                  were too few events to judge.
+                                type: string
+                              message:
+                                description: Message says what the reading found.
+                                type: string
+                              name:
+                                description: Name is the SLO's name, e.g. uptime or
+                                  edge-errors.
+                                type: string
+                              objective:
+                                description: Objective is the SLO's objective, in
+                                  percent.
+                                type: string
+                              passed:
+                                description: Passed is false once the SLO burned past
+                                  the threshold.
+                                type: boolean
+                              threshold:
+                                description: Threshold is the burn rate that fails
+                                  the zone.
+                                type: string
+                              window:
+                                description: Window is how much of the hold the reading
+                                  covers.
+                                type: string
+                            required:
+                            - name
+                            - passed
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
                         unhealthySince:
                           description: |-
                             UnhealthySince is when Argo CD last stopped reporting the zone Synced

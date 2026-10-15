@@ -782,15 +782,15 @@ check defaults.yaml "no extensions by default: no checksum annotation" 'checksum
 check extensions.yaml "extensions ConfigMap <fullname>-ui-extensions" '^  name: infrared-ui-extensions$' 1
 check extensions.yaml "extensions ConfigMap keys" '^  (extensions\.json|http\.conf|server\.conf): \|$' 3
 check extensions.yaml "extensions.json carries no upstream" '"upstream"' 0
-check extensions.yaml "extensions.json defaults the entry" '"entry": "/ext/ledger/ui/entry\.js"' 1
+check extensions.yaml "extensions.json defaults the entry" '"entry": "/ext/back-office/ui/entry\.js"' 1
 check extensions.yaml "extensions.json defaults the icon" '"icon": "puzzle"' 1
 check extensions.yaml "one resolver, filled in by start-nginx" '^    resolver __EXT_RESOLVER__ valid=30s;$' 1
-check extensions.yaml "upstream ext_<id> with '-' as '_'" '^    upstream ext_(ledger|field_notes) \{$' 2
-check extensions.yaml "upstream resolves its FQDN at run time" '^      server ledger\.ledger\.svc\.cluster\.local:8080 resolve;$' 1
-check extensions.yaml "ledger proxies v1 and ui only" '^    location \^~ /ext/ledger/[a-z0-9_-]+/ \{$' 2
-check extensions.yaml "v1 prefix stripped to the upstream" '^      proxy_pass http://ext_ledger/v1/;$' 1
+check extensions.yaml "upstream ext_<id> with '-' as '_'" '^    upstream ext_(back_office|field_notes) \{$' 2
+check extensions.yaml "upstream resolves its FQDN at run time" '^      server back-office\.back-office\.svc\.cluster\.local:8080 resolve;$' 1
+check extensions.yaml "back-office proxies v1 and ui only" '^    location \^~ /ext/back-office/[a-z0-9_-]+/ \{$' 2
+check extensions.yaml "v1 prefix stripped to the upstream" '^      proxy_pass http://ext_back_office/v1/;$' 1
 check extensions.yaml "declared paths only for field-notes" '^    location \^~ /ext/field-notes/(api|ui)/ \{$' 2
-check extensions.yaml "everything else under /ext/<id>/ is 404" '^    location \^~ /ext/(ledger|field-notes)/ \{$' 2
+check extensions.yaml "everything else under /ext/<id>/ is 404" '^    location \^~ /ext/(back-office|field-notes)/ \{$' 2
 check extensions.yaml "every proxied location asks /_ext_auth first" '^      auth_request /_ext_auth;$' 4
 check extensions.yaml "login from the auth response" '^      proxy_set_header X-Infrared-Github [$]ext_github;$' 4
 check extensions.yaml "proxy secret placeholder" '^      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET__";$' 4
@@ -809,16 +809,16 @@ refuse() {
   elif grep -qF -- "$want" "$out/refuse.log"; then ok "$desc"
   else cat "$out/refuse.log"; bad "$desc (wrong error)"; fi
 }
-ext='ui.extensions[0].id=ledger,ui.extensions[0].title=Ledger,ui.extensions[0].upstream=ledger.ledger.svc.cluster.local:8080'
+ext='ui.extensions[0].id=back-office,ui.extensions[0].title=Back Office,ui.extensions[0].upstream=back-office.back-office.svc.cluster.local:8080'
 refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"
 refuse "a bucket key with Google Cloud Storage fails" "Google Cloud Storage (backup.endpoint https://storage.googleapis.com) takes none" \
   "${install_gcs[@]}" "${backup_key[@]}"
 refuse "Barman's archive with Google Cloud Storage fails" "backup.postgres.archive is not offered with Google Cloud Storage yet" \
   "${install_gcs[@]}" "${gitea[@]}" "${backups[@]}" --set backup.postgres.archive=true
 refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
-  --set "$ext,ui.extensions[0].upstream=ledger:8080,ui.extensionsProxySecret.existingSecret=x"
-refuse "a duplicate extension id fails" 'id "ledger" is listed more than once' \
-  --set "$ext,ui.extensions[1].id=ledger,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
+  --set "$ext,ui.extensions[0].upstream=back-office:8080,ui.extensionsProxySecret.existingSecret=x"
+refuse "a duplicate extension id fails" 'id "back-office" is listed more than once' \
+  --set "$ext,ui.extensions[1].id=back-office,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
 refuse "an edge other than traefik or gateway fails" "at '/installation/edge'" --set installation.edge=nginx
 refuse "previews without a signInURL fail" "missing property 'signInURL'" --set installation.previews.domain=preview.example.com
 refuse "a signInURL that is not https fails" "at '/installation/previews/signInURL'" \

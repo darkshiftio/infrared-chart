@@ -872,8 +872,12 @@ gitea:
           [[ "$list" =~ $regex ]] || skip "Gitea's list of authentication sources could not be read"
           id="$(echo "${BASH_REMATCH[2]}" | tail -n+2 | grep -E '\|infrared[[:space:]]+\|' | grep -iE '\|OAuth2[[:space:]]+\|' |
             awk '{print $1}')"
+          # Platform admins are Gitea's site admins (groups), and Gitea itself refuses anyone
+          # without a role in the platform org (infrared_platform_role is absent), as
+          # Infrared does at sign-in (ADR 0053 D4).
           args=(--name infrared --provider openidConnect --key "$key" --secret "$secret" --auto-discover-url "$url"
-            --group-claim-name groups --admin-group platform-admin --scopes openid --scopes email --scopes profile)
+            --group-claim-name groups --admin-group platform-admin --required-claim-name infrared_platform_role
+            --scopes openid --scopes email --scopes profile)
           if [ -z "$id" ]; then
             out="$(run gitea admin auth add-oauth "${args[@]}" 2>&1)" && { log 'added the OAuth2 source infrared'; exit 0; }
           else

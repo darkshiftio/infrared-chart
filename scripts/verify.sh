@@ -1447,6 +1447,9 @@ check gitea-oidc.yaml "...configure-gitea registers none" "echo 'no oauth config
 # whatever happens it exits 0, and it never prints the client's secret. The
 # test shortens the two-minute wait.
 sign_in="$out/sign-in"
+# Empty at every run: a client's files left by the last run would answer the
+# "not yet written" case below.
+rm -rf "$sign_in"
 mkdir -p "$sign_in/bin" "$sign_in/client"
 gitea_init gitea-oidc configure-infrared-sign-in '.args[0]' | jq -r . \
   | sed -e "s#^client=/infrared-oidc-gitea\$#client=$sign_in/client#" -e 's/+ 120 ))/+ 3 ))/' -e 's/sleep 5$/sleep 1/' >"$sign_in/step.sh"
@@ -1487,8 +1490,8 @@ if grep -q "^client=$sign_in/client\$" "$sign_in/step.sh" && grep -q '+ 3 ))' "$
     INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery" STUB_CODE=000
   signin_case "on and ready: it adds the source" 'added the OAuth2 source infrared' \
     INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery"
-  has sign-in/log "...as ADR 0053 names it: openidConnect at the discovery, the client gitea, platform-admin as site admins" \
-    "gitea admin auth add-oauth --name infrared --provider openidConnect --key gitea --secret ci-client-secret --auto-discover-url $discovery --group-claim-name groups --admin-group platform-admin --scopes openid --scopes email --scopes profile"
+  has sign-in/log "...as ADR 0053 names it: openidConnect at the discovery, the client gitea, platform-admin as site admins, a platform-org role required" \
+    "gitea admin auth add-oauth --name infrared --provider openidConnect --key gitea --secret ci-client-secret --auto-discover-url $discovery --group-claim-name groups --admin-group platform-admin --required-claim-name infrared_platform_role --scopes openid --scopes email --scopes profile"
   signin_case "on, the source there: it updates it by its ID" 'updated the OAuth2 source infrared \(7\)' \
     INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery" STUB_ID=7
   check sign-in/log "...by its ID" '^gitea admin auth update-oauth --id 7 --name infrared ' 1

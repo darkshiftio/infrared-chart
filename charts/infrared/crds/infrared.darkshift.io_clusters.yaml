@@ -29,6 +29,9 @@ spec:
     - jsonPath: .status.kubernetesVersion
       name: Version
       type: string
+    - jsonPath: .spec.owner.org
+      name: Owner
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -55,7 +58,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClusterSpec describes a cluster Infrared knows about.
+            description: |-
+              ClusterSpec describes a cluster Infrared knows about.
+              An org's cluster (ADR 0052) is reached by a kubeconfig or built from a
+              template through one of the org's cloud accounts, never in-cluster, never
+              with a server override, a custom module source or a custom OpenTofu image.
             properties:
               connection:
                 description: Connection says how Infrared and Argo CD reach a workload
@@ -90,6 +97,29 @@ spec:
                 - k3s
                 - eks
                 type: string
+              owner:
+                description: |-
+                  Owner is the org a workload cluster belongs to (ADR 0052). Empty means
+                  the platform's, as every cluster was before. It cannot change.
+                properties:
+                  org:
+                    description: Org is the owning org.
+                    maxLength: 63
+                    minLength: 1
+                    type: string
+                  registeredBy:
+                    description: |-
+                      RegisteredBy is who registered it: org (one of the org's admins) or
+                      platform (a platform admin, for the org). It decides whose gitops repo
+                      holds the cluster's registry.
+                    enum:
+                    - org
+                    - platform
+                    type: string
+                required:
+                - org
+                - registeredBy
+                type: object
               provider:
                 enum:
                 - aws
@@ -155,8 +185,14 @@ spec:
                   variables:
                     additionalProperties:
                       type: string
-                    description: Variables are the module's inputs.
+                    description: |-
+                      Variables are the module's inputs, each named like an OpenTofu
+                      identifier.
                     type: object
+                    x-kubernetes-validations:
+                    - message: 'variable names are OpenTofu identifiers: a letter
+                        or underscore, then letters, digits, underscores or hyphens'
+                      rule: self.all(k, k.matches('^[A-Za-z_][A-Za-z0-9_-]{0,63}$'))
                 type: object
               region:
                 type: string
@@ -186,6 +222,20 @@ spec:
             required:
             - type
             type: object
+            x-kubernetes-validations:
+            - message: 'an org''s cluster is a workload cluster reached by a kubeconfig:
+                no inCluster connection and no server'
+              rule: '!has(self.owner) || (self.type == ''workload'' && !has(self.server)
+                && (!has(self.connection) || !has(self.connection.inCluster) || !self.connection.inCluster))'
+            - message: 'an org''s cluster is built from a template through one of
+                the org''s cloud accounts: set template and provision.cloudAccount,
+                and no provision.source or provision.image'
+              rule: '!has(self.owner) || !has(self.provision) || (!has(self.provision.source)
+                && !has(self.provision.image) && has(self.provision.cloudAccount)
+                && has(self.template))'
+            - message: owner cannot change
+              rule: has(self.owner) == has(oldSelf.owner) && (!has(self.owner) ||
+                self.owner == oldSelf.owner)
           status:
             description: ClusterStatus is the observed state of a cluster.
             properties:

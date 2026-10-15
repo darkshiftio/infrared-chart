@@ -104,8 +104,8 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: profileURLTemplate must contain {handle}, e.g. https://x.com/{handle}
-              rule: '!has(self.profileURLTemplate) || self.profileURLTemplate == ''''
-                || self.profileURLTemplate.contains(''{handle}'')'
+              rule: '!has(self.profileURLTemplate) || size(self.profileURLTemplate)
+                == 0 || self.profileURLTemplate.contains(''{handle}'')'
         required:
         - spec
         type: object

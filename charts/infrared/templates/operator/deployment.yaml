@@ -177,6 +177,19 @@ spec:
             - name: INFRARED_GITEA_URL
               value: {{ include "infrared.giteaURL" . | quote }}
             {{- end }}
+            {{- if .Values.oidc.enabled }}
+            # Infrared as the OpenID Connect provider of the install's own tools
+            # (oidc.enabled, ADR 0053): with Grafana's address, the gitops
+            # template signs people in to Grafana through Infrared.
+            - name: INFRARED_OIDC
+              value: "true"
+            {{- end }}
+            {{- with .Values.oidc.grafanaURL }}
+            # Grafana's address in a browser (oidc.grafanaURL), the template's
+            # GrafanaURL.
+            - name: INFRARED_OIDC_GRAFANA_URL
+              value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
             {{- if .Values.summaryvideo.enabled }}
             - name: INFRARED_SUMMARY_VIDEO_IMAGE
               value: {{ include "infrared.image" (dict "root" . "image" .Values.summaryvideo.image) | quote }}

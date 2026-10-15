@@ -49,6 +49,22 @@
         }
       }
     },
+    "oidc": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Infrared as the OpenID Connect provider of the install's own tools, Grafana and Gitea (infrared-docs-internal ADR 0053). Off by default; each tool's client exists only while its address is set.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "INFRARED_OIDC (api and operator): turn the provider on. Its issuer is the Installation's spec.previews.signInURL with /api/v1/oidc."
+        },
+        "grafanaURL": {
+          "type": "string",
+          "pattern": "^$|^(https://[^\\s/?#@]+|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?)(/[^\\s?#]*)?$",
+          "description": "INFRARED_OIDC_GRAFANA_URL (api and operator): Grafana's address in a browser, such as https://grafana.example.com, a trailing slash trimmed; its redirect URI is <grafanaURL>/login/generic_oauth. Empty: no Grafana client."
+        }
+      }
+    },
     "installation": {
       "type": "object",
       "additionalProperties": false,
@@ -1295,7 +1311,7 @@
         "browserURL": {
           "type": "string",
           "pattern": "^$|^(https://[^\\s/?#]+|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?)(/[^\\s?#]*)?$",
-          "description": "INFRARED_GITEA_BROWSER_URL: the address browsers open this Gitea at, such as https://git.example.com; set, Infrared can register its own Gitea connector (ADR 0042). Needs gitea.enabled."
+          "description": "INFRARED_GITEA_BROWSER_URL (api): the address browsers open this Gitea at, such as https://git.example.com; Gitea's ROOT_URL follows it, with a trailing slash (ADR 0053). Set, Infrared can register its own Gitea connector (ADR 0042), and with oidc.enabled and installation.previews.signInURL Gitea signs people in through Infrared. Needs gitea.enabled."
         },
         "fullnameOverride": {
           "const": "gitea",

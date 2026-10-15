@@ -352,7 +352,7 @@ obj() {
 }
 objn() { obj "$1" "$2" "$3" | grep -cE -- "$4" || true; }
 for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key; do
-  check "$f.yaml" "$f: no Gitea" '^  name: (gitea|gitea-http|gitea-ssh|gitea-shared-storage|infrared-gitea-admin)$' 0
+  check "$f.yaml" "$f: no Gitea" '^  name: (gitea|gitea-http|gitea-ssh|gitea-shared-storage|infrared-gitea-admin|infrared-gitea-sign-in)$' 0
 done
 check defaults.env "no Gitea address or admin Secret handed on by default" '^INFRARED_GITEA_' 0
 # A fresh install with Gitea: one pod of Gitea 1.27.3 on one volume, its admin
@@ -361,8 +361,8 @@ gitea_url=http://gitea-http.infrared.svc.cluster.local:3000
 has gitea.env "the operator and the API reach Gitea at its Service" "INFRARED_GITEA_URL=\"$gitea_url\"" 2
 has gitea.env "the API reads Gitea's admin from infrared-gitea-admin" 'INFRARED_GITEA_ADMIN_SECRET="infrared-gitea-admin"'
 check gitea.yaml "five Deployments: Infrared's four and Gitea" '^kind: Deployment$' 5
-check gitea.yaml "Gitea 1.27.3, rootless, by digest, in each of its four containers" \
-  'image: "docker\.gitea\.com/gitea:1\.27\.3-rootless@sha256:[0-9a-f]{64}"$' 4
+check gitea.yaml "Gitea 1.27.3, rootless, by digest, in each of its five containers, Infrared's sign-in step among them" \
+  'image: "?docker\.gitea\.com/gitea:1\.27\.3-rootless@sha256:[0-9a-f]{64}"?$' 5
 if [[ "$(objn gitea Deployment gitea '^  replicas: 1$|^    type: Recreate$')" == 2 ]]; then
   ok "one Gitea pod, replaced with Recreate: its volume is ReadWriteOnce"
 else bad "Gitea is not one pod with strategy Recreate"; fi
@@ -1314,6 +1314,198 @@ refuse "a directory interval that is not a Go duration fails" "at '/api/director
 refuse "a client address header that is not a header name fails" "at '/api/clientAddressHeader'" \
   --set-string 'api.clientAddressHeader=CF Connecting IP'
 
+step "Infrared as the OpenID Connect provider of the install's own tools (ADR 0053)"
+# Off by default: no provider for the API or the operator. Gitea's sign-in is
+# this chart's alone: the ConfigMap infrared-gitea-sign-in, Gitea's settings
+# from it (gitea.gitea.additionalConfigFromEnvs, each optional) and the
+# post-init step configure-infrared-sign-in. With any of oidc.enabled,
+# gitea.browserURL and installation.previews.signInURL unset the ConfigMap holds
+# no key, so Gitea keeps its presets and the step ends at once. Gitea's
+# ROOT_URL follows gitea.browserURL alone; empty, it is the Service address.
+oidc=(--set oidc.enabled=true --set oidc.grafanaURL=https://grafana.example.com/ --set gitea.browserURL=https://gitea.example.com)
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${oidc[@]}" >"$out/gitea-oidc.yaml"
+# The provider and both addresses, but no sign-in URL among the values: an
+# install whose Installation's previews were set by hand.
+helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" "${oidc[@]}" \
+  >"$out/gitea-oidc-no-sign-in-url.yaml"
+# localred's own list of Gitea's settings from the environment, which replaces
+# this chart's (Helm replaces lists): its ROOT_URL from its own ConfigMap.
+localred_envs='[{"name":"GITEA__SERVER__ROOT_URL","valueFrom":{"configMapKeyRef":{"name":"localred-gitea","key":"ROOT_URL","optional":true}}}]'
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" --set-json "gitea.gitea.additionalConfigFromEnvs=$localred_envs" \
+  >"$out/gitea-localred.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" "${oidc[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with the provider, Grafana's address and Gitea's"
+else cat "$out/lint.log"; bad "lint install with the provider, Grafana's address and Gitea's"; fi
+envs gitea-oidc
+check defaults.env "no provider and no Grafana address by default" '^INFRARED_OIDC' 0
+check gitea.env "...nor with Gitea alone" '^INFRARED_OIDC' 0
+check identity.env "...nor with Gitea's browser address alone" '^INFRARED_OIDC' 0
+has gitea-oidc.env "the provider on, for the API and the operator" 'INFRARED_OIDC="true"' 2
+has gitea-oidc.env "Grafana's address for both, its trailing slash trimmed" 'INFRARED_OIDC_GRAFANA_URL="https://grafana.example.com"' 2
+for d in infrared-api infrared-operator; do
+  if [[ "$(objn gitea-oidc Deployment "$d" '^            - name: INFRARED_OIDC(_GRAFANA_URL)?$')" == 2 ]]; then
+    ok "$d gets INFRARED_OIDC and INFRARED_OIDC_GRAFANA_URL"
+  else bad "$d lacks INFRARED_OIDC or INFRARED_OIDC_GRAFANA_URL"; fi
+done
+if [[ "$(objn gitea-oidc Deployment infrared-operator 'INFRARED_GITEA_BROWSER_URL')" == 0 ]]; then
+  ok "the operator gets no Gitea browser address: Gitea's sign-in is this chart's alone"
+else bad "the operator gets INFRARED_GITEA_BROWSER_URL"; fi
+
+# The ConfigMap: its keys only with the provider, Gitea's address and the sign-in URL.
+signin_data() {
+  yq -o json -I0 'select(.kind == "ConfigMap" and .metadata.name == "infrared-gitea-sign-in") | .data' "$out/$1.yaml" | jq -S -c .
+}
+want_signin='{"ENABLED":"true","DISCOVERY_URL":"https://infrared.example.com/api/v1/oidc/.well-known/openid-configuration",
+  "service.DISABLE_REGISTRATION":"false","service.ALLOW_ONLY_EXTERNAL_REGISTRATION":"true","service.SHOW_REGISTRATION_BUTTON":"false",
+  "oauth2_client.ENABLE_AUTO_REGISTRATION":"true","oauth2_client.USERNAME":"nickname","oauth2_client.ACCOUNT_LINKING":"disabled",
+  "oauth2_client.UPDATE_AVATAR":"false","openid.ENABLE_OPENID_SIGNIN":"false","openid.ENABLE_OPENID_SIGNUP":"false",
+  "session.SESSION_LIFE_TIME":"43200","security.LOGIN_REMEMBER_DAYS":"1"}'
+if [[ "$(signin_data gitea-oidc)" == "$(jq -S -c . <<<"$want_signin")" ]]; then
+  ok "with all three, infrared-gitea-sign-in turns sign-in on at Infrared's discovery, registration through it alone"
+else bad "infrared-gitea-sign-in is $(signin_data gitea-oidc)"; fi
+for f in gitea gitea-adopted identity backups restore gitea-oidc-no-sign-in-url gitea-localred; do
+  if [[ "$(signin_data "$f")" == "{}" ]]; then ok "$f: infrared-gitea-sign-in holds no key, so Gitea keeps its presets"
+  else bad "$f: infrared-gitea-sign-in is '$(signin_data "$f")', want {}"; fi
+done
+
+# Gitea's ROOT_URL, and its settings from that ConfigMap: each optional, each
+# named after the key it reads, and every setting the ConfigMap holds read.
+# gitea_init <render> <init container> <yq expression>: the expression on that
+# init container of Gitea's Deployment, as sorted JSON. The Deployment is cut out
+# first: yq collects an empty array from every other document.
+gitea_init() {
+  yq 'select(.kind == "Deployment" and .metadata.name == "gitea")' "$out/$1.yaml" \
+    | yq -o json -I0 ".spec.template.spec.initContainers[] | select(.name == \"$2\") | $3" - | jq -S -c .
+}
+root_url() { gitea_init "$1" init-app-ini '.env[] | select(.name == "GITEA__SERVER__ROOT_URL") | .value' | jq -r .; }
+if [[ "$(root_url gitea)" == "$gitea_url/" && "$(root_url gitea-adopted)" == "$gitea_url/" ]]; then
+  ok "without gitea.browserURL, Gitea's ROOT_URL is its Service address, as before"
+else bad "without gitea.browserURL, Gitea's ROOT_URL is '$(root_url gitea)'"; fi
+if [[ "$(root_url gitea-oidc)" == https://gitea.example.com/ && "$(root_url identity)" == https://git.example.com/ ]]; then
+  ok "Gitea's ROOT_URL follows gitea.browserURL, with a trailing slash, with the provider or without"
+else bad "Gitea's ROOT_URL is '$(root_url gitea-oidc)' and '$(root_url identity)', want the browser addresses with a slash"; fi
+settings="$(gitea_init gitea init-app-ini '[.env[] | select(.valueFrom.configMapKeyRef.name == "infrared-gitea-sign-in")]')"
+wrong=""
+while IFS=' ' read -r name key optional; do
+  rest="${name#GITEA__}"
+  section="$(tr '[:upper:]' '[:lower:]' <<<"${rest%%__*}")"
+  [[ "$key" == "$section.${rest#*__}" && "$optional" == true ]] || wrong="$wrong $name"
+done < <(jq -r '.[] | "\(.name) \(.valueFrom.configMapKeyRef.key) \(.valueFrom.configMapKeyRef.optional)"' <<<"$settings")
+read_keys="$(jq -r '[.[].valueFrom.configMapKeyRef.key] | sort | join(" ")' <<<"$settings")"
+held_keys="$(jq -r '[keys[] | select(. != "ENABLED" and . != "DISCOVERY_URL")] | sort | join(" ")' <<<"$want_signin")"
+if [[ -z "$wrong" && "$read_keys" == "$held_keys" ]]; then
+  ok "Gitea reads each of the ConfigMap's $(jq length <<<"$settings") settings, optional, by its section and key"
+else bad "Gitea's settings from infrared-gitea-sign-in are wrong:$wrong (reads '$read_keys', the ConfigMap holds '$held_keys')"; fi
+got="$(gitea_init gitea-localred init-app-ini '[.env[] | select(.name | test("^GITEA__"))]')"
+if [[ "$got" == "$(jq -S -c . <<<"$localred_envs")" ]]; then
+  ok "an install's own additionalConfigFromEnvs list replaces this chart's (localred's: its ROOT_URL from its ConfigMap, no sign-in setting)"
+else bad "with localred's list, Gitea's settings from the environment are $got"; fi
+
+# The sign-in step: after the gitea chart's own, with configure-gitea's image,
+# env, mounts, securityContext and resources, so a gitea chart upgrade that
+# changes them fails here; the client's Secret an optional volume only it
+# mounts; and no OAuth source of the gitea chart's own (gitea.gitea.oauth),
+# whose configure-gitea would stop Gitea's start whenever Infrared's discovery
+# did not answer.
+base_env='[.env[] | select(.name == "GITEA_APP_INI" or .name == "GITEA_CUSTOM" or .name == "GITEA_WORK_DIR" or .name == "GITEA_TEMP" or .name == "HOME")]'
+base_mounts='[.volumeMounts[] | select(.name == "temp" or .name == "data")]'
+for f in gitea gitea-adopted gitea-oidc; do
+  differ=""
+  for e in .image .imagePullPolicy .securityContext .resources "$base_env" "$base_mounts"; do
+    a="$(gitea_init "$f" configure-gitea "$e")"; b="$(gitea_init "$f" configure-infrared-sign-in "$e")"
+    [[ -n "$a" && "$a" != null && "$a" != '[]' && "$a" == "$b" ]] || differ="$differ $e"
+  done
+  if [[ -z "$differ" && "$(gitea_init "$f" configure-infrared-sign-in "$base_env" | jq length)" == 5 ]]; then
+    ok "$f: configure-infrared-sign-in has configure-gitea's image, env, mounts, securityContext and resources"
+  else bad "$f: configure-infrared-sign-in differs from configure-gitea in:$differ"; fi
+done
+if [[ "$(yq 'select(.kind == "Deployment" and .metadata.name == "gitea") | .spec.template.spec.initContainers[-1].name' "$out/gitea.yaml")" \
+    == configure-infrared-sign-in ]]; then
+  ok "configure-infrared-sign-in runs after the gitea chart's own init containers"
+else bad "configure-infrared-sign-in is not Gitea's last init container"; fi
+got="$(gitea_init gitea configure-infrared-sign-in '[.env[] | select(.valueFrom) | .valueFrom.configMapKeyRef + {"env": .name}]')"
+want='[{"env":"INFRARED_SIGN_IN","key":"ENABLED","name":"infrared-gitea-sign-in","optional":true},
+  {"env":"INFRARED_SIGN_IN_DISCOVERY_URL","key":"DISCOVERY_URL","name":"infrared-gitea-sign-in","optional":true}]'
+if [[ "$got" == "$(jq -S -c . <<<"$want")" ]]; then ok "the step reads ENABLED and DISCOVERY_URL from the ConfigMap, optional"
+else bad "the step's env from the ConfigMap is $got"; fi
+vol="$(yq -o json -I0 'select(.kind == "Deployment" and .metadata.name == "gitea") | .spec.template.spec.volumes[]
+  | select(.name == "infrared-oidc-gitea") | .secret' "$out/gitea.yaml" | jq -S -c .)"
+users="$(yq 'select(.kind == "Deployment" and .metadata.name == "gitea")' "$out/gitea.yaml" \
+  | yq '.spec.template.spec | [.initContainers[], .containers[]][] | select(.volumeMounts[] | .name == "infrared-oidc-gitea") | .name' - \
+  | sort -u | tr '\n' ' ')"
+if [[ "$vol" == '{"defaultMode":288,"optional":true,"secretName":"infrared-oidc-gitea"}' && "$users" == "configure-infrared-sign-in " ]]; then
+  ok "the client's Secret infrared-oidc-gitea is an optional volume, mounted by the sign-in step alone"
+else bad "the volume infrared-oidc-gitea is $vol, mounted by '$users'"; fi
+for f in gitea gitea-adopted gitea-oidc gitea-oidc-no-sign-in-url gitea-localred identity backups restore; do
+  check "$f.yaml" "$f: no OAuth source of the gitea chart's own, and no GITEA_OAUTH_ variable" 'GITEA_OAUTH_|checksum/oauth_' 0
+done
+check gitea-oidc.yaml "...configure-gitea registers none" "echo 'no oauth configuration\.\.\. skipping\.'" 1
+
+# The step's script, against stand-ins for curl, gitea and timeout: off, it ends
+# at once and calls nothing; on, it waits for the client's Secret and Infrared's
+# discovery, then adds or updates the source "infrared" with ADR 0053's flags;
+# whatever happens it exits 0, and it never prints the client's secret. The
+# test shortens the two-minute wait.
+sign_in="$out/sign-in"
+# Empty at every run: a client's files left by the last run would answer the
+# "not yet written" case below.
+rm -rf "$sign_in"
+mkdir -p "$sign_in/bin" "$sign_in/client"
+gitea_init gitea-oidc configure-infrared-sign-in '.args[0]' | jq -r . \
+  | sed -e "s#^client=/infrared-oidc-gitea\$#client=$sign_in/client#" -e 's/+ 120 ))/+ 3 ))/' -e 's/sleep 5$/sleep 1/' >"$sign_in/step.sh"
+cat >"$sign_in/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s' "${STUB_CODE:-200}"
+EOF
+cat >"$sign_in/bin/gitea" <<'EOF'
+#!/usr/bin/env bash
+echo "gitea $*" >>"$STUB_LOG"
+case "$*" in
+  "admin auth list --vertical-bars")
+    printf 'a warning first\nID   |Name      |Type    |Enabled\n'
+    if [[ -n "${STUB_ID:-}" ]]; then printf '%s    |infrared  |OAuth2  |true\n' "$STUB_ID"; fi ;;
+  "admin auth add-oauth"* | "admin auth update-oauth"*)
+    if [[ -n "${STUB_FAIL:-}" ]]; then echo "Command error: refused, with $(cat "$STUB_CLIENT/secret") in it"; exit 1; fi ;;
+  *) exit 3 ;;
+esac
+EOF
+printf '#!/usr/bin/env bash\nshift\nexec "$@"\n' >"$sign_in/bin/timeout"
+chmod +x "$sign_in/bin/curl" "$sign_in/bin/gitea" "$sign_in/bin/timeout"
+discovery=https://infrared.example.com/api/v1/oidc/.well-known/openid-configuration
+signin_case() { # signin_case <description> <output regex> [env...]
+  local desc="$1" want="$2"; shift 2
+  : >"$sign_in/log"
+  if step_out="$(env PATH="$sign_in/bin:$PATH" STUB_LOG="$sign_in/log" STUB_CLIENT="$sign_in/client" "$@" bash "$sign_in/step.sh" 2>&1)"; then
+    if grep -qE -- "$want" <<<"$step_out"; then ok "sign-in step: $desc"; else bad "sign-in step: $desc: $step_out"; fi
+  else bad "sign-in step: $desc: exited non-zero: $step_out"; fi
+}
+if grep -q "^client=$sign_in/client\$" "$sign_in/step.sh" && grep -q '+ 3 ))' "$sign_in/step.sh" && grep -q 'sleep 1$' "$sign_in/step.sh"; then
+  signin_case "off, it ends at once" 'Infrared sign-in is off'
+  if [[ -s "$sign_in/log" ]]; then bad "sign-in step: off, it called gitea"; fi
+  signin_case "on, the Secret not yet written: it waits, then Gitea starts without" \
+    "WARNING: the Secret infrared-oidc-gitea or Infrared's discovery .* was not ready within 120 seconds" \
+    INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery"
+  printf 'gitea' >"$sign_in/client/key"; printf 'ci-client-secret' >"$sign_in/client/secret"
+  signin_case "on, Infrared's discovery down" 'was not ready within 120 seconds' \
+    INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery" STUB_CODE=000
+  signin_case "on and ready: it adds the source" 'added the OAuth2 source infrared' \
+    INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery"
+  has sign-in/log "...as ADR 0053 names it: openidConnect at the discovery, the client gitea, platform-admin as site admins, a platform-org role required" \
+    "gitea admin auth add-oauth --name infrared --provider openidConnect --key gitea --secret ci-client-secret --auto-discover-url $discovery --group-claim-name groups --admin-group platform-admin --required-claim-name infrared_platform_role --scopes openid --scopes email --scopes profile"
+  signin_case "on, the source there: it updates it by its ID" 'updated the OAuth2 source infrared \(7\)' \
+    INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery" STUB_ID=7
+  check sign-in/log "...by its ID" '^gitea admin auth update-oauth --id 7 --name infrared ' 1
+  signin_case "on, Gitea refuses: Gitea starts without, its answer shown with the secret redacted" \
+    'Command error: refused, with <redacted> in it' INFRARED_SIGN_IN=true INFRARED_SIGN_IN_DISCOVERY_URL="$discovery" STUB_FAIL=1
+  if grep -q 'ci-client-secret' <<<"$step_out"; then bad "sign-in step: it printed the client's secret"
+  else ok "sign-in step: it never prints the client's secret"; fi
+else bad "sign-in step: its script no longer has the lines this test shortens"; fi
+
+refuse "a Grafana address over plain http, other than localhost, fails" "at '/oidc/grafanaURL'" \
+  --set oidc.grafanaURL=http://grafana.example.com
+refuse "a Grafana address with a user fails" "at '/oidc/grafanaURL'" --set oidc.grafanaURL=https://someone@grafana.example.com
+refuse "a key under oidc the chart does not know fails" "at '/oidc'" --set oidc.issuer=https://infrared.example.com
+
 step "umbrella chart (ADR 0038)"
 # An umbrella wraps this chart: its version is the control plane's, and its pins hand no override on.
 helm template infrared "$chart" -n infrared --set global.deployedChart.version=0.1.0-rc.147 \
@@ -1343,7 +1535,7 @@ if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && g
 else bad "the chart's name leaks into what it renders"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

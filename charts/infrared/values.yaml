@@ -32,6 +32,29 @@ signIn:
     # ConfigMap infrared-sign-in turns it back on until the next Google sign-in.
     enabled: true
 
+# Infrared as the OpenID Connect provider of this install's own tools
+# (infrared-docs-internal ADR 0053): Grafana and Gitea sign people in through
+# Infrared, which signs them in as it does itself, and their roles there come
+# from Infrared's access groups. Off by default, and each tool's client exists
+# only while its address is set. The issuer is the Installation's
+# spec.previews.signInURL with /api/v1/oidc. infrared-api makes and keeps the
+# signing key and each client's secret itself (the Secrets infrared-oidc-signing,
+# infrared-oidc-gitea and monitoring/infrared-oidc-grafana); the chart never
+# renders them. After Argo CD adopts the release, set these in the gitops repo's
+# registry/clusters/<cluster>/values/infrared.yaml, which Infrared never writes.
+oidc:
+  # -- Turn the provider on (INFRARED_OIDC, api and operator). With grafanaURL,
+  # the gitops template signs people in to Grafana through Infrared; with
+  # gitea.browserURL and installation.previews.signInURL, this chart signs them
+  # in to Gitea (the ConfigMap infrared-gitea-sign-in, under gitea below).
+  enabled: false
+  # -- Grafana's address in a browser, such as
+  # https://grafana.infrared-cp-google.private.darkshift.io
+  # (INFRARED_OIDC_GRAFANA_URL, api and operator; a trailing slash is trimmed).
+  # Grafana's redirect URI is <grafanaURL>/login/generic_oauth. Empty: no
+  # Grafana client.
+  grafanaURL: ""
+
 # What the operator writes to the Installation when it starts, so nobody patches
 # it after the install. It writes each field only while that field is empty, and
 # never overwrites one.
@@ -717,8 +740,9 @@ mcp:
 # but `enabled` and `browserURL` is the gitea chart's own
 # (https://gitea.com/gitea/helm-gitea),
 # preset for one pod: SQLite on one volume, an in-memory cache, a LevelDB queue,
-# no ingress and no SSH, sign-in required and no self-registration. The operator
-# and the API reach it at http://gitea-http.<release namespace>.svc.cluster.local:3000
+# no ingress and no SSH, sign-in required and no self-registration, and with
+# oidc.enabled sign-in through Infrared (ADR 0053). The operator and the API
+# reach it at http://gitea-http.<release namespace>.svc.cluster.local:3000
 # (INFRARED_GITEA_URL), and its site admin is the Secret giteaAdmin describes.
 gitea:
   # -- Run Gitea in the release namespace, and hand its address to the operator
@@ -726,10 +750,14 @@ gitea:
   # (INFRARED_GITEA_ADMIN_SECRET).
   enabled: false
   # -- The address browsers open this Gitea at, such as https://git.example.com
-  # (INFRARED_GITEA_BROWSER_URL, api). Set, a platform admin can have Infrared
-  # register its own OAuth application on this Gitea, a git connector people
-  # link their Gitea accounts with (ADR 0042). Empty keeps that off, as for a
-  # Gitea only the cluster reaches. Needs `enabled`.
+  # (INFRARED_GITEA_BROWSER_URL, api). Gitea's ROOT_URL follows it, with a
+  # trailing slash, so the links Gitea makes open in a browser; empty keeps
+  # ROOT_URL the Service address below, as for a Gitea only the cluster
+  # reaches. Set, a platform admin can have Infrared register its own OAuth
+  # application on this Gitea, a git connector people link their Gitea accounts
+  # with (ADR 0042); with oidc.enabled and installation.previews.signInURL too,
+  # Gitea signs people in through Infrared (ADR 0053). Argo CD, kpack, the
+  # operator and the API keep reaching Gitea at its Service. Needs `enabled`.
   browserURL: ""
   # -- Fixed: the Deployment is `gitea` and its Service `gitea-http`.
   fullnameOverride: gitea
@@ -784,6 +812,130 @@ gitea:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
+  # Infrared's sign-in on Gitea (ADR 0053), after the gitea chart's own init
+  # containers, so the database is migrated and app.ini written. It registers,
+  # or updates, the OAuth2 source "infrared" at Infrared's issuer while the
+  # ConfigMap infrared-gitea-sign-in says ENABLED (oidc.enabled,
+  # gitea.browserURL and installation.previews.signInURL all set), with the
+  # client in the Secret infrared-oidc-gitea that infrared-api writes. It never
+  # fails the pod, so Gitea starts whatever Infrared's state is: with sign-in
+  # off it ends at once; on, it waits two minutes at most for that Secret and
+  # Infrared's discovery, and registers again at the next start if either is
+  # missing. Static, as the gitea chart renders it without tpl: its image, env,
+  # mounts, securityContext and resources are configure-gitea's, which
+  # scripts/verify.sh checks in the same render. An install that sets its own
+  # postExtraInitContainers or extraVolumes list replaces this one (Helm
+  # replaces lists), and must keep both or neither.
+  postExtraInitContainers:
+    - name: configure-infrared-sign-in
+      image: docker.gitea.com/gitea:1.27.3-rootless@sha256:1c17ecaead42eb3b5391553d8708103a4beb0e86edf5b9ebc1eb269c318845f2
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          # Infrared's sign-in on Gitea (infrared-docs-internal ADR 0053): register,
+          # or update, the OAuth2 source "infrared" at Infrared's issuer, with the
+          # client in the Secret infrared-oidc-gitea that infrared-api writes. It never
+          # fails the pod, so Gitea starts whatever Infrared's state is, and it never
+          # prints the client's secret.
+          set -uo pipefail
+          log() { printf '==== configure-infrared-sign-in: %s\n' "$*"; }
+          skip() {
+            log "WARNING: $*. Gitea starts without Infrared sign-in; it registers again at the next start."
+            exit 0
+          }
+          if [ "${INFRARED_SIGN_IN:-}" != true ]; then
+            log 'Infrared sign-in is off (oidc.enabled, gitea.browserURL and installation.previews.signInURL are not all set): nothing to do.'
+            exit 0
+          fi
+          url="${INFRARED_SIGN_IN_DISCOVERY_URL:-}"
+          client=/infrared-oidc-gitea
+          [ -n "$url" ] || skip 'the ConfigMap infrared-gitea-sign-in names no discovery URL'
+          # The API writes the client's Secret within seconds of its own start, which
+          # may come after this pod's, and the kubelet fills the optional volume once
+          # the Secret exists. Gitea registers the source only once it has fetched
+          # Infrared's discovery. So wait for both, two minutes at most.
+          log "waiting up to 120 seconds for the Secret infrared-oidc-gitea and Infrared's discovery at $url"
+          deadline=$(( $(date +%s) + 120 ))
+          until [ -s "$client/key" ] && [ -s "$client/secret" ] &&
+            [ "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null)" = 200 ]; do
+            [ "$(date +%s)" -lt "$deadline" ] ||
+              skip "the Secret infrared-oidc-gitea or Infrared's discovery at $url was not ready within 120 seconds"
+            sleep 5
+          done
+          key="$(cat "$client/key")"
+          secret="$(cat "$client/secret")"
+          run() { if command -v timeout >/dev/null 2>&1; then timeout 20 "$@"; else "$@"; fi; }
+          # The source's ID, read as the gitea chart's own configure-gitea reads it.
+          list="$(run gitea admin auth list --vertical-bars 2>&1)" || skip 'gitea admin auth list failed'
+          regex='(.*)(ID[[:space:]]+\|Name[[:space:]]+\|Type[[:space:]]+\|Enabled.*)'
+          [[ "$list" =~ $regex ]] || skip "Gitea's list of authentication sources could not be read"
+          id="$(echo "${BASH_REMATCH[2]}" | tail -n+2 | grep -E '\|infrared[[:space:]]+\|' | grep -iE '\|OAuth2[[:space:]]+\|' |
+            awk '{print $1}')"
+          # Platform admins are Gitea's site admins (groups), and Gitea itself refuses anyone
+          # without a role in the platform org (infrared_platform_role is absent), as
+          # Infrared does at sign-in (ADR 0053 D4).
+          args=(--name infrared --provider openidConnect --key "$key" --secret "$secret" --auto-discover-url "$url"
+            --group-claim-name groups --admin-group platform-admin --required-claim-name infrared_platform_role
+            --scopes openid --scopes email --scopes profile)
+          if [ -z "$id" ]; then
+            out="$(run gitea admin auth add-oauth "${args[@]}" 2>&1)" && { log 'added the OAuth2 source infrared'; exit 0; }
+          else
+            out="$(run gitea admin auth update-oauth --id "$id" "${args[@]}" 2>&1)" &&
+              { log "updated the OAuth2 source infrared ($id)"; exit 0; }
+          fi
+          printf '%s\n' "${out//"$secret"/<redacted>}"
+          skip 'Gitea refused the OAuth2 source infrared'
+      env:
+        - name: GITEA_APP_INI
+          value: /data/gitea/conf/app.ini
+        - name: GITEA_CUSTOM
+          value: /data/gitea
+        - name: GITEA_WORK_DIR
+          value: /data
+        - name: GITEA_TEMP
+          value: /tmp/gitea
+        - name: HOME
+          value: /data/gitea/git
+        # Whether sign-in is on, and Infrared's discovery: optional, so with the
+        # ConfigMap's keys absent the step ends at once.
+        - name: INFRARED_SIGN_IN
+          valueFrom:
+            configMapKeyRef: {name: infrared-gitea-sign-in, key: ENABLED, optional: true}
+        - name: INFRARED_SIGN_IN_DISCOVERY_URL
+          valueFrom:
+            configMapKeyRef: {name: infrared-gitea-sign-in, key: DISCOVERY_URL, optional: true}
+      volumeMounts:
+        - name: temp
+          mountPath: /tmp
+        - name: data
+          mountPath: /data
+        - name: infrared-oidc-gitea
+          mountPath: /infrared-oidc-gitea
+          readOnly: true
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      resources:
+        limits: {}
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  # The client's Secret for the step above alone (keys key and secret), which
+  # infrared-api writes while Infrared signs people in to Gitea. Optional: the
+  # kubelet fills the volume once the Secret exists, so Gitea never waits on it.
+  extraVolumes:
+    - name: infrared-oidc-gitea
+      secret:
+        secretName: infrared-oidc-gitea
+        optional: true
+        # 0440: the pod's group (the gitea chart's fsGroup, 1000) reads it.
+        defaultMode: 288
   gitea:
     admin:
       # -- Fixed: the Secret giteaAdmin describes. Gitea reads the admin's
@@ -825,6 +977,60 @@ gitea:
         ENABLE_BASIC_AUTHENTICATION: true
       cron.update_checker:
         ENABLED: false
+    # Settings from the environment, which the gitea chart applies to app.ini
+    # after the config above, at every start of the pod. An install that sets
+    # its own additionalConfigFromEnvs list replaces this whole list (Helm
+    # replaces lists), Infrared's sign-in with it: localred does, with its own
+    # ROOT_URL from its ConfigMap localred-gitea.
+    additionalConfigFromEnvs:
+      # ROOT_URL follows browserURL, with a trailing slash, so the links Gitea
+      # makes and its sign-in's callback open in a browser (ADR 0053 D3); with
+      # browserURL empty it is the preset above, exactly as before. The gitea
+      # chart renders this list through tpl, where .Values are its own values:
+      # .Values.browserURL is gitea.browserURL. A change of browserURL changes
+      # Gitea's pod, which restarts Gitea.
+      - name: GITEA__SERVER__ROOT_URL
+        value: '{{ with .Values.browserURL }}{{ trimSuffix "/" . }}/{{ else }}{{ .Values.gitea.config.server.ROOT_URL }}{{ end }}'
+      # Infrared's sign-in (ADR 0053), from the ConfigMap infrared-gitea-sign-in,
+      # whose keys exist only while it is on: registration through the source
+      # infrared alone, the username from the nickname claim, no linking to an
+      # existing account, no OpenID 2.0, and sessions of 12 hours with a
+      # remember-me cookie of one day. Optional, so with a key absent Gitea keeps
+      # its preset. A change of only oidc.enabled, or of the sign-in URL, changes
+      # only the ConfigMap: restart Gitea for it to apply.
+      - name: GITEA__SERVICE__DISABLE_REGISTRATION
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: service.DISABLE_REGISTRATION, optional: true}
+      - name: GITEA__SERVICE__ALLOW_ONLY_EXTERNAL_REGISTRATION
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: service.ALLOW_ONLY_EXTERNAL_REGISTRATION, optional: true}
+      - name: GITEA__SERVICE__SHOW_REGISTRATION_BUTTON
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: service.SHOW_REGISTRATION_BUTTON, optional: true}
+      - name: GITEA__OAUTH2_CLIENT__ENABLE_AUTO_REGISTRATION
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: oauth2_client.ENABLE_AUTO_REGISTRATION, optional: true}
+      - name: GITEA__OAUTH2_CLIENT__USERNAME
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: oauth2_client.USERNAME, optional: true}
+      - name: GITEA__OAUTH2_CLIENT__ACCOUNT_LINKING
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: oauth2_client.ACCOUNT_LINKING, optional: true}
+      - name: GITEA__OAUTH2_CLIENT__UPDATE_AVATAR
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: oauth2_client.UPDATE_AVATAR, optional: true}
+      - name: GITEA__OPENID__ENABLE_OPENID_SIGNIN
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: openid.ENABLE_OPENID_SIGNIN, optional: true}
+      - name: GITEA__OPENID__ENABLE_OPENID_SIGNUP
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: openid.ENABLE_OPENID_SIGNUP, optional: true}
+      - name: GITEA__SESSION__SESSION_LIFE_TIME
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: session.SESSION_LIFE_TIME, optional: true}
+      - name: GITEA__SECURITY__LOGIN_REMEMBER_DAYS
+        valueFrom:
+          configMapKeyRef: {name: infrared-gitea-sign-in, key: security.LOGIN_REMEMBER_DAYS, optional: true}
   # The gitea chart's databases, caches and test pod: none, with SQLite.
   postgresql:
     enabled: false

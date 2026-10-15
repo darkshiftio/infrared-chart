@@ -308,6 +308,9 @@ part is the API's settings below, each rendered only when set.
   `infrared-git-connectors` (key `<connector>.client-secret`), which the API
   writes in the release namespace and never returns. `gitea.browserURL` lets
   Infrared register one on the Gitea this chart runs (see "Gitea").
+- **The install's own tools sign people in through Infrared** with
+  `oidc.enabled` (infrared-docs-internal ADR 0053): see "Signing in to the
+  install's tools through Infrared".
 - **The password sign-in's limits** count a caller's failures by its address:
   the first `X-Forwarded-For` address, or the header `api.clientAddressHeader`
   names, such as `CF-Connecting-IP` behind Cloudflare. A caller can send any
@@ -569,7 +572,7 @@ preset for one pod:
 | Names | Deployment `gitea`, Service `gitea-http` (ClusterIP, port 3000), claim `gitea-shared-storage` |
 | Pod | One, replaced with `Recreate`; non-root, no privilege escalation, every capability dropped |
 | Data | SQLite, the repositories and the LevelDB queue on one ReadWriteOnce volume of `gitea.persistence.storageClass` (the cluster's default when empty) and `gitea.persistence.size` (10Gi); an in-memory cache and sessions |
-| Access | No Ingress and no SSH; sign-in required to see anything, no self-registration, basic auth on (the API mints tokens with it); `ROOT_URL` `http://gitea-http.infrared.svc.cluster.local:3000/` |
+| Access | No Ingress and no SSH; sign-in required to see anything, no self-registration, basic auth on (the API mints tokens with it); `ROOT_URL` `http://gitea-http.infrared.svc.cluster.local:3000/`, or `gitea.browserURL` with a trailing slash |
 | Off | The gitea chart's PostgreSQL, PostgreSQL HA, Valkey, Valkey cluster and test pod |
 
 With it on, the operator and the API get `INFRARED_GITEA_URL`,
@@ -583,12 +586,17 @@ a namespace other than `infrared`, set `gitea.gitea.config.server.ROOT_URL` and
 
 `gitea.browserURL` is the address browsers open this Gitea at, if they can
 (`INFRARED_GITEA_BROWSER_URL`, rendered only when set, and refused without
-`gitea.enabled`). With it, a platform admin can have Infrared register an OAuth
-application on this Gitea as its site admin, a managed git connector people link
-their Gitea accounts with (see "Sign-in, roles and git connectors"). Linking goes
-through the browser, and Gitea answers browsers at its own `ROOT_URL`, so the two
-name the same address. A Gitea only the cluster reaches leaves it empty, and the
-API refuses that connector.
+`gitea.enabled`). Gitea's `ROOT_URL` follows it, with a trailing slash, so the
+links Gitea makes open in a browser: `gitea.gitea.additionalConfigFromEnvs` sets
+`GITEA__SERVER__ROOT_URL`, through the gitea chart's `tpl`, to it, or with it
+empty to the preset above, exactly as before. Argo CD, kpack, the operator and
+the API keep reaching Gitea at its Service (`INFRARED_GITEA_URL`). With it, a
+platform admin can have Infrared register an OAuth application on this Gitea as
+its site admin, a managed git connector people link their Gitea accounts with
+(see "Sign-in, roles and git connectors"). Linking goes through the browser, and
+Gitea answers browsers at its own `ROOT_URL`, so the two name the same address.
+A Gitea only the cluster reaches leaves it empty, and the API refuses that
+connector.
 
 ```yaml
 gitea:
@@ -615,6 +623,76 @@ The gitea chart is not committed: `make deps` (`hack/deps.sh`) vendors it into
 `charts/infrared/charts/` with `helm dependency build`, at the version in
 `Chart.lock`, and checks the archive's sha256. `make verify`, `lint`,
 `template` and `package` run it, and so does the publish workflow.
+
+## Signing in to the install's tools through Infrared
+
+`oidc.enabled` makes infrared-api the OpenID Connect provider of the install's
+own tools (infrared-docs-internal ADR 0053). Its issuer is the Installation's
+`spec.previews.signInURL` with `/api/v1/oidc`. People sign in to Infrared as
+they do today, Google first, and a tool's role for them comes from Infrared's
+access groups. It is off by default, and then the chart renders what it rendered
+before, but for the inert pieces of Gitea's below. The API makes and keeps the
+signing key and each client's secret itself: the Secrets `infrared-oidc-signing`
+and `infrared-oidc-gitea` in the release namespace, and `infrared-oidc-grafana`
+in `monitoring`. The chart never renders them, and they are not in the backup.
+
+| Value | The API | The operator |
+|---|---|---|
+| `oidc.enabled` | `INFRARED_OIDC=true` | `INFRARED_OIDC=true` |
+| `oidc.grafanaURL` | `INFRARED_OIDC_GRAFANA_URL`: the client `grafana` | `INFRARED_OIDC_GRAFANA_URL`, which the gitops template signs people in to Grafana with |
+| `gitea.browserURL` | `INFRARED_GITEA_BROWSER_URL`: the client `gitea` | nothing: Gitea's sign-in is this chart's |
+
+**Grafana** is the gitops template's, in its `victoria-metrics-k8s-stack`
+Application: with `oidc.enabled`, `oidc.grafanaURL` and the Installation's
+sign-in URL, Grafana signs people in through Infrared, and its local `admin`
+keeps its password as break glass.
+
+**Gitea** signs people in through Infrared when `oidc.enabled`,
+`gitea.browserURL` and `installation.previews.signInURL` are all set. Gitea
+starts whatever Infrared's state is, so the gitops repo it holds can always
+sync. It is made of three pieces:
+
+- **The ConfigMap `infrared-gitea-sign-in`**, rendered with `gitea.enabled`. It
+  holds no key unless all three are set; then it holds:
+  - `ENABLED` and `DISCOVERY_URL`, the issuer's
+    `/.well-known/openid-configuration`;
+  - Gitea's settings by `<section>.<KEY>`: `service` `DISABLE_REGISTRATION=false`,
+    `ALLOW_ONLY_EXTERNAL_REGISTRATION=true` and `SHOW_REGISTRATION_BUTTON=false`;
+    `oauth2_client` `ENABLE_AUTO_REGISTRATION=true`, `USERNAME=nickname`,
+    `ACCOUNT_LINKING=disabled` and `UPDATE_AVATAR=false`; `openid`
+    `ENABLE_OPENID_SIGNIN=false` and `ENABLE_OPENID_SIGNUP=false`;
+    `session.SESSION_LIFE_TIME=43200` (12 hours); `security.LOGIN_REMEMBER_DAYS=1`.
+- **`gitea.gitea.additionalConfigFromEnvs`** reads each setting from the
+  ConfigMap with `optional: true`, so with a key absent Gitea keeps its preset.
+- **`gitea.postExtraInitContainers`**, the step `configure-infrared-sign-in`,
+  runs after the gitea chart's own init containers, with `configure-gitea`'s
+  image, env, mounts, securityContext and resources (`make verify` compares
+  them). It never fails the pod:
+  - with sign-in off, it ends at once;
+  - on, it waits up to two minutes for the client's Secret `infrared-oidc-gitea`,
+    an optional volume the kubelet fills once the API writes it, and for
+    Infrared's discovery to answer;
+  - it then adds, or updates, the OAuth2 source `infrared` (`openidConnect`, the
+    client `gitea`, the claim `groups`, `platform-admin` as site admins);
+  - if either never came, or Gitea refused, it logs a warning and Gitea starts
+    without it, to register again at its next start. It never prints the
+    secret.
+
+Gitea reads the ConfigMap only when it starts. A change of `gitea.browserURL`
+changes Gitea's pod (its `ROOT_URL`), which restarts Gitea. After a change of
+only `oidc.enabled`, or of the sign-in URL, restart it:
+`kubectl --context <cluster> -n <namespace> rollout restart deployment/gitea`.
+Turned off, Gitea's `DISABLE_REGISTRATION` returns to its preset at the next
+start. The other settings stay in `app.ini`, which the gitea chart edits in
+place, and the source `infrared` stays in Gitea's database; without Infrared's
+client neither lets anyone in, and `gitea_admin` keeps working.
+
+An install that sets its own `gitea.gitea.additionalConfigFromEnvs`,
+`gitea.postExtraInitContainers` or `gitea.extraVolumes` replaces this chart's
+list, since Helm replaces lists. localred sets its own
+`additionalConfigFromEnvs` (its `ROOT_URL` from its ConfigMap `localred-gitea`),
+so its Gitea runs without Infrared's sign-in; the step stays and does nothing.
+`postExtraInitContainers` and `extraVolumes` go together.
 
 ## Extensions
 
@@ -685,6 +763,8 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `api.directory.serviceAccount` | `""` | The Google service account the API impersonates to read Workspace groups (`INFRARED_DIRECTORY_SERVICE_ACCOUNT`), `<name>@<project>.iam.gserviceaccount.com`, holding the Workspace role Groups Reader; empty: the directory is off, and no group gives a role. Rendered only when set. See "Sign-in, roles and git connectors" |
 | `api.directory.api` | `admin` | `admin`, the Admin SDK Directory API, which tells a suspended person (who then holds nothing) and needs `admin.googleapis.com` in the account's project; or `cloud-identity` (`INFRARED_DIRECTORY_API`) |
 | `api.directory.interval` / `.maxAge` | `2m` / `10m` | How often the groups are read, and how long a group's last good read gives roles (`INFRARED_DIRECTORY_INTERVAL`, `INFRARED_DIRECTORY_MAX_AGE`), Go durations; each empty one is left to the API, which has the same defaults |
+| `oidc.enabled` | `false` | Infrared as the OpenID Connect provider of the install's own tools, Grafana and Gitea (`INFRARED_OIDC`, api and operator; infrared-docs-internal ADR 0053), at the Installation's sign-in URL with `/api/v1/oidc`. With `oidc.grafanaURL` the gitops template signs people in to Grafana through it; with `gitea.browserURL` and `installation.previews.signInURL` this chart signs them in to Gitea. See "Signing in to the install's tools through Infrared" |
+| `oidc.grafanaURL` | `""` | Grafana's address in a browser, `https://` (plain `http://` only for localhost), such as `https://grafana.example.com` (`INFRARED_OIDC_GRAFANA_URL`, api and operator, a trailing slash trimmed). Grafana's redirect URI is `<grafanaURL>/login/generic_oauth`; empty: no Grafana client |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
 | `cloud` | `""` | The control plane's cloud, `gcp` or `aws` (empty is `gcp`): the default image registry and chart repository, Artifact Registry or ECR (ADR 0033) |
@@ -721,7 +801,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `platformTokens.codeIndexGithubAppId` / `.codeIndexGithubAppInstallationId` / `.codeIndexGithubAppPrivateKey` | `""` | The code index's GitHub App, all three or none and only with `codeIndex.enabled`: its ID and its installation's (numbers) and its private key (PEM), rendered into `infrared-platform-tokens`, keys `code-index-github-app-id`, `-installation-id` and `-private-key`; empty for none. Pass them with `--set-file` |
 | `platformTokens.googleClientId` / `.googleClientSecret` | `""` | Sign in with Google's OAuth client (a Web application client), both or neither, rendered into `infrared-platform-tokens`, keys `google-client-id` and `google-client-secret`; the API reads them at use, so a client patched into the Secret later needs no restart. Its redirect URIs are `<address>/api/v1/auth/google/callback` for every address people open Infrared at. Which Google Workspace domains may sign in is a setting in Infrared (Settings, Sign-in). Pass the secret with `--set-file` |
 | `gitea.enabled` | `false` | Run Gitea, the chart's gitea dependency, and hand its address to the operator and the API (`INFRARED_GITEA_URL`) and its admin Secret to the API (`INFRARED_GITEA_ADMIN_SECRET`). See "Gitea" |
-| `gitea.browserURL` | `""` | The address browsers open that Gitea at, `https://` (plain `http://` only for localhost), with `gitea.enabled` only (`INFRARED_GITEA_BROWSER_URL`, api). Set, Infrared may register its own Gitea connector there; empty keeps it off. See "Gitea" |
+| `gitea.browserURL` | `""` | The address browsers open that Gitea at, `https://` (plain `http://` only for localhost), with `gitea.enabled` only (`INFRARED_GITEA_BROWSER_URL`, api). Gitea's `ROOT_URL` follows it, with a trailing slash; empty keeps `ROOT_URL` the Service address. Set, Infrared may register its own Gitea connector there, and with `oidc.enabled` and `installation.previews.signInURL` Gitea signs people in through Infrared; empty keeps both off. See "Gitea" |
 | `gitea.persistence.storageClass` / `.size` | `""` / `10Gi` | StorageClass and size of Gitea's volume; empty uses the cluster's default class |
 | `gitea.*` | one pod, SQLite, no Ingress or SSH | The gitea chart's own values, preset as "Gitea" describes. `gitea.fullnameOverride` (`gitea`) and `gitea.gitea.admin.existingSecret` (`infrared-gitea-admin`) are fixed |
 | `giteaAdmin.existingSecret` | `""` | `infrared-gitea-admin` when it already exists, as under Argo CD; the chart then renders none |

@@ -1,0 +1,48 @@
+{{- /*
+Infrared's sign-in on Gitea (infrared-docs-internal ADR 0053), when
+gitea.enabled: the ConfigMap infrared-gitea-sign-in, which Gitea's pod reads at
+each start. Its keys exist only while oidc.enabled, gitea.browserURL and
+installation.previews.signInURL are all set:
+  - ENABLED and DISCOVERY_URL, Infrared's issuer's discovery
+    (<signInURL>/api/v1/oidc/.well-known/openid-configuration), for the
+    post-init container configure-infrared-sign-in (gitea.postExtraInitContainers),
+    which registers the OAuth2 source "infrared" there with the client in the
+    Secret infrared-oidc-gitea that infrared-api writes;
+  - <section>.<KEY>, each an app.ini setting that
+    gitea.gitea.additionalConfigFromEnvs reads with optional: true: registration
+    through that source alone, the username from the nickname claim, no linking
+    to an existing account, no OpenID 2.0, and sessions of 12 hours with a
+    remember-me cookie of one day.
+Otherwise it holds no key, and Gitea keeps its presets, as before. Gitea reads
+it only when it starts: a change of gitea.browserURL changes Gitea's pod (its
+ROOT_URL), which restarts it; after a change of only oidc.enabled, or of the
+sign-in URL, restart Gitea.
+*/}}
+{{- if .Values.gitea.enabled }}
+{{- $signInURL := dig "previews" "signInURL" "" .Values.installation | trimSuffix "/" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infrared-gitea-sign-in
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "gitea") | nindent 4 }}
+{{- if and .Values.oidc.enabled .Values.gitea.browserURL $signInURL }}
+data:
+  ENABLED: "true"
+  DISCOVERY_URL: {{ printf "%s/api/v1/oidc/.well-known/openid-configuration" $signInURL | quote }}
+  service.DISABLE_REGISTRATION: "false"
+  service.ALLOW_ONLY_EXTERNAL_REGISTRATION: "true"
+  service.SHOW_REGISTRATION_BUTTON: "false"
+  oauth2_client.ENABLE_AUTO_REGISTRATION: "true"
+  oauth2_client.USERNAME: "nickname"
+  oauth2_client.ACCOUNT_LINKING: "disabled"
+  oauth2_client.UPDATE_AVATAR: "false"
+  openid.ENABLE_OPENID_SIGNIN: "false"
+  openid.ENABLE_OPENID_SIGNUP: "false"
+  session.SESSION_LIFE_TIME: "43200"
+  security.LOGIN_REMEMBER_DAYS: "1"
+{{- else }}
+data: {}
+{{- end }}
+{{- end }}

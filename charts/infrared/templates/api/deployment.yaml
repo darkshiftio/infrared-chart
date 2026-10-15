@@ -103,6 +103,19 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
+            {{- if .Values.oidc.enabled }}
+            # Infrared as the OpenID Connect provider of the install's own tools
+            # (oidc.enabled, ADR 0053), at the Installation's sign-in URL's
+            # /api/v1/oidc. It writes the signing key and each client's secret.
+            - name: INFRARED_OIDC
+              value: "true"
+            {{- end }}
+            {{- with .Values.oidc.grafanaURL }}
+            # Grafana's address in a browser (oidc.grafanaURL): set, the
+            # provider has the client grafana.
+            - name: INFRARED_OIDC_GRAFANA_URL
+              value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
             {{- if .Values.summaryvideo.enabled }}
             - name: INFRARED_MEDIA_DIR
               value: /var/lib/infrared/media

@@ -1,0 +1,289 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: knowledgesources.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: KnowledgeSource
+    listKind: KnowledgeSourceList
+    plural: knowledgesources
+    shortNames:
+    - ks
+    singular: knowledgesource
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.url
+      name: URL
+      type: string
+    - jsonPath: .spec.visibility
+      name: Visibility
+      type: string
+    - jsonPath: .spec.origin
+      name: Origin
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          KnowledgeSource is one source of an org's knowledge base, in the org's
+          namespace (ir-org-<org>): a git repository the code index reads at the refs
+          it names (infrared-docs-internal docs/one-install/knowledge-base.md). Its
+          name is the repository's name in the index (argo-cd, infrared-api), unique
+          across the install: the operator renders every source into the ConfigMap
+          the index reads, and a name two orgs use is the first org's. A platform
+          admin adds and removes manual sources through infrared-api; the derived
+          origins are the operator's.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              KnowledgeSourceSpec is one thing the code index may read: a git repository
+              at the refs it names, and what the index leaves out of it.
+            properties:
+              domain:
+                description: |-
+                  Domain groups the source with the others of its area, as the knowledge
+                  repository's manifest does: gitops, certificates, library, infrared.
+                maxLength: 32
+                pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                type: string
+              exclude:
+                description: |-
+                  Exclude are regular expressions over a path, added to the install's
+                  list of what the index leaves out of every source: vendored and
+                  third-party trees, generated code, lock files, minified files and
+                  binaries.
+                items:
+                  maxLength: 512
+                  minLength: 1
+                  type: string
+                maxItems: 50
+                type: array
+                x-kubernetes-list-type: set
+              hide:
+                description: |-
+                  Hide are path prefixes the index never serves: never indexed, never
+                  read, never listed, and left out of every log and diff.
+                items:
+                  maxLength: 256
+                  minLength: 1
+                  type: string
+                maxItems: 50
+                type: array
+                x-kubernetes-list-type: set
+              kind:
+                default: git
+                description: |-
+                  Kind is what the source is: git, a git repository. A documentation site
+                  and a bucket of files come later.
+                enum:
+                - git
+                type: string
+              origin:
+                default: manual
+                description: |-
+                  Origin is what the source was derived from (product, platform,
+                  template, library, manifest), or manual for one a platform admin
+                  added. It never changes: a derived source goes with what derived it,
+                  a manual one through infrared-api.
+                enum:
+                - manual
+                - product
+                - platform
+                - template
+                - library
+                - manifest
+                type: string
+              refs:
+                description: |-
+                  Refs are the refs the index serves, each at a commit or following a
+                  branch. The first is the source's default.
+                items:
+                  description: |-
+                    KnowledgeSourceRef is one ref of a source: the name the code index serves
+                    it under, at one commit or following a branch.
+                  properties:
+                    commit:
+                      description: 'Commit pins the ref to one commit: 40 lowercase
+                        hex characters.'
+                      pattern: ^[0-9a-f]{40}$
+                      type: string
+                    name:
+                      description: |-
+                        Name is the ref as the index serves it, e.g. deployed, latest or main.
+                        The first ref of a source is its default, what a read without a ref
+                        gets.
+                      maxLength: 100
+                      minLength: 1
+                      pattern: ^[a-z0-9][a-z0-9._/-]*$
+                      type: string
+                    track:
+                      description: |-
+                        Track names a branch the index follows: it resolves the branch again
+                        every cycle instead of keeping a commit.
+                      maxLength: 255
+                      minLength: 1
+                      pattern: ^[^\s]+$
+                      type: string
+                  required:
+                  - name
+                  type: object
+                  x-kubernetes-validations:
+                  - message: exactly one of commit or track
+                    rule: has(self.commit) != has(self.track)
+                maxItems: 20
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              url:
+                description: |-
+                  URL is where the index reads the source: the https address of a git
+                  repository, e.g. https://github.com/argoproj/argo-cd.git.
+                maxLength: 512
+                pattern: ^https://[^\s]+$
+                type: string
+              vendored:
+                description: |-
+                  Vendored indexes what the exclude lists name too: for a source whose
+                  vendored or generated code is the point.
+                type: boolean
+              visibility:
+                default: public
+                description: |-
+                  Visibility is who reads the source: public, every org of the install;
+                  internal, this org and the platform org, through a credential that
+                  reads it.
+                enum:
+                - public
+                - internal
+                type: string
+            required:
+            - refs
+            - url
+            type: object
+            x-kubernetes-validations:
+            - message: 'origin cannot change: a derived source goes with what derived
+                it, a manual one through infrared-api'
+              rule: '(has(self.origin) ? self.origin : ''manual'') == (has(oldSelf.origin)
+                ? oldSelf.origin : ''manual'')'
+          status:
+            description: KnowledgeSourceStatus is what the operator's latest pass
+              found.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              message:
+                description: Message says why the source is not in the ConfigMap the
+                  index reads.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the spec generation the latest
+                  pass ran against.
+                format: int64
+                type: integer
+              phase:
+                description: Phase is Pending, Rendered or Failed.
+                enum:
+                - Pending
+                - Rendered
+                - Failed
+                type: string
+              renderedAt:
+                description: RenderedAt is when this spec of the source went into
+                  the ConfigMap.
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

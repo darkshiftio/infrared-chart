@@ -223,6 +223,7 @@ rules:
   - gitproviders/status
   - humans/status
   - installations/status
+  - knowledgesources/status
   - organizations/status
   - products/status
   - registries/status
@@ -261,6 +262,7 @@ rules:
   - cloudaccounts
   - gitconnectors
   - incidents
+  - knowledgesources
   - runnerpools
   - runnertemplates
   - users

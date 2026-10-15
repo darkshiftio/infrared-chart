@@ -28,6 +28,15 @@ The Helm chart for Infrared (`charts/infrared`), published to
   for tests. The API writes the Secret `infrared-git-connectors` (keys
   `<connector>.client-secret`) and the BreakGlass `root` itself. No Secret holds
   the root user's password or its hash: no template names `infrared-admin`.
+- ADR 0053, Infrared as the OpenID Connect provider of the install's tools: env
+  `INFRARED_OIDC` (`oidc.enabled`) and `INFRARED_OIDC_GRAFANA_URL`
+  (`oidc.grafanaURL`, a trailing slash trimmed) for the API and the operator,
+  each rendered only when set; the operator never gets
+  `INFRARED_GITEA_BROWSER_URL`. The API writes the Secrets `infrared-oidc-signing`,
+  `infrared-oidc-gitea` (keys `key`, `secret`) and `monitoring/infrared-oidc-grafana`
+  itself; no template renders them. Gitea's sign-in is the ConfigMap
+  `infrared-gitea-sign-in`, `gitea.gitea.additionalConfigFromEnvs` and the
+  post-init step `configure-infrared-sign-in`, which never fails Gitea's start.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - `make verify` must pass before a PR. Pin every upstream version.

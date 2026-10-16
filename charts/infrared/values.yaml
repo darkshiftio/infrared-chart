@@ -102,7 +102,7 @@ gitops:
   # metrics ports, VMSingle at 512Mi to 2Gi and the Fleet dashboard's fourth cut.
   # New gitops repos take it; an existing one keeps its spec.template.version
   # until that is patched.
-  templateVersion: 9c1bcd596b24742b7de10d0a843cd1f359c7d37d
+  templateVersion: 0c2cdba6acae522b543925ed8923494821c2b8d3
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

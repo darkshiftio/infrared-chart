@@ -71,6 +71,15 @@ spec:
               value: "/var/run/infrared/api-token/token"
             - name: INFRARED_MCP_TOKEN_FILE
               value: "/var/run/infrared/mcp-access/token"
+            {{- if and .Values.oidc.enabled .Values.oidc.mcpURL }}
+            # The code tools for people signed in through Infrared (oidc.mcpURL,
+            # ADR 0053), at its path on the public listener, which the UI's /mcp
+            # route reaches: only to an access token of the provider for this
+            # address, never to the access token above, and for the platform org
+            # alone. infrared-mcp asks the API's user info about each token.
+            - name: INFRARED_MCP_CODE_URL
+              value: {{ trimSuffix "/" .Values.oidc.mcpURL | quote }}
+            {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

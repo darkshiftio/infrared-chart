@@ -125,6 +125,13 @@ spec:
             - name: INFRARED_OIDC_GRAFANA_URL
               value: {{ trimSuffix "/" . | quote }}
             {{- end }}
+            {{- with .Values.oidc.mcpURL }}
+            # Where MCP clients reach the code tools, signed in through Infrared
+            # (oidc.mcpURL): set, the provider has the public client mcp, whose
+            # access tokens are for this address too.
+            - name: INFRARED_OIDC_MCP_URL
+              value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
             {{- if .Values.summaryvideo.enabled }}
             - name: INFRARED_MEDIA_DIR
               value: /var/lib/infrared/media

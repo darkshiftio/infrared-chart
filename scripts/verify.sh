@@ -427,9 +427,9 @@ check code-index.yaml "the code index adds no object of the chart's own: four De
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" --set codeIndex.enabled=true >"$out/code-index-default.yaml"
 envs code-index-default
 if grep -qF '\"code-index\":{\"default\":true,\"digest\":\"sha256:'"$(awk '/^codeIndex:/ {f = 1} f && /^    digest:/ {print $2; exit}' "$chart/values.yaml" | sed 's/^sha256://')"'\",\"tag\":\"'"$(awk '/^codeIndex:/ {f = 1} f && /^    tag:/ {print $2; exit}' "$chart/values.yaml")"'\"}' "$out/code-index-default.env" &&
-   grep -qE '^    tag: one-install-[0-9a-f]{7}$' <(sed -n '/^codeIndex:/,/^[a-z]/p' "$chart/values.yaml") &&
+   grep -qE '^    tag: v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' <(sed -n '/^codeIndex:/,/^[a-z]/p' "$chart/values.yaml") &&
    grep -qE '^    digest: sha256:[0-9a-f]{64}$' <(sed -n '/^codeIndex:/,/^[a-z]/p' "$chart/values.yaml"); then
-  ok "codeIndex.enabled alone hands on the chart's own pin, a one-install build by digest, marked default"
+  ok "codeIndex.enabled alone hands on the chart's own pin, a release-tagged build by digest, marked default"
 else bad "codeIndex.enabled alone does not hand on the chart's pin by digest"; fi
 # Only pins that differ from the chart's own defaults are handed on (drift row
 # 53): the defaults file is values.yaml's, and an install on the default images

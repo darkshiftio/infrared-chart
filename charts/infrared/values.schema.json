@@ -954,6 +954,28 @@
         "registry": {
           "type": "string",
           "description": "Registry prefix product images are built into; empty disables the builds component."
+        },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Where Product builds run: written into each kpack Image's spec.build.",
+          "properties": {
+            "nodeSelector": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "tolerations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
         }
       }
     },
@@ -1269,6 +1291,25 @@
         "helmImage": {
           "type": "string",
           "minLength": 1
+        },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Where agent steps' runner pods run.",
+          "properties": {
+            "nodeSelector": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "tolerations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
         }
       }
     },

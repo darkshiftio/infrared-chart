@@ -115,6 +115,14 @@ builds:
   # `123456789012.dkr.ecr.us-east-1.amazonaws.com/acme` (INFRARED_BUILD_REGISTRY).
   # Empty leaves the gitops template's builds component out.
   registry: ""
+  # -- Where the kpack builds of every Product run (INFRARED_BUILD_PLACEMENT, operator, as JSON):
+  # a node selector, tolerations and resources the operator writes into each kpack Image's
+  # spec.build, the Images already in the gitops repos included, so builds keep off the nodes
+  # Infrared runs on, e.g. a node pool of their own. Empty: the scheduler places builds anywhere.
+  placement:
+    nodeSelector: {}
+    tolerations: []
+    resources: {}
 
 registry:
   # -- The install's own registry, as builds and nodes reach it: host and port,
@@ -509,6 +517,12 @@ observability:
   metricsWriteURL: ""
 
 runner:
+  # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a
+  # node selector and tolerations, e.g. a node pool of their own away from the nodes Infrared runs
+  # on. Each step keeps its own resources. Empty: the scheduler places steps anywhere.
+  placement:
+    nodeSelector: {}
+    tolerations: []
   image:
     # -- Repository under image.registry.
     repository: infrared-runner
@@ -608,9 +622,11 @@ api:
   replicas: 1
   extraArgs: []
   extraEnv: []
+  # The API serves every page's reads: at 50m it waited on CPU up to 23% of the time while builds
+  # and agent steps ran beside it (workspace TODO 359).
   resources:
     requests:
-      cpu: 50m
+      cpu: 250m
       memory: 128Mi
     limits:
       memory: 512Mi

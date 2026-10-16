@@ -282,7 +282,10 @@ check install.yaml "every Secret from values is kept, like the generated ones, a
 check defaults.yaml "summary videos provisioned by default: the media volume" '^  name: infrared-media$' 1
 check defaults.yaml "the API (for Settings, Install features) and the operator are told the Gemini key's Secret" '^            - name: INFRARED_SUMMARY_VIDEO_GEMINI_SECRET$' 2
 check defaults.yaml "the operator runs the video pipeline" '^            - name: INFRARED_SUMMARY_VIDEO_IMAGE$' 1
-check defaults.yaml "the API with its ReadWriteOnce media volume is recreated" '^    type: Recreate$' 1
+check defaults.yaml "the API rolls with no pod down: a new pod is ready before the old one stops" '^      maxUnavailable: 0$' 1
+check defaults.yaml "no Deployment of the chart's own is recreated" '^    type: Recreate$' 0
+check defaults.yaml "with its ReadWriteOnce media volume, the API's new pod goes to the running pod's node" '^            topologyKey: kubernetes\.io/hostname$' 1
+check no-videos.yaml "summaryvideo.enabled=false: the API is placed anywhere" '^            topologyKey: kubernetes\.io/hostname$' 0
 check no-videos.yaml "summaryvideo.enabled=false: no media volume" '^  name: infrared-media$' 0
 check no-videos.yaml "summaryvideo.enabled=false: no video settings for the API or the operator" 'INFRARED_(MEDIA_DIR|SUMMARY_VIDEO_)' 0
 want_auth="$(printf 'ci-reader:ci-password' | base64)"

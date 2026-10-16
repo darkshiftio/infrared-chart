@@ -7,6 +7,13 @@
 fsGroup makes it the pod's group's to write, whatever uid the image runs as. */}}
 {{- $c = deepCopy .Values.api }}
 {{- $_ := set $c "podSecurityContext" (merge (dict "fsGroup" 65532 "fsGroupChangePolicy" "OnRootMismatch") (deepCopy (default .Values.podSecurityContext .Values.api.podSecurityContext))) }}
+{{- /* The media volume is ReadWriteOnce: one node, any number of pods on it.
+A rollout's new pod goes to the node the running pod is on, so it mounts the
+volume beside it and takes requests before the old pod stops. */}}
+{{- if not $c.affinity }}
+{{- $sel := dict "app.kubernetes.io/name" (include "infrared.name" .) "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/component" "api" }}
+{{- $_ := set $c "affinity" (dict "podAffinity" (dict "requiredDuringSchedulingIgnoredDuringExecution" (list (dict "labelSelector" (dict "matchLabels" $sel) "topologyKey" "kubernetes.io/hostname")))) }}
+{{- end }}
 {{- end }}
 {{- $ctx := dict "root" . "c" $c "component" "api" }}
 {{- if .Values.summaryvideo.enabled }}
@@ -23,12 +30,14 @@ metadata:
 spec:
   replicas: {{ $c.replicas }}
   revisionHistoryLimit: 3
-  {{- if .Values.summaryvideo.enabled }}
-  # The media volume is ReadWriteOnce: a rolling update's new pod on another
-  # node could never attach it while the old pod holds it, so the old pod goes first.
+  # A rollout starts the new pod and stops the old one only once the new one is
+  # ready, so the edge always has a ready pod (with the media volume, the new
+  # pod goes to the same node: see the affinity above).
   strategy:
-    type: Recreate
-  {{- end }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "infrared.selectorLabels" $ctx | nindent 6 }}

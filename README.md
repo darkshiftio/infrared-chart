@@ -640,6 +640,7 @@ in `monitoring`. The chart never renders them, and they are not in the backup.
 |---|---|---|
 | `oidc.enabled` | `INFRARED_OIDC=true` | `INFRARED_OIDC=true` |
 | `oidc.grafanaURL` | `INFRARED_OIDC_GRAFANA_URL`: the client `grafana` | `INFRARED_OIDC_GRAFANA_URL`, which the gitops template signs people in to Grafana with |
+| `oidc.mcpURL` | `INFRARED_OIDC_MCP_URL`: the public client `mcp`, and the audience of its access tokens | nothing; infrared-mcp gets `INFRARED_MCP_CODE_URL` with `oidc.enabled` |
 | `gitea.browserURL` | `INFRARED_GITEA_BROWSER_URL`: the client `gitea` | nothing: Gitea's sign-in is this chart's |
 
 **Grafana** is the gitops template's, in its `victoria-metrics-k8s-stack`
@@ -765,6 +766,7 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `api.directory.interval` / `.maxAge` | `2m` / `10m` | How often the groups are read, and how long a group's last good read gives roles (`INFRARED_DIRECTORY_INTERVAL`, `INFRARED_DIRECTORY_MAX_AGE`), Go durations; each empty one is left to the API, which has the same defaults |
 | `oidc.enabled` | `false` | Infrared as the OpenID Connect provider of the install's own tools, Grafana and Gitea (`INFRARED_OIDC`, api and operator; infrared-docs-internal ADR 0053), at the Installation's sign-in URL with `/api/v1/oidc`. With `oidc.grafanaURL` the gitops template signs people in to Grafana through it; with `gitea.browserURL` and `installation.previews.signInURL` this chart signs them in to Gitea. See "Signing in to the install's tools through Infrared" |
 | `oidc.grafanaURL` | `""` | Grafana's address in a browser, `https://` (plain `http://` only for localhost), such as `https://grafana.example.com` (`INFRARED_OIDC_GRAFANA_URL`, api and operator, a trailing slash trimmed). Grafana's redirect URI is `<grafanaURL>/login/generic_oauth`; empty: no Grafana client |
+| `oidc.mcpURL` | `""` | Where MCP clients on people's machines (Claude Code, `ir` for localred) reach the code index's tools, signed in through Infrared: the UI's address followed by `/mcp/code`, such as `https://infrared.example.com/mcp/code`, `https://` (plain `http://` only for localhost), a trailing slash trimmed. Set, the API has the public client `mcp` (`INFRARED_OIDC_MCP_URL`); with `oidc.enabled`, infrared-mcp serves the code tools and `knowledge_sources` there, for the platform org alone, to the provider's access tokens for this address (`INFRARED_MCP_CODE_URL`). Empty: the code tools stay inside the cluster |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret`. The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
 | `cloud` | `""` | The control plane's cloud, `gcp` or `aws` (empty is `gcp`): the default image registry and chart repository, Artifact Registry or ECR (ADR 0033) |

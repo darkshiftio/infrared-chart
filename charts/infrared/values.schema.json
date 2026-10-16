@@ -62,6 +62,11 @@
           "type": "string",
           "pattern": "^$|^(https://[^\\s/?#@]+|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?)(/[^\\s?#]*)?$",
           "description": "INFRARED_OIDC_GRAFANA_URL (api and operator): Grafana's address in a browser, such as https://grafana.example.com, a trailing slash trimmed; its redirect URI is <grafanaURL>/login/generic_oauth. Empty: no Grafana client."
+        },
+        "mcpURL": {
+          "type": "string",
+          "pattern": "^$|^(https://[^\\s/?#@]+|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?)/mcp/[^\\s?#]+$",
+          "description": "INFRARED_OIDC_MCP_URL (api) and, with enabled, INFRARED_MCP_CODE_URL (mcp): the address MCP clients reach the code tools at, signed in through Infrared, the UI's address followed by /mcp/code, such as https://infrared.example.com/mcp/code, a trailing slash trimmed. Empty: no client mcp, and the code tools stay inside the cluster."
         }
       }
     },

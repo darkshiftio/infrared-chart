@@ -1325,8 +1325,12 @@ step "Infrared as the OpenID Connect provider of the install's own tools (ADR 00
 # gitea.browserURL and installation.previews.signInURL unset the ConfigMap holds
 # no key, so Gitea keeps its presets and the step ends at once. Gitea's
 # ROOT_URL follows gitea.browserURL alone; empty, it is the Service address.
-oidc=(--set oidc.enabled=true --set oidc.grafanaURL=https://grafana.example.com/ --set gitea.browserURL=https://gitea.example.com)
+oidc=(--set oidc.enabled=true --set oidc.grafanaURL=https://grafana.example.com/ --set gitea.browserURL=https://gitea.example.com
+  --set oidc.mcpURL=https://infrared.example.com/mcp/code/)
 helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" "${oidc[@]}" >"$out/gitea-oidc.yaml"
+# The code tools' address without the provider: the API is told of it, infrared-mcp is not.
+helm template infrared "$chart" -n infrared "${install[@]}" --set oidc.mcpURL=https://infrared.example.com/mcp/code \
+  >"$out/mcp-url-off.yaml"
 # The provider and both addresses, but no sign-in URL among the values: an
 # install whose Installation's previews were set by hand.
 helm template infrared "$chart" -n infrared "${adopted[@]}" -f "$chart/ci/gitea-adopted-values.yaml" "${oidc[@]}" \
@@ -1353,6 +1357,21 @@ done
 if [[ "$(objn gitea-oidc Deployment infrared-operator 'INFRARED_GITEA_BROWSER_URL')" == 0 ]]; then
   ok "the operator gets no Gitea browser address: Gitea's sign-in is this chart's alone"
 else bad "the operator gets INFRARED_GITEA_BROWSER_URL"; fi
+# oidc.mcpURL: the public client mcp for the API, and the signed-in code tools for
+# infrared-mcp, which only the provider being on turns on.
+check defaults.env "no code tools' address by default" '^INFRARED_(OIDC_MCP_URL|MCP_CODE_URL)=' 0
+has gitea-oidc.env "the code tools' address for the API, its trailing slash trimmed" 'INFRARED_OIDC_MCP_URL="https://infrared.example.com/mcp/code"'
+has gitea-oidc.env "...and for infrared-mcp" 'INFRARED_MCP_CODE_URL="https://infrared.example.com/mcp/code"'
+for pair in infrared-api:INFRARED_OIDC_MCP_URL infrared-mcp:INFRARED_MCP_CODE_URL; do
+  if [[ "$(objn gitea-oidc Deployment "${pair%%:*}" "^            - name: ${pair#*:}\$")" == 1 ]]; then ok "${pair%%:*} gets ${pair#*:}"
+  else bad "${pair%%:*} lacks ${pair#*:}"; fi
+done
+if [[ "$(objn gitea-oidc Deployment infrared-operator 'INFRARED_(OIDC_MCP_URL|MCP_CODE_URL)')" == 0 ]]; then
+  ok "the operator gets no code tools' address"
+else bad "the operator gets a code tools' address"; fi
+envs mcp-url-off
+has mcp-url-off.env "with the provider off, the API still knows the address" 'INFRARED_OIDC_MCP_URL="https://infrared.example.com/mcp/code"'
+check mcp-url-off.env "...and infrared-mcp serves nothing signed in" '^INFRARED_MCP_CODE_URL=' 0
 
 # The ConfigMap: its keys only with the provider, Gitea's address and the sign-in URL.
 signin_data() {
@@ -1508,6 +1527,10 @@ refuse "a Grafana address over plain http, other than localhost, fails" "at '/oi
   --set oidc.grafanaURL=http://grafana.example.com
 refuse "a Grafana address with a user fails" "at '/oidc/grafanaURL'" --set oidc.grafanaURL=https://someone@grafana.example.com
 refuse "a key under oidc the chart does not know fails" "at '/oidc'" --set oidc.issuer=https://infrared.example.com
+refuse "a code tools' address over plain http, other than localhost, fails" "at '/oidc/mcpURL'" \
+  --set oidc.mcpURL=http://infrared.example.com/mcp/code
+refuse "a code tools' address outside /mcp/ fails" "at '/oidc/mcpURL'" --set oidc.mcpURL=https://infrared.example.com/code
+refuse "a code tools' address at /mcp itself fails" "at '/oidc/mcpURL'" --set oidc.mcpURL=https://infrared.example.com/mcp
 
 step "umbrella chart (ADR 0038)"
 # An umbrella wraps this chart: its version is the control plane's, and its pins hand no override on.

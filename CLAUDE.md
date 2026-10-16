@@ -32,7 +32,10 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `INFRARED_OIDC` (`oidc.enabled`) and `INFRARED_OIDC_GRAFANA_URL`
   (`oidc.grafanaURL`, a trailing slash trimmed) for the API and the operator,
   each rendered only when set; the operator never gets
-  `INFRARED_GITEA_BROWSER_URL`. The API writes the Secrets `infrared-oidc-signing`,
+  `INFRARED_GITEA_BROWSER_URL`. `oidc.mcpURL` (trailing slash trimmed) is
+  `INFRARED_OIDC_MCP_URL` for the API alone, rendered when set, and
+  `INFRARED_MCP_CODE_URL` for infrared-mcp, rendered only with `oidc.enabled`
+  too. The API writes the Secrets `infrared-oidc-signing`,
   `infrared-oidc-gitea` (keys `key`, `secret`) and `monitoring/infrared-oidc-grafana`
   itself; no template renders them. Gitea's sign-in is the ConfigMap
   `infrared-gitea-sign-in`, `gitea.gitea.additionalConfigFromEnvs` and the

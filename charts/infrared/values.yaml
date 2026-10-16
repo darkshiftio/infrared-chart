@@ -54,6 +54,16 @@ oidc:
   # Grafana's redirect URI is <grafanaURL>/login/generic_oauth. Empty: no
   # Grafana client.
   grafanaURL: ""
+  # -- The address people's MCP clients (Claude Code, ir for localred) reach the
+  # code index's tools at, signed in through Infrared: the UI's address followed
+  # by /mcp/code, such as https://infrared.darkshift.io/mcp/code (a trailing
+  # slash is trimmed). Set, the provider has the public client mcp, whose access
+  # tokens are for this address (INFRARED_OIDC_MCP_URL, api), and with enabled,
+  # infrared-mcp serves the code tools there, for the platform org alone, to
+  # people with a role in the platform org (INFRARED_MCP_CODE_URL, mcp). The
+  # UI's /mcp route reaches it. Empty: no client mcp, and the code tools stay
+  # inside the cluster.
+  mcpURL: ""
 
 # What the operator writes to the Installation when it starts, so nobody patches
 # it after the install. It writes each field only while that field is empty, and

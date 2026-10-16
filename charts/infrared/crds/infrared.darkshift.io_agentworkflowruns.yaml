@@ -346,6 +346,12 @@ spec:
                     attempts:
                       format: int32
                       type: integer
+                    decidedBy:
+                      description: |-
+                        DecidedBy is who approved, rejected or handed off a human step, as the
+                        approve or reject annotation named them (e.g. their email). Empty while
+                        the step waits, and when it was approved automatically.
+                      type: string
                     evidence:
                       items:
                         description: EvidenceRef points at a proof captured during

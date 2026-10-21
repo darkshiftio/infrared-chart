@@ -150,9 +150,58 @@ spec:
                 type: integer
               build:
                 description: |-
-                  Build is the kpack Build that produced the image, or for an image a
-                  step published, step <step> of AgentWorkflowRun <run>.
+                  Build is the kpack Build of the commit, set as soon as kpack starts it
+                  (the image is built once Image is set), or for an image a step
+                  published, step <step> of AgentWorkflowRun <run>.
                 type: string
+              buildPod:
+                description: |-
+                  BuildPod is the kpack Build's pod, in the org's builds namespace: each
+                  step is a container of it, with its log.
+                type: string
+              buildSteps:
+                description: |-
+                  BuildSteps are the kpack Build's steps in the order they run: prepare,
+                  analyze, detect, restore, build, export and completion for a full
+                  build; rebase and completion for a rebase. Read on every pass while the
+                  Release is Building and once more when the build succeeds or fails.
+                items:
+                  description: |-
+                    BuildStep is one step of a Release's kpack build: the build pod's
+                    container of the same name.
+                  properties:
+                    finishedAt:
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        Message is a failed step's reason and exit code, with the last line of
+                        what it wrote on its way out when it wrote any; or why a waiting
+                        step's container cannot start, such as an image it cannot pull.
+                      type: string
+                    name:
+                      description: |-
+                        Name is the step: prepare, analyze, detect, restore, build, export,
+                        rebase or completion.
+                      type: string
+                    phase:
+                      description: BuildStepPhase is where one step of a kpack build
+                        is.
+                      enum:
+                      - Waiting
+                      - Running
+                      - Succeeded
+                      - Failed
+                      type: string
+                    startedAt:
+                      format: date-time
+                      type: string
+                  required:
+                  - name
+                  - phase
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               builtAt:
                 description: BuiltAt is when the build was ready and its digest tagged
                   with the version.
@@ -511,6 +560,19 @@ spec:
                             UnhealthySince is when Argo CD last stopped reporting the zone Synced
                             and Healthy on the release during the hold; a minute of that fails it.
                           format: date-time
+                          type: string
+                        wentAheadAt:
+                          description: |-
+                            WentAheadAt is when the guard honoured Go now: how far into the hold
+                            the zone went ahead is WentAheadAt less HoldStartedAt.
+                          format: date-time
+                          type: string
+                        wentAheadBy:
+                          description: |-
+                            WentAheadBy is who ended the zone's hold early with Go now (the
+                            infrared.darkshift.io/go-now.<zone> annotation), as infrared-api names
+                            people. The guard still read the error budgets and ran the zone's checks
+                            once more before it passed the zone.
                           type: string
                       required:
                       - result

@@ -235,6 +235,7 @@ rules:
   - organizations/status
   - products/status
   - registries/status
+  - releasecuts/status
   - releases/status
   - teams/status
   verbs:
@@ -285,6 +286,7 @@ rules:
   - organizations
   - products
   - registries
+  - releasecuts
   verbs:
   - get
   - list

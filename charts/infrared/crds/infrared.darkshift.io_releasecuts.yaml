@@ -1,0 +1,274 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: releasecuts.infrared.darkshift.io
+spec:
+  group: infrared.darkshift.io
+  names:
+    kind: ReleaseCut
+    listKind: ReleaseCutList
+    plural: releasecuts
+    shortNames:
+    - ircut
+    singular: releasecut
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.productRef.name
+      name: Product
+      type: string
+    - jsonPath: .spec.version
+      name: Version
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.cutBy
+      name: Cut by
+      priority: 1
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ReleaseCut is a release of a Product: the Releases that reached production
+          since the last cut, under one version, written up for engineers and for
+          everyone else. Infrared tags the commit and the image running in
+          production with the version, creates the forge release with the notes,
+          and sends release.cut once. Named <product>-<major>-<minor>-<patch>.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              ReleaseCutSpec is one release of a Product, as infrared-api writes it when
+              a person cuts it. Every field is set at the cut and never changed.
+            properties:
+              bump:
+                description: 'Bump is which part of the version the cut took: minor
+                  or major.'
+                enum:
+                - minor
+                - major
+                type: string
+              covers:
+                description: |-
+                  Covers are the Releases the cut covers, oldest first: those that
+                  reached production after the last cut, frozen at the cut. Deployment is
+                  the last of them.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              cutBy:
+                description: |-
+                  CutBy is who cut the release, as infrared-api names people (never an
+                  address).
+                type: string
+              deployment:
+                description: |-
+                  Deployment is the Release running in production when the cut was made:
+                  the cut tags its commit and its image digest, so the release is
+                  exactly what runs.
+                minLength: 1
+                type: string
+              notes:
+                description: |-
+                  Notes are the release notes for engineers, Markdown: the forge
+                  release's body.
+                type: string
+              post:
+                description: Post is the release's post for everyone else, Markdown.
+                type: string
+              productRef:
+                description: LocalRef names another Infrared resource in the same
+                  namespace.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              title:
+                description: Title is the release's title, as a person edited it.
+                type: string
+              version:
+                description: |-
+                  Version is the release's version, vX.Y.0: the next minor or major of
+                  the version in production when it was cut, never a patch.
+                pattern: ^v[0-9]+\.[0-9]+\.0$
+                type: string
+                x-kubernetes-validations:
+                - message: spec.version is immutable
+                  rule: self == oldSelf
+            required:
+            - bump
+            - deployment
+            - productRef
+            - version
+            type: object
+          status:
+            description: |-
+              ReleaseCutStatus is the observed state of a ReleaseCut. Each step of the
+              cut is skipped once its field is set, so a pass that fails after a step
+              never repeats it.
+            properties:
+              commit:
+                description: 'Commit is the commit the cut tags: the deployment''s
+                  commit.'
+                type: string
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              cutAt:
+                description: 'CutAt is when the cut was Released: tagged, published
+                  and dispatched.'
+                format: date-time
+                type: string
+              cutDispatched:
+                description: CutDispatched is true once the release.cut event has
+                  been sent.
+                type: boolean
+              cutRuns:
+                description: |-
+                  CutRuns are the AgentWorkflowRuns the cut started: the org's enabled
+                  AgentWorkflows with a release.cut event trigger, one run each.
+                items:
+                  type: string
+                type: array
+              image:
+                description: Image is the deployment's released image, repository:version@sha256:...
+                type: string
+              imageDigest:
+                description: |-
+                  ImageDigest is the image's digest, sha256:..., which the cut tags with
+                  the version.
+                type: string
+              imageTaggedAt:
+                description: ImageTaggedAt is when the image digest was tagged with
+                  the version.
+                format: date-time
+                type: string
+              message:
+                description: Message says in plain words what the cut is doing, or
+                  why it failed.
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                description: ReleaseCutPhase is where a ReleaseCut is on its way to
+                  being released.
+                enum:
+                - Pending
+                - Tagging
+                - Publishing
+                - Released
+                - Failed
+                type: string
+              releaseURL:
+                description: |-
+                  ReleaseURL is the forge release, created on the tag with the notes
+                  and marked latest.
+                type: string
+              repo:
+                description: Repo is owner/name of the Product's delivery repo.
+                type: string
+              tag:
+                description: Tag is the git tag the cut made, equal to spec.version
+                  once made.
+                type: string
+              taggedAt:
+                description: TaggedAt is when the git tag was made.
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

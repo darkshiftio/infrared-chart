@@ -102,8 +102,9 @@ spec:
                 type: object
               notes:
                 description: |-
-                  Notes for the GitHub release; empty means the commits since the
-                  previous release.
+                  Notes were the forge release's body, when a Release made one. A
+                  Release makes the git tag only; a ReleaseCut's spec.notes are the
+                  forge release's body now. Kept for Releases from before.
                 type: string
               productRef:
                 description: LocalRef names another Infrared resource in the same
@@ -207,6 +208,50 @@ spec:
                   with the version.
                 format: date-time
                 type: string
+              changes:
+                description: |-
+                  Changes are the commits this Release ships, oldest first: the forge
+                  compare PreviousVersion..Commit, read once when the Release is tagged.
+                  A ReleaseCut's drafts read them instead of asking the forge again; a
+                  Release from before they were recorded has none. At most 250.
+                items:
+                  description: ReleaseChange is one commit a Release ships.
+                  properties:
+                    author:
+                      description: |-
+                        Author is the commit's author on the forge, by login; empty when the
+                        forge links the commit to no account.
+                      type: string
+                    commit:
+                      description: Commit is the full SHA.
+                      type: string
+                    kind:
+                      description: |-
+                        ReleaseChangeKind is what a commit a Release ships does, by its
+                        conventional commit subject.
+                      enum:
+                      - feature
+                      - fix
+                      - breaking
+                      - other
+                      type: string
+                    pullRequest:
+                      description: |-
+                        PullRequest is the pull request the commit merged, from the subject's
+                        trailing (#N) on a squash or a "Merge pull request #N" subject; 0 when
+                        the subject names none.
+                      format: int32
+                      type: integer
+                    subject:
+                      description: Subject is the commit message's first line.
+                      type: string
+                  required:
+                  - commit
+                  - kind
+                  - subject
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               chart:
                 description: Chart is the umbrella chart a platform Release published.
                 properties:
@@ -350,13 +395,15 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               cutDispatched:
-                description: CutDispatched is true once the release.cut event has
-                  been sent.
+                description: |-
+                  CutDispatched is true once the release.cut event has been sent, on a
+                  Release from before release cuts.
                 type: boolean
               cutRuns:
                 description: |-
                   CutRuns are the AgentWorkflowRuns started when the tag was cut (the
-                  org's enabled AgentWorkflows with a release.cut event trigger).
+                  org's enabled AgentWorkflows with a release.cut event trigger), on a
+                  Release from before release cuts; a ReleaseCut starts them since.
                 items:
                   type: string
                 type: array
@@ -393,7 +440,10 @@ spec:
                   one.
                 type: string
               releaseURL:
-                description: ReleaseURL is the GitHub release.
+                description: |-
+                  ReleaseURL is the forge release, on a Release from before release
+                  cuts, when a Release made one; empty since: a ReleaseCut makes the
+                  forge release. An umbrella Release keeps its chart's URL here.
                 type: string
               repo:
                 description: Repo is owner/name of the delivery repo.
@@ -411,8 +461,7 @@ spec:
                 format: date-time
                 type: string
               taggedAt:
-                description: TaggedAt is when the GitHub release (and so the git tag)
-                  was created.
+                description: TaggedAt is when the git tag was made.
                 format: date-time
                 type: string
               version:

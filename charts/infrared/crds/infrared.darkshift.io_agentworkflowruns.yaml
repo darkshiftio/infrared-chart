@@ -122,6 +122,17 @@ spec:
                 description: Trigger records what started the run, e.g. onChange,
                   cron, adhoc:bernie.
                 type: string
+              triggerKey:
+                description: |-
+                  TriggerKey names the event the run answers, e.g.
+                  ci.failed:acme/zippy@<commit>:zippy:test, so that one event starts one
+                  run: at most one run of a workflow per key in a namespace. A run whose
+                  key an earlier run of the same workflow already carries ends Skipped
+                  before it starts, naming that run. Infrared's own emitters set it and
+                  name the run after it (StartKeyedRun); empty means the run answers no
+                  event twice and is never deduplicated.
+                maxLength: 512
+                type: string
               workflowRef:
                 description: LocalRef names another Infrared resource in the same
                   namespace.

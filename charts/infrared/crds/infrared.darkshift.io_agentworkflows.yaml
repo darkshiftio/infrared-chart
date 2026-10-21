@@ -103,6 +103,33 @@ spec:
               enabled:
                 default: true
                 type: boolean
+              limits:
+                description: |-
+                  Limits is the workflow's circuit breaker: past either limit the
+                  operator sets the Tripped condition and starts no run of the workflow
+                  until its spec changes. Omitted, or a limit left at 0, takes the
+                  default (DefaultMaxRunsPerDay, DefaultMaxConsecutiveFailures).
+                properties:
+                  maxConsecutiveFailures:
+                    description: |-
+                      MaxConsecutiveFailures is how many of the workflow's latest finished
+                      runs in the org may fail in a row (Skipped and Cancelled runs are
+                      passed over); the next run trips the workflow. 0 means
+                      DefaultMaxConsecutiveFailures.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                  maxRunsPerDay:
+                    description: |-
+                      MaxRunsPerDay is how many runs of the workflow for one Product (and
+                      one Team, for a run labelled with one) may start in 24 hours; the next
+                      trips the workflow. 0 means DefaultMaxRunsPerDay.
+                    format: int32
+                    maximum: 10000
+                    minimum: 0
+                    type: integer
+                type: object
               maxConcurrency:
                 default: 3
                 format: int32

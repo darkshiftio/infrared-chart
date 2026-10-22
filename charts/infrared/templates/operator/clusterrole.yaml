@@ -237,6 +237,7 @@ rules:
   - registries/status
   - releasecuts/status
   - releases/status
+  - socials/status
   - teams/status
   verbs:
   - get

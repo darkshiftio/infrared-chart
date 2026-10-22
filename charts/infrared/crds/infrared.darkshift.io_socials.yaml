@@ -345,6 +345,61 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              posts:
+                description: |-
+                  Posts are what it posted, newest first, at most 50 (ADR 0055 D4: its
+                  own record of what it said).
+                items:
+                  description: SocialPost is one post a Social made.
+                  properties:
+                    by:
+                      description: By is who approved it, or "window" or "auto" when
+                        the plan posted it.
+                      maxLength: 254
+                      type: string
+                    id:
+                      description: |-
+                        ID is the platform's id for the post, e.g. an X post id, a Bluesky
+                        record's at:// URI, a Slack message's ts.
+                      maxLength: 512
+                      type: string
+                    items:
+                      description: Items are the issues it announced, as repo#number.
+                      items:
+                        type: string
+                      maxItems: 100
+                      type: array
+                      x-kubernetes-list-type: atomic
+                    postedAt:
+                      description: PostedAt is when it went out.
+                      format: date-time
+                      type: string
+                    product:
+                      description: Product is the Product it announced.
+                      maxLength: 63
+                      type: string
+                    run:
+                      description: Run is the announce AgentWorkflowRun whose draft
+                        it was.
+                      maxLength: 253
+                      type: string
+                    takenDown:
+                      description: TakenDown is when it was taken down, if it was.
+                      format: date-time
+                      type: string
+                    url:
+                      description: URL is where people read it, when the platform
+                        gives one.
+                      maxLength: 512
+                      type: string
+                  required:
+                  - id
+                  - postedAt
+                  - run
+                  type: object
+                maxItems: 50
+                type: array
+                x-kubernetes-list-type: atomic
             type: object
         required:
         - spec

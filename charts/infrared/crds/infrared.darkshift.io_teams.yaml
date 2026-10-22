@@ -74,6 +74,48 @@ spec:
                 maxItems: 100
                 type: array
                 x-kubernetes-list-type: set
+              character:
+                description: |-
+                  Character is how the team looks and sounds: its colour, its glyph and
+                  its voice. Its AgentRoles wear the colour; Workforce draws the glyph on
+                  the team's mark. Empty, the app picks a colour from the name and a
+                  glyph from the discipline (Workforce, design brief 6).
+                properties:
+                  glyph:
+                    description: |-
+                      Glyph is the Lucide icon drawn on the team's mark, in PascalCase,
+                      e.g. Lock, Siren or CodeXml.
+                    maxLength: 40
+                    pattern: ^[A-Z][A-Za-z0-9]*$
+                    type: string
+                  hue:
+                    description: |-
+                      Hue is the team's colour, one of the persona palette's hues, which
+                      read the same in light and dark. Its AgentRoles wear it.
+                    enum:
+                    - infrared
+                    - violet
+                    - indigo
+                    - sky
+                    - teal
+                    - green
+                    - lime
+                    - amber
+                    - crimson
+                    - slate
+                    type: string
+                  sample:
+                    description: Sample is a line in the team's voice, shown beside
+                      it.
+                    maxLength: 500
+                    type: string
+                  voice:
+                    description: |-
+                      Voice is how the team writes, in a sentence or two, e.g. "Direct.
+                      Names the risk, then the fix." Its AgentRoles are asked to write so.
+                    maxLength: 300
+                    type: string
+                type: object
               charter:
                 description: Charter is what the team is for, in words.
                 maxLength: 4000

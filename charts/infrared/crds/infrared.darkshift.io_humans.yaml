@@ -109,22 +109,61 @@ spec:
                   colors:
                     additionalProperties:
                       type: string
-                    description: 'Colors color each feature, by part name, as #rrggbb.'
+                    description: |-
+                      Colors color each feature, by part name, as #rrggbb: skin, hair,
+                      shirt and accessory for the app's styles; skin, hair and background
+                      for a DiceBear style.
                     maxProperties: 16
+                    type: object
+                  options:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Options are a DiceBear style's other choices: radius (0 to 50),
+                      flip (true), backgroundType (solid or gradientLinear).
+                    maxProperties: 8
                     type: object
                   parts:
                     additionalProperties:
                       type: string
-                    description: 'Parts pick each feature, by part name, e.g. hair:
-                      bob.'
+                    description: |-
+                      Parts pick each feature, by part name, e.g. hair: bob, or for a
+                      DiceBear style its option values, e.g. hair: variant23, glasses: none.
                     maxProperties: 16
                     type: object
+                  seed:
+                    description: |-
+                      Seed is the face a DiceBear style starts from; every part it leaves
+                      unset is drawn from it. Empty means the Human's name.
+                    maxLength: 64
+                    type: string
                   style:
-                    description: Style is the avatar's drawing style.
+                    description: |-
+                      Style is the avatar's drawing style: one of the app's own (pixel,
+                      round, block), or a DiceBear style the app bundles (notionists,
+                      adventurer, lorelei, micah, big-smile, pixel-art, avataaars,
+                      open-peeps, personas, croodles, big-ears, miniavs, fun-emoji, bottts,
+                      thumbs, shapes), each drawn in the browser from Seed and Parts.
                     enum:
                     - pixel
                     - round
                     - block
+                    - notionists
+                    - adventurer
+                    - lorelei
+                    - micah
+                    - big-smile
+                    - pixel-art
+                    - avataaars
+                    - open-peeps
+                    - personas
+                    - croodles
+                    - big-ears
+                    - miniavs
+                    - fun-emoji
+                    - bottts
+                    - thumbs
+                    - shapes
                     type: string
                   voice:
                     description: |-

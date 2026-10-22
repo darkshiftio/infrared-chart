@@ -168,6 +168,13 @@ spec:
                       - network
                       type: object
                     type: array
+                  signupAddress:
+                    description: |-
+                      SignupAddress is the shared mailbox new social accounts are made with,
+                      so none belongs to one person (ADR 0055 D7), e.g. social@example.com.
+                      The new-accounts helper suggests social+<platform>@ forms of it.
+                    maxLength: 254
+                    type: string
                 type: object
               buildRegistry:
                 description: |-

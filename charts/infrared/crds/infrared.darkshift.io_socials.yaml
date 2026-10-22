@@ -246,6 +246,41 @@ spec:
                     minimum: 1
                     type: integer
                 type: object
+              planned:
+                description: |-
+                  Planned is an account the new-accounts helper is making (ADR 0055 D7):
+                  the handle picked, and who made it with which address. It stays as a
+                  record once the account is connected.
+                properties:
+                  handle:
+                    description: Handle is the handle picked for it, e.g. hiveblastapp.
+                    maxLength: 100
+                    minLength: 1
+                    type: string
+                  madeAt:
+                    format: date-time
+                    type: string
+                  madeBy:
+                    description: MadeBy and MadeAt say who marked the account made,
+                      and when.
+                    maxLength: 254
+                    type: string
+                  product:
+                    description: Product is the Product it was made for; empty for
+                      the whole org.
+                    maxLength: 63
+                    type: string
+                  signupAddress:
+                    description: SignupAddress is the address it was signed up with.
+                    maxLength: 254
+                    type: string
+                  startedBy:
+                    description: StartedBy is who picked the handle, by Infrared login.
+                    maxLength: 254
+                    type: string
+                required:
+                - handle
+                type: object
               products:
                 description: |-
                   Products are the Products an announcing Social speaks for. Empty:
@@ -275,10 +310,10 @@ spec:
             - message: profileURLTemplate must contain {handle}, e.g. https://x.com/{handle}
               rule: '!has(self.profileURLTemplate) || size(self.profileURLTemplate)
                 == 0 || self.profileURLTemplate.contains(''{handle}'')'
-            - message: connection, plan and audience are for Socials an org announces
-                to, not identity Socials
-              rule: (!has(self.connection) && !has(self.plan) && !has(self.audience))
-                || self.kind in ['slack-channel','x','linkedin','bluesky','youtube','blog','github-releases','gitlab-releases','gitea-releases','webhook']
+            - message: connection, plan, audience and planned are for Socials an org
+                announces to, not identity Socials
+              rule: (!has(self.connection) && !has(self.plan) && !has(self.audience)
+                && !has(self.planned)) || self.kind in ['slack-channel','x','linkedin','bluesky','youtube','blog','github-releases','gitlab-releases','gitea-releases','webhook']
           status:
             description: SocialStatus is what the Social controller found.
             properties:
@@ -342,6 +377,21 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastDraftRun:
+                description: LastDraftRun is the announce AgentWorkflowRun its plan
+                  started last.
+                maxLength: 253
+                type: string
+              nextDraftAt:
+                description: |-
+                  NextDraftAt is when its announcement plan next drafts, and NextPostAt
+                  when that draft is due to post (ADR 0055 phase 3). Empty without a
+                  digest cadence, or while the org's scheduled runs are off.
+                format: date-time
+                type: string
+              nextPostAt:
+                format: date-time
+                type: string
               observedGeneration:
                 format: int64
                 type: integer

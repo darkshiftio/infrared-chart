@@ -101,6 +101,71 @@ spec:
                         name
                       rule: '!has(self.source) || self.source != ''product'' || (has(self.name)
                         && size(self.name) > 0)'
+                  socials:
+                    description: |-
+                      Socials are this Product's overrides of the org's Socials (ADR 0055,
+                      2026-10-23): a Product uses every Social that speaks for it unless it
+                      turns one off here, and may post to one on its own schedule.
+                    items:
+                      description: ProductSocial is one Product's override of one
+                        of the org's Socials.
+                      properties:
+                        "off":
+                          description: Off stops this Product's announcements going
+                            to the Social.
+                          type: boolean
+                        schedule:
+                          description: |-
+                            Schedule replaces the Social's cadence, day, time and review for this
+                            Product's announcements. Its voice, notes and the rest stay the
+                            Social's.
+                          properties:
+                            cadence:
+                              enum:
+                              - release
+                              - daily
+                              - weekly
+                              - biweekly
+                              - monthly
+                              type: string
+                            day:
+                              enum:
+                              - mon
+                              - tue
+                              - wed
+                              - thu
+                              - fri
+                              - sat
+                              - sun
+                              type: string
+                            review:
+                              enum:
+                              - approve
+                              - window
+                              - auto
+                              type: string
+                            time:
+                              pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+                              type: string
+                            windowHours:
+                              format: int32
+                              maximum: 72
+                              minimum: 1
+                              type: integer
+                          type: object
+                        social:
+                          description: Social is the Social's name.
+                          maxLength: 63
+                          minLength: 1
+                          type: string
+                      required:
+                      - social
+                      type: object
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - social
+                    x-kubernetes-list-type: map
                 type: object
               currentRelease:
                 description: CurrentRelease is the release in progress, e.g. "2.4".

@@ -100,6 +100,12 @@ spec:
                     - step
                     type: object
                 type: object
+              notBefore:
+                description: |-
+                  NotBefore holds the deployment Pending until then: the window in which
+                  more pushes join it.
+                format: date-time
+                type: string
               notes:
                 description: |-
                   Notes were the forge release's body, when a Release made one. A
@@ -116,6 +122,41 @@ spec:
                 required:
                 - name
                 type: object
+              pushes:
+                description: |-
+                  Pushes are the pushes to a repo's default branch this deployment ships
+                  (ADR 0054, amended 2026-10-23), oldest first. infrared-api writes them
+                  from the forge's push events and adds to them while the deployment
+                  waits for NotBefore, so pushes close together ship as one. For an
+                  umbrella Product the operator waits for each pushed repo's build of
+                  its newest pushed commit.
+                items:
+                  description: ReleasePush is one push to a repo's default branch.
+                  properties:
+                    at:
+                      description: At is when Infrared received the push.
+                      format: date-time
+                      type: string
+                    by:
+                      description: By is who pushed, as the forge names them (a login).
+                      type: string
+                    commit:
+                      description: Commit is the branch's head after the push, a full
+                        SHA.
+                      pattern: ^[0-9a-f]{40}$
+                      type: string
+                    commits:
+                      description: Commits counts the commits the push added.
+                      format: int32
+                      type: integer
+                    repo:
+                      description: Repo is the repo's name, one of the Product's spec.repos.
+                      type: string
+                  required:
+                  - commit
+                  - repo
+                  type: object
+                type: array
               recorded:
                 description: |-
                   Recorded marks a release made outside Infrared, by hand: Infrared
@@ -325,8 +366,20 @@ spec:
                     previousImage:
                       description: PreviousImage is the previous release's image.
                       type: string
+                    releaseURL:
+                      description: ReleaseURL is the forge release on Tag.
+                      type: string
                     repo:
                       description: Repo is owner/name.
+                      type: string
+                    tag:
+                      description: |-
+                        Tag is the git tag an umbrella deployment made on the repo at Commit:
+                        the umbrella chart's version, on every repo, changed or carried.
+                      type: string
+                    tagMessage:
+                      description: TagMessage says why the repo has no Tag, when it
+                        could not be made.
                       type: string
                   required:
                   - name
@@ -410,11 +463,24 @@ spec:
               finishedAt:
                 format: date-time
                 type: string
+              forgeReleaseAt:
+                description: |-
+                  ForgeReleaseAt is when this deployment made its forge release, on a
+                  deployment since 2026-10-23. A ReleaseURL without it is one from
+                  before release cuts.
+                format: date-time
+                type: string
               guard:
                 description: Guard is the upgrade guard's Job.
                 type: string
               image:
                 description: Image is the released image, repository:version@sha256:...
+                type: string
+              latestAt:
+                description: |-
+                  LatestAt is when Infrared marked the deployment's forge releases as
+                  each repo's latest: once it ran Healthy in every zone.
+                format: date-time
                 type: string
               message:
                 description: Message says in plain words what the Release is doing
@@ -441,9 +507,11 @@ spec:
                 type: string
               releaseURL:
                 description: |-
-                  ReleaseURL is the forge release, on a Release from before release
-                  cuts, when a Release made one; empty since: a ReleaseCut makes the
-                  forge release. An umbrella Release keeps its chart's URL here.
+                  ReleaseURL is the forge release on the deployment's tag. Deployments
+                  made one until release cuts (2026-10-21), none from then to
+                  2026-10-23, and one again since, when ForgeReleaseAt is set. An
+                  umbrella Release keeps its chart's URL here; its repos' forge releases
+                  are on status.components.
                 type: string
               repo:
                 description: Repo is owner/name of the delivery repo.

@@ -168,6 +168,13 @@ spec:
                       - network
                       type: object
                     type: array
+                  requireApproval:
+                    description: |-
+                      RequireApproval makes a person approve every draft before it posts to
+                      any of the org's Socials, whatever a Social's plan or a Product's
+                      schedule says: window and auto review act as approve (ADR 0055, the
+                      owner, 2026-10-23). Post now still posts: a person asked.
+                    type: boolean
                   signupAddress:
                     description: |-
                       SignupAddress is the shared mailbox new social accounts are made with,

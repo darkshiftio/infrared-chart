@@ -377,6 +377,35 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              draftNow:
+                description: DraftNow is what the last "draft now" did (AnnotationSocialDraftNow).
+                properties:
+                  at:
+                    format: date-time
+                    type: string
+                  by:
+                    description: By is who asked, and At when the operator acted on
+                      it.
+                    maxLength: 254
+                    type: string
+                  message:
+                    description: |-
+                      Message says why it started nothing, e.g. nothing shipped since the
+                      Social's last post.
+                    maxLength: 512
+                    type: string
+                  runs:
+                    description: Runs are the announce AgentWorkflowRuns it started,
+                      one per Product.
+                    items:
+                      type: string
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-type: atomic
+                required:
+                - at
+                - by
+                type: object
               lastDraftRun:
                 description: LastDraftRun is the announce AgentWorkflowRun its plan
                   started last.

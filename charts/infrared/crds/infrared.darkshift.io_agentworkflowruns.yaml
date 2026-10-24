@@ -80,7 +80,9 @@ spec:
                   repo:
                     description: |-
                       Repo is the Product repo the Change is made in; empty means the repo
-                      named in issue, else the Product's first repo.
+                      named in issue, else the Product's first repo. Empty on a Product of
+                      several repos also means the Change names none: an issue-mode step
+                      (hydration) is given every Product repo and their open issues.
                     type: string
                 type: object
               guidance:

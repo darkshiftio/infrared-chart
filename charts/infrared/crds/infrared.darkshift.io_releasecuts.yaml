@@ -70,11 +70,13 @@ spec:
               a person cuts it. Every field is set at the cut and never changed.
             properties:
               bump:
-                description: 'Bump is which part of the version the cut took: minor
-                  or major.'
+                description: |-
+                  Bump is which part of the version the cut took: minor or major, or
+                  track, which announces the version in production as its track.
                 enum:
                 - minor
                 - major
+                - track
                 type: string
               covers:
                 description: |-
@@ -120,9 +122,10 @@ spec:
                 type: string
               version:
                 description: |-
-                  Version is the release's version, vX.Y.0: the next minor or major of
-                  the version in production when it was cut, never a patch.
-                pattern: ^v[0-9]+\.[0-9]+\.0$
+                  Version is the release's version: for a minor or major cut vX.Y.0, the
+                  next minor or major of the version in production when it was cut; for
+                  a track cut, the version in production itself.
+                pattern: ^v[0-9]+\.[0-9]+\.[0-9]+$
                 type: string
                 x-kubernetes-validations:
                 - message: spec.version is immutable
@@ -133,6 +136,9 @@ spec:
             - productRef
             - version
             type: object
+            x-kubernetes-validations:
+            - message: a minor or major cut's version is vX.Y.0
+              rule: self.bump == 'track' || self.version.endsWith('.0')
           status:
             description: |-
               ReleaseCutStatus is the observed state of a ReleaseCut. Each step of the

@@ -168,6 +168,16 @@ spec:
                       - network
                       type: object
                     type: array
+                  backdropLibrary:
+                    description: |-
+                      BackdropLibrary is how many backdrops each Product keeps: every one made
+                      for its announcements is saved, and once it has this many, an
+                      announcement reuses the one used longest ago instead of paying for a
+                      new one (the owner, 2026-10-24). Zero means DefaultBackdropLibrary.
+                    format: int32
+                    maximum: 200
+                    minimum: 0
+                    type: integer
                   freshStage:
                     description: |-
                       FreshStage makes a new studio stage with Google's image model for each

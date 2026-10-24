@@ -283,6 +283,12 @@ spec:
                         the subject names none.
                       format: int32
                       type: integer
+                    repo:
+                      description: |-
+                        Repo is the repository the commit is in, owner/name, on a platform
+                        Release, whose changes come from each changed component's repository;
+                        empty when it is the Release's own repository (status.repo).
+                      type: string
                     subject:
                       description: Subject is the commit message's first line.
                       type: string

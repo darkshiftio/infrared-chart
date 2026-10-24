@@ -1277,6 +1277,13 @@ spec:
                 description: Observability reports the alerting rules Infrared keeps
                   for the SLOs.
                 properties:
+                  edgeZones:
+                    description: |-
+                      EdgeZones are the delivery zones with an HTTPRoute, where the default
+                      edge SLOs read Envoy; a zone without one gets neither.
+                    items:
+                      type: string
+                    type: array
                   message:
                     type: string
                   observedGeneration:

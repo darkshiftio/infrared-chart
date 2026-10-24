@@ -70,6 +70,20 @@ spec:
                   properties:
                     description:
                       type: string
+                    emails:
+                      description: |-
+                        Emails are members by the address of their Google account, which Google verified at sign-in:
+                        people who sign in with Google and hold no Workspace group or linked login, such as a hosted
+                        control plane's tenants (infrared-docs-internal ADR 0057). Lower-case. Adding an address is the
+                        invitation; taking it off ends the role at the person's next request. It matches an address, not
+                        a stable subject: a person who changes their Google address needs the new one added.
+                      items:
+                        maxLength: 254
+                        pattern: ^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}$
+                        type: string
+                      maxItems: 200
+                      type: array
+                      x-kubernetes-list-type: set
                     githubTeam:
                       description: |-
                         GitHubTeam is the GitHub team, by slug, in the org's GitHub organization (its GitProvider github),
@@ -227,6 +241,22 @@ spec:
               displayName:
                 minLength: 1
                 type: string
+              limits:
+                description: |-
+                  Limits bounds what the org may hold, beyond the licence's install-wide
+                  limits: set at a self-service sign-up from the install's
+                  signIn.google.selfSignUp (infrared-docs-internal ADR 0057), changed by
+                  a platform admin. Unset means none.
+                properties:
+                  products:
+                    description: |-
+                      Products caps the org's Products; 0 means no cap. The API refuses the
+                      Product past it, saying what to do.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                type: object
               modelTiers:
                 description: |-
                   ModelTiers overrides the Installation's tier-to-model mapping for this
@@ -465,6 +495,20 @@ spec:
                   properties:
                     description:
                       type: string
+                    emails:
+                      description: |-
+                        Emails are members by the address of their Google account, which Google verified at sign-in:
+                        people who sign in with Google and hold no Workspace group or linked login, such as a hosted
+                        control plane's tenants (infrared-docs-internal ADR 0057). Lower-case. Adding an address is the
+                        invitation; taking it off ends the role at the person's next request. It matches an address, not
+                        a stable subject: a person who changes their Google address needs the new one added.
+                      items:
+                        maxLength: 254
+                        pattern: ^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}$
+                        type: string
+                      maxItems: 200
+                      type: array
+                      x-kubernetes-list-type: set
                     githubTeam:
                       description: |-
                         GitHubTeam is the GitHub team, by slug, in the org's GitHub organization (its GitProvider github),

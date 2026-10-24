@@ -168,6 +168,15 @@ spec:
                       - network
                       type: object
                     type: array
+                  freshStage:
+                    description: |-
+                      FreshStage makes a new studio stage with Google's image model for each
+                      announcement (ADR 0055, the owner, 2026-10-24): the picture on each X,
+                      LinkedIn and Bluesky draft and post, with the official logo and the
+                      headline drawn on it, and the stage a product owner announcement's
+                      presenter stands on. Each stage costs about StageUSD, counted against
+                      spec.summaryVideos' monthly cap.
+                    type: boolean
                   requireApproval:
                     description: |-
                       RequireApproval makes a person approve every draft before it posts to

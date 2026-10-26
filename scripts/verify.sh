@@ -88,6 +88,8 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/adopted-values.yaml" >
 # The MCP Secrets under names of a person's own choosing.
 helm template infrared "$chart" -n infrared --set mcp.existingSecret=ci-mcp-token,mcp.access.existingSecret=ci-mcp-access \
   >"$out/mcp-existing.yaml"
+# The API restarting in place, for a shape with no room for a second API pod.
+helm template infrared "$chart" -n infrared --set api.strategy.type=Recreate >"$out/api-recreate.yaml"
 helm template other "$chart" -n ir-test >"$out/other.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" >"$out/extensions.yaml"
@@ -369,6 +371,13 @@ check gitea.yaml "Gitea 1.27.3, rootless, by digest, in each of its five contain
 if [[ "$(objn gitea Deployment gitea '^  replicas: 1$|^    type: Recreate$')" == 2 ]]; then
   ok "one Gitea pod, replaced with Recreate: its volume is ReadWriteOnce"
 else bad "Gitea is not one pod with strategy Recreate"; fi
+# api.strategy Recreate renders no rollingUpdate block: the API server refuses one beside it.
+if [[ "$(objn defaults Deployment infrared-api '^    type: RollingUpdate$|^      maxSurge: 1$|^      maxUnavailable: 0$')" == 3 ]]; then
+  ok "the API rolls out by default with one pod surged and none unavailable"
+else bad "the API default strategy is not RollingUpdate maxSurge 1 maxUnavailable 0"; fi
+if [[ "$(objn api-recreate Deployment infrared-api '^    type: Recreate$|^    rollingUpdate:$|^      maxSurge:')" == 1 ]]; then
+  ok "api.strategy.type Recreate renders Recreate alone, no rollingUpdate block"
+else bad "api.strategy.type Recreate renders a rollingUpdate block beside Recreate (or no Recreate)"; fi
 if [[ "$(objn gitea Deployment gitea '^ +name: infrared-gitea-admin$')" == 2 ]]; then
   ok "Gitea's admin username and password come from infrared-gitea-admin"
 else bad "Gitea does not read its admin from infrared-gitea-admin"; fi

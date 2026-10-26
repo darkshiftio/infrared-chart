@@ -635,7 +635,8 @@ api:
   # pod's node when the media volume is mounted, see summaryvideo) and stops the old one only once
   # the new one is ready, so the edge always has a ready pod: it needs a node with room for a
   # second API. On a shape without that room (three e2-highmem-2, as a hosted control plane's),
-  # the new pod waits forever as Pending: set `strategy: {type: Recreate}` there, and the old pod
+  # the new pod waits forever as Pending: set `strategy: {type: Recreate}` there (the rollingUpdate
+  # block is dropped from the Deployment), and the old pod
   # stops before the new one starts (a short outage at each upgrade).
   strategy:
     type: RollingUpdate

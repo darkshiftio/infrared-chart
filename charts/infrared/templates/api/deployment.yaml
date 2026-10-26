@@ -33,9 +33,14 @@ spec:
   # By default a rollout starts the new pod and stops the old one only once the
   # new one is ready, so the edge always has a ready pod (with the media volume,
   # the new pod goes to the same node: see the affinity above); api.strategy
-  # chooses Recreate where no node has room for a second API.
+  # chooses Recreate where no node has room for a second API (its rollingUpdate
+  # block is left out then: the API server refuses one beside Recreate).
   strategy:
-    {{- toYaml $c.strategy | nindent 4 }}
+    type: {{ $c.strategy.type }}
+    {{- if and (eq $c.strategy.type "RollingUpdate") $c.strategy.rollingUpdate }}
+    rollingUpdate:
+      {{- toYaml $c.strategy.rollingUpdate | nindent 6 }}
+    {{- end }}
   selector:
     matchLabels:
       {{- include "infrared.selectorLabels" $ctx | nindent 6 }}

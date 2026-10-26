@@ -56,7 +56,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -90,6 +90,10 @@ helm template infrared "$chart" -n infrared --set mcp.existingSecret=ci-mcp-toke
   >"$out/mcp-existing.yaml"
 # The API restarting in place, for a shape with no room for a second API pod.
 helm template infrared "$chart" -n infrared --set api.strategy.type=Recreate >"$out/api-recreate.yaml"
+# Flags (ADR 0058) as a plane's values file sets them, and its int again from
+# --set, which Helm reads as an int64 where a values file gives a float64.
+helm template infrared "$chart" -n infrared -f "$chart/ci/flags-values.yaml" >"$out/flags.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/flags-values.yaml" --set api.flags.ciCount=1000000 >"$out/flags-set.yaml"
 helm template other "$chart" -n ir-test >"$out/other.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" >"$out/extensions.yaml"
@@ -378,6 +382,34 @@ else bad "the API default strategy is not RollingUpdate maxSurge 1 maxUnavailabl
 if [[ "$(objn api-recreate Deployment infrared-api '^    type: Recreate$|^    rollingUpdate:$|^      maxSurge:')" == 1 ]]; then
   ok "api.strategy.type Recreate renders Recreate alone, no rollingUpdate block"
 else bad "api.strategy.type Recreate renders a rollingUpdate block beside Recreate (or no Recreate)"; fi
+# api.flags (ADR 0058): the ConfigMap infrared-flags, rendered always, under that
+# name whatever the release is called, in the release namespace; the API reads it
+# by name every 15 seconds. Empty by default: every flag at its default.
+if [[ "$(objn defaults ConfigMap infrared-flags '^  namespace: infrared$|^data: \{\}$')" == 2 &&
+      "$(objn other ConfigMap infrared-flags '^  namespace: ir-test$|^data: \{\}$')" == 2 ]]; then
+  ok "infrared-flags rendered empty by default, under its fixed name in the release namespace"
+else bad "infrared-flags is not rendered with data: {} by default under its fixed name in the release namespace"; fi
+# Every value a quoted string, the form the API parses: the API server refuses a
+# bare bool or int in a ConfigMap, and a values file's int arrives as a float64,
+# which toString prints as 1e+06.
+if [[ "$(objn flags ConfigMap infrared-flags '^  [a-zA-Z]+: "')" == 3 ]]; then
+  ok "api.flags: a string, a bool and an int, each written into infrared-flags as a quoted string"
+else bad "infrared-flags does not hold ci/flags-values.yaml's three flags as quoted strings"; fi
+if [[ "$(objn flags ConfigMap infrared-flags '^  ciCount: "1000000"$|^  ciSwitch: "true"$')" == 2 ]]; then
+  ok "a seven-digit int from a values file renders as its digits, \"1000000\", and a bool as \"true\""
+else bad "infrared-flags' int is not \"1000000\" or its bool not \"true\": $(obj flags ConfigMap infrared-flags | grep -E '^  ci' | tr '\n' ' ')"; fi
+if [[ -n "$(obj flags-set ConfigMap infrared-flags)" && "$(obj flags-set ConfigMap infrared-flags)" == "$(obj flags ConfigMap infrared-flags)" ]]; then
+  ok "the same int from --set, an int64, renders the same infrared-flags"
+else bad "the int from --set renders infrared-flags otherwise than from a values file"; fi
+# Mounted nowhere and no checksum on the API's Deployment: setting a flag leaves
+# that Deployment as it was, so a changed flag rolls nothing.
+check flags.yaml "infrared-flags is named by its ConfigMap alone: no pod mounts it" 'infrared-flags' 1
+if [[ -n "$(obj flags Deployment infrared-api)" && "$(obj flags Deployment infrared-api)" == "$(obj defaults Deployment infrared-api)" ]]; then
+  ok "setting api.flags leaves the API's Deployment as it was: no checksum, so a changed flag rolls nothing"
+else bad "api.flags changes the API's Deployment, so a changed flag would roll the API"; fi
+if obj defaults ClusterRole infrared-api | grep -A1 -xF '    resources: ["configmaps"]' | grep -q '"get"'; then
+  ok "the API's ClusterRole gets ConfigMaps: it reads infrared-flags by name"
+else bad "the API's ClusterRole does not get ConfigMaps, so it cannot read infrared-flags"; fi
 if [[ "$(objn gitea Deployment gitea '^ +name: infrared-gitea-admin$')" == 2 ]]; then
   ok "Gitea's admin username and password come from infrared-gitea-admin"
 else bad "Gitea does not read its admin from infrared-gitea-admin"; fi
@@ -787,7 +819,7 @@ else bad "the Job infrared-gitea-restore, its Role, or Gitea's replicas are wron
 check restore.yaml "the chart renders no identity Secret" '^  name: infrared-backup-identity$' 0
 
 # Extensions: off by default; with ui.extensions, the UI proxies only the declared paths.
-check defaults.yaml "no extensions by default: no ConfigMap" '^kind: ConfigMap$' 0
+check defaults.yaml "no extensions by default: no ConfigMap of theirs" '^  name: infrared-ui-extensions$' 0
 check defaults.yaml "no extensions by default: no mount" 'infrared-ui/extensions' 0
 check defaults.yaml "no extensions by default: no proxy secret env" 'INFRARED_EXT_PROXY_SECRET' 0
 check defaults.yaml "no extensions by default: no checksum annotation" 'checksum/extensions' 0
@@ -958,6 +990,12 @@ refuse "an IRSA role without a region fails" "need registryToken.aws.region" \
 refuse "an IRSA role that is not a role ARN fails" "at '/registryToken/aws/roleArn'" \
   -f "$chart/ci/aws-values.yaml" --set registryToken.aws.roleArn=ci-registry-reader
 refuse "an ECR region that is not a region fails" "at '/registryToken/aws/region'" --set cloud=aws,registryToken.aws.region=east
+# api.flags (ADR 0058): a flag's key is camelCase with no dots, and its value a
+# string, a bool or an integer, which the template writes as a string (an
+# integer through int64: the schema lets no fraction through, so none is cut).
+refuse "a flag's key with a dot fails" "invalid propertyName 'sign.in'" --set-json 'api.flags={"sign.in":"x"}'
+refuse "a flag that is a map fails" "at '/api/flags/notice': got object" --set api.flags.notice.text=x
+refuse "a flag with a fraction fails" "at '/api/flags/ratio': got number" --set-json 'api.flags={"ratio":1.5}'
 
 # The registry token (a Google install): a ServiceAccount bound to the Google
 # service account, a Role on its one Secret, the first token at the install and
@@ -1570,7 +1608,7 @@ if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && g
 else bad "the chart's name leaks into what it renders"; fi
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

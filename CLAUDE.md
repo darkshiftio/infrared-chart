@@ -17,7 +17,10 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `infrared-platform-tokens` keys `google-client-id` and `google-client-secret`
   (Sign in with Google's client, read at use) and env `INFRARED_SIGN_IN_PASSWORD`
   (`signIn.password.enabled`). The API writes the ConfigMap `infrared-sign-in`
-  itself; the chart never renders it. The UI Service is `{{ include "infrared.fullname" . }}`
+  itself; the chart never renders it. The chart renders the ConfigMap
+  `infrared-flags` (`api.flags`, ADR 0058) always, by that fixed name, with
+  `data: {}` when none is set; the API only reads it, by name, every 15
+  seconds, so it is mounted nowhere and no Deployment carries its checksum. The UI Service is `{{ include "infrared.fullname" . }}`
   (`svc/infrared`), port 80 -> 8080.
 - ADR 0042, the API's side: env `INFRARED_DIRECTORY_SERVICE_ACCOUNT`,
   `INFRARED_DIRECTORY_API`, `INFRARED_DIRECTORY_INTERVAL`,

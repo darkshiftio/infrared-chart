@@ -631,6 +631,17 @@ api:
     tag: v0.1.0-alpha.164
     digest: "sha256:4208afdcd6010405c243707a586a7a42375bcda6cdabf5b1e2870d607e8cc091"
   replicas: 1
+  # -- How a new API rolls out. The default starts the new pod beside the old one (on the running
+  # pod's node when the media volume is mounted, see summaryvideo) and stops the old one only once
+  # the new one is ready, so the edge always has a ready pod: it needs a node with room for a
+  # second API. On a shape without that room (three e2-highmem-2, as a hosted control plane's),
+  # the new pod waits forever as Pending: set `strategy: {type: Recreate}` there, and the old pod
+  # stops before the new one starts (a short outage at each upgrade).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   extraArgs: []
   extraEnv: []
   # The API serves every page's reads: at 50m it waited on CPU up to 23% of the time while builds

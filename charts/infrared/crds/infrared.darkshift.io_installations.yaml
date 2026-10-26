@@ -470,6 +470,32 @@ spec:
                         - by
                         - since
                         type: object
+                      selfSignUp:
+                        description: |-
+                          SelfSignUp opens Sign in with Google to anyone with a verified Google
+                          account, personal or Workspace, as a hosted control plane does
+                          (infrared-docs-internal ADR 0057): a first sign-in that holds no role
+                          anywhere gets an org of its own on the install's Gitea, with Products
+                          Products allowed. Off (or unset), only the allowed domains sign in, as
+                          before. Set by a platform admin in Settings, Sign-in; refused on an
+                          install without Gitea, where an org with no forge could hold no Product.
+                        properties:
+                          enabled:
+                            description: |-
+                              Enabled admits any Google account with a verified address, and makes a
+                              first sign-in that holds no role an org of its own.
+                            type: boolean
+                          products:
+                            description: |-
+                              Products is how many Products the org a sign-up makes may hold
+                              (Organization.spec.limits.products); 0 means no limit.
+                            format: int32
+                            maximum: 1000
+                            minimum: 0
+                            type: integer
+                        required:
+                        - enabled
+                        type: object
                     type: object
                 type: object
               summaryVideos:

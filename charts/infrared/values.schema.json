@@ -543,6 +543,44 @@
           "type": "integer",
           "minimum": 0
         },
+        "strategy": {
+          "type": "object",
+          "description": "How a new API rolls out: the Deployment's strategy. The default surges (the new pod beside the old one, the old stops once the new is ready); Recreate where no node has room for a second API.",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "RollingUpdate",
+                "Recreate"
+              ]
+            },
+            "rollingUpdate": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "maxSurge": {
+                  "type": [
+                    "integer",
+                    "string"
+                  ]
+                },
+                "maxUnavailable": {
+                  "type": [
+                    "integer",
+                    "string"
+                  ]
+                }
+              }
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
         "extraArgs": {
           "type": "array",
           "items": {

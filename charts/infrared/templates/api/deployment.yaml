@@ -30,14 +30,12 @@ metadata:
 spec:
   replicas: {{ $c.replicas }}
   revisionHistoryLimit: 3
-  # A rollout starts the new pod and stops the old one only once the new one is
-  # ready, so the edge always has a ready pod (with the media volume, the new
-  # pod goes to the same node: see the affinity above).
+  # By default a rollout starts the new pod and stops the old one only once the
+  # new one is ready, so the edge always has a ready pod (with the media volume,
+  # the new pod goes to the same node: see the affinity above); api.strategy
+  # chooses Recreate where no node has room for a second API.
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+    {{- toYaml $c.strategy | nindent 4 }}
   selector:
     matchLabels:
       {{- include "infrared.selectorLabels" $ctx | nindent 6 }}

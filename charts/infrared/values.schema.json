@@ -581,6 +581,20 @@
             "type"
           ]
         },
+        "flags": {
+          "type": "object",
+          "description": "Flags (ADR 0058): install-class behaviour declared in infrared-api, rendered into the ConfigMap infrared-flags, which the API reads every 15 seconds with no rollout. Keys are camelCase with no dots; values are a string, a bool or an int, never a map or a list.",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "boolean",
+              "integer"
+            ]
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][A-Za-z0-9]*$"
+          }
+        },
         "extraArgs": {
           "type": "array",
           "items": {

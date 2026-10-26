@@ -1,0 +1,38 @@
+{{- /*
+Flags (api.flags, infrared-docs-internal ADR 0058): install-class behaviour
+declared in infrared-api and set per install in its values file, in its gitops
+repo. One ConfigMap with a fixed name, infrared-flags, in the release
+namespace, rendered always: with no flag set its data is empty, and every flag
+runs at its default. The API only reads it, by name, every 15 seconds (it keeps
+each read that long, as it keeps the ConfigMap infrared-sign-in, which it
+writes itself and this chart never renders); NotFound, as from a chart before
+api.flags, means every flag at its default. A key no flag declares, or a value
+that does not parse, is reported by the API (GET /v1/flags), never fatal.
+
+It is mounted nowhere, and the API's Deployment carries no checksum of it, so a
+changed flag reaches the API within 15 seconds and rolls nothing. The UI's
+ConfigMap does the opposite on purpose: nginx reads the extensions only when it
+starts, so the UI's Deployment carries their checksum and rolls when they
+change (templates/ui/deployment.yaml).
+
+Each value is written as a string, the form the API parses. Helm reads a values
+file through JSON, so an int there arrives as a float64, which toString prints
+as 1e+06: it is written from int64, its plain digits, as an int from --set
+already is. The schema takes integers alone, so int64 truncates nothing.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infrared-flags
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+{{- with .Values.api.flags }}
+data:
+  {{- range $key, $value := . }}
+  {{- if kindIs "float64" $value }}{{ $value = int64 $value }}{{ end }}
+  {{ $key }}: {{ $value | toString | quote }}
+  {{- end }}
+{{- else }}
+data: {}
+{{- end }}

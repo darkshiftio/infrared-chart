@@ -1,0 +1,12 @@
+# CI: api.flags with each kind of value a flag takes, as a plane's values file
+# carries them: a string (signInNotice, a flag infrared-api declares), a bool
+# and a seven-digit int (keys no flag declares, which the API reports as
+# unknown: the chart needs only their kinds). Each renders into the ConfigMap
+# infrared-flags as a quoted string, and the int as its digits, though Helm
+# reads a values file's numbers as float64. scripts/verify.sh sets the int with
+# --set too, which gives an int64, and the ConfigMap must not change.
+api:
+  flags:
+    signInNotice: "CI's notice: a line on the sign-in page."
+    ciSwitch: true
+    ciCount: 1000000

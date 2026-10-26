@@ -751,6 +751,18 @@ them on every sync (the gitops template syncs the `infrared` Application with
 `ServerSideApply=true`). On a helm-managed install, upgrade CRDs with
 `kubectl apply --server-side -f charts/infrared/crds/` before `helm upgrade`.
 
+**Flags** (`api.flags`, infrared-docs-internal ADR 0058) go in the install's values
+file in its gitops repo, `registry/clusters/<cluster>/values/infrared.yaml`, as
+`infrared-core.api.flags.<key>` where the umbrella chart `infrared` wraps this one.
+Argo CD renders them into the ConfigMap `infrared-flags`, and the API reads it
+within 15 seconds, with no rollout. A self-hosted install may set any flag in its
+values file, so a flag never opens anything the licence withholds, or anything
+unsafe: what an install may use stays the licence's to decide. A key an older
+chart's schema refuses stops the Application rendering: `api` takes no key its
+schema does not name, so a chart before 0.1.0-alpha.214 refuses `api.flags` as an
+additional property. A plane's `api.flags` therefore goes into its values file
+only after the pin to a chart with `api.flags` is Synced.
+
 ## Values
 
 | Key | Default | Description |
@@ -764,6 +776,8 @@ them on every sync (the gitops template syncs the `infrared` Application with
 | `api.directory.serviceAccount` | `""` | The Google service account the API impersonates to read Workspace groups (`INFRARED_DIRECTORY_SERVICE_ACCOUNT`), `<name>@<project>.iam.gserviceaccount.com`, holding the Workspace role Groups Reader; empty: the directory is off, and no group gives a role. Rendered only when set. See "Sign-in, roles and git connectors" |
 | `api.directory.api` | `admin` | `admin`, the Admin SDK Directory API, which tells a suspended person (who then holds nothing) and needs `admin.googleapis.com` in the account's project; or `cloud-identity` (`INFRARED_DIRECTORY_API`) |
 | `api.directory.interval` / `.maxAge` | `2m` / `10m` | How often the groups are read, and how long a group's last good read gives roles (`INFRARED_DIRECTORY_INTERVAL`, `INFRARED_DIRECTORY_MAX_AGE`), Go durations; each empty one is left to the API, which has the same defaults |
+| `api.strategy` | `{type: RollingUpdate, rollingUpdate: {maxSurge: 1, maxUnavailable: 0}}` | How a new API rolls out, the Deployment's strategy. The default starts the new pod beside the old one and stops the old one once the new one is ready, so it needs a node with room for a second API. On a shape without that room, such as a hosted control plane's three `e2-highmem-2`, set `{type: Recreate}`: the old pod stops first (a short outage at each upgrade), and no `rollingUpdate` block is rendered beside it (since 0.1.0-alpha.213) |
+| `api.flags` | `{}` | Flags (infrared-docs-internal ADR 0058): install-class behaviour declared in infrared-api, with its default in code, read through `GET /v1/flags`. Each key is a flag's camelCase name with no dots, such as `signInNotice`, and each value a string, a bool or an int; the schema refuses a dotted key, a map, a list and a fraction. They render the ConfigMap `infrared-flags` in the release namespace, always (no data when none is set), each value written as a string; the API reads it by name every 15 seconds, and it is mounted nowhere, so a change rolls nothing. A key no flag declares is reported by the API, never fatal. A self-hosted install may set any flag; a flag never opens anything the licence withholds. See "Upgrading" |
 | `oidc.enabled` | `false` | Infrared as the OpenID Connect provider of the install's own tools, Grafana and Gitea (`INFRARED_OIDC`, api and operator; infrared-docs-internal ADR 0053), at the Installation's sign-in URL with `/api/v1/oidc`. With `oidc.grafanaURL` the gitops template signs people in to Grafana through it; with `gitea.browserURL` and `installation.previews.signInURL` this chart signs them in to Gitea. See "Signing in to the install's tools through Infrared" |
 | `oidc.grafanaURL` | `""` | Grafana's address in a browser, `https://` (plain `http://` only for localhost), such as `https://grafana.example.com` (`INFRARED_OIDC_GRAFANA_URL`, api and operator, a trailing slash trimmed). Grafana's redirect URI is `<grafanaURL>/login/generic_oauth`; empty: no Grafana client |
 | `oidc.mcpURL` | `""` | Where MCP clients on people's machines (Claude Code, `ir` for localred) reach the code index's tools, signed in through Infrared: the UI's address followed by `/mcp/code`, such as `https://infrared.example.com/mcp/code`, `https://` (plain `http://` only for localhost), a trailing slash trimmed. Set, the API has the public client `mcp` (`INFRARED_OIDC_MCP_URL`); with `oidc.enabled`, infrared-mcp serves the code tools and `knowledge_sources` there, for the platform org alone, to the provider's access tokens for this address (`INFRARED_MCP_CODE_URL`). Empty: the code tools stay inside the cluster |

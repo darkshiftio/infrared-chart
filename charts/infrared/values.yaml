@@ -643,6 +643,13 @@ api:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
+  # -- Flags (infrared-docs-internal ADR 0058): install-class behaviour declared in infrared-api,
+  # with its default in code, and read through GET /v1/flags. Set here, from the install's values
+  # file in its gitops repo, they render the ConfigMap infrared-flags, which the API reads every 15
+  # seconds: a change rolls nothing. Keys are camelCase, no dots (`signInNotice`); values are a
+  # string, a bool or an int, each written as a string. Empty: every flag at its default. A
+  # self-hosted install may set any flag, and a flag never opens anything the licence withholds.
+  flags: {}
   extraArgs: []
   extraEnv: []
   # The API serves every page's reads: at 50m it waited on CPU up to 23% of the time while builds

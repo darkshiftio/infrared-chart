@@ -77,8 +77,14 @@ installation:
   # `signInURL`, and optionally `ingressHost`, `ingressIP`, `managedRoots`,
   # `cloudflareTokenSecret`, `cloudflareTokenKey`, `customHostnames` (a Gateway
   # edge serves addresses under orgs' own domains as Cloudflare for SaaS custom
-  # hostnames) and `acmeEmail`. Written to the Installation's `spec.previews`.
-  # Empty leaves previews to a person, as before.
+  # hostnames), `acmeEmail` and `domainTokenKey` (the key of
+  # infrared-platform-tokens that holds a Cloudflare token for `domain`'s zone
+  # alone, when that zone is not the sign-in URL host's: a hosted plane's
+  # tenants' domain, infrared-docs-internal ADR 0063; on a Gateway edge the
+  # certificate and DNS records of `*.<domain>` then use it, and Infrared's own
+  # name keeps `cloudflare-api-token`; `cloudflare-domain-api-token` with
+  # platformTokens.cloudflareDomainApiToken). Written to the Installation's
+  # `spec.previews`. Empty leaves previews to a person, as before.
   previews: {}
   #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
   #   signInURL: https://infrared.example.com  # where preview visitors sign in
@@ -448,6 +454,16 @@ platformTokens:
   # -- Cloudflare API token (key `cloudflare-api-token`), for the edge's DNS
   # records and origin certificates.
   cloudflareApiToken: ""
+  # -- A Cloudflare token for the zone of `installation.previews.domain` alone
+  # (key `cloudflare-domain-api-token`), when that zone is not the one of
+  # Infrared's own name and its token is kept apart (a hosted plane's tenants'
+  # domain, infrared-docs-internal ADR 0063). With
+  # `installation.previews.domainTokenKey: cloudflare-domain-api-token`, a
+  # Gateway edge takes the certificate and DNS records of `*.<domain>` with it,
+  # and keeps `cloudflareApiToken` for Infrared's own name. It needs Zone Read,
+  # DNS Edit and SSL and Certificates Edit on that zone. Pass it with
+  # --set-file.
+  cloudflareDomainApiToken: ""
   # -- Access key ID of the backup bucket's key (key `backup-access-key-id`);
   # required with the secret access key. Not with Google Cloud Storage
   # (`backup.endpoint` `https://storage.googleapis.com`), which takes no key:

@@ -118,6 +118,27 @@
             "cloudflareTokenSecret": {
               "type": "string",
               "description": "A Secret in the release namespace whose api-token key may edit DNS for the managed roots."
+            },
+            "cloudflareTokenKey": {
+              "type": "string",
+              "description": "The key of cloudflareTokenSecret that holds the token; empty is api-token. infrared-platform-tokens holds it as cloudflare-api-token."
+            },
+            "customHostnames": {
+              "type": "boolean",
+              "description": "On a Gateway edge behind Cloudflare, an address under an org's external Domain becomes a Cloudflare for SaaS custom hostname on the zone of the managed root that holds ingressHost, its origin certificate from Let's Encrypt over HTTP-01."
+            },
+            "acmeEmail": {
+              "type": "string",
+              "description": "The address Let's Encrypt writes to about the custom hostnames' origin certificates; empty registers without one."
+            },
+            "domainTokenKey": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[-._a-zA-Z0-9]+$",
+              "not": {
+                "pattern": "^[.]([.]|$)"
+              },
+              "description": "The key of infrared-platform-tokens that holds a Cloudflare token for domain's zone alone, when it is not the sign-in URL host's zone (infrared-docs-internal ADR 0063): cloudflare-domain-api-token, from platformTokens.cloudflareDomainApiToken. A Gateway edge then takes the certificate and DNS records of *.<domain> with it. A Secret's key: letters, digits, '-', '_' and '.', neither . nor starting with ..; empty: cloudflare-api-token serves both names."
             }
           },
           "anyOf": [
@@ -335,6 +356,10 @@
         "cloudflareApiToken": {
           "type": "string",
           "description": "Key cloudflare-api-token. Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "cloudflareDomainApiToken": {
+          "type": "string",
+          "description": "Key cloudflare-domain-api-token: a Cloudflare token for installation.previews.domain's zone alone, which installation.previews.domainTokenKey names (infrared-docs-internal ADR 0063). Pass it with --set-file; surrounding whitespace is trimmed."
         },
         "backupAccessKeyId": {
           "type": "string",

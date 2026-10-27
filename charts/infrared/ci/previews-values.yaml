@@ -1,0 +1,19 @@
+# CI: every field of installation.previews that values.yaml documents, set at
+# once, as a hosted plane on a Gateway edge sets them: its tenants' domain in a
+# Cloudflare zone of its own with that zone's token (infrared-docs-internal ADR
+# 0063), the managed roots with their token, and custom hostnames with
+# Let's Encrypt's contact. The schema takes them all, and the operator gets
+# them whole in INFRARED_PREVIEWS.
+installation:
+  edge: gateway
+  previews:
+    domain: tenants.example.net
+    signInURL: https://infrared.example.com
+    ingressHost: edge.tenants.example.net
+    ingressIP: 203.0.113.7
+    managedRoots: [example.com]
+    cloudflareTokenSecret: infrared-platform-tokens
+    cloudflareTokenKey: cloudflare-api-token
+    customHostnames: true
+    acmeEmail: alerts@example.com
+    domainTokenKey: cloudflare-domain-api-token

@@ -393,6 +393,18 @@ spec:
                       record for the domain must point at the management cluster's ingress.
                     minLength: 1
                     type: string
+                  domainTokenKey:
+                    description: |-
+                      DomainTokenKey is the key of the Secret infrared-platform-tokens that
+                      holds a Cloudflare token for Domain's zone, when Domain is in another
+                      Cloudflare zone than SignInURL's host and that token is kept apart (a
+                      hosted plane's tenants' domain, infrared-docs-internal ADR 0063). The
+                      Gateway edge then takes the certificate and DNS records of *.<Domain>
+                      with it, and those of Infrared's own name with cloudflare-api-token.
+                      Empty means cloudflare-api-token serves both.
+                    maxLength: 253
+                    pattern: ^[-._a-zA-Z0-9]+$
+                    type: string
                   ingressHost:
                     description: |-
                       IngressHost is the name customers point their own domains at with a

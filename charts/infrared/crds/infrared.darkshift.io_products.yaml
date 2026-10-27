@@ -297,12 +297,15 @@ spec:
                       its zones' files into the gitops repo, then start its first Release.
                     properties:
                       kind:
-                        description: 'Kind of app: static (files served by nginx),
-                          node or go.'
+                        description: |-
+                          Kind of app: static (files served by nginx), node, go, or auto (for a
+                          new repo whose first code is still to come). Only static sets build
+                          settings; the others leave the stack to the buildpacks to find.
                         enum:
                         - static
                         - node
                         - go
+                        - auto
                         type: string
                       root:
                         description: Root is the directory of a static site within

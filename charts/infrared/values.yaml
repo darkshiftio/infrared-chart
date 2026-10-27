@@ -107,12 +107,13 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here main's 9c1bcd5 (#21), which
-  # operator e3b9bf5 renders: the telemetry component, a scrape of Infrared's own
-  # metrics ports, VMSingle at 512Mi to 2Gi and the Fleet dashboard's fourth cut.
+  # to install from a branch of the template. Here main's b256f41 (#33): the
+  # builder's first group builds a Go service's UI with Node before Go (kpack
+  # ignores a repo's project.toml groups), with #30 (SeaweedFS's 1000 volume
+  # slots a server) and #31 (the Go buildpack 4.23.1, which offers Go 1.27).
   # New gitops repos take it; an existing one keeps its spec.template.version
   # until that is patched.
-  templateVersion: 0c2cdba6acae522b543925ed8923494821c2b8d3
+  templateVersion: b256f41c8c319fea7d1a3e99732ff28da27b9a9c
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

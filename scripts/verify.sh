@@ -337,6 +337,9 @@ helm template infrared "$chart" -n infrared "${domain_token[@]}" --set platformT
 envs domain-token-install
 check install.yaml "no cloudflare-domain-api-token without platformTokens.cloudflareDomainApiToken" '^  cloudflare-domain-api-token: ' 0
 check defaults.yaml "the Installation CRD has spec.previews.domainTokenKey" '^                  domainTokenKey:$' 1
+# The operator records what a hydration rendered from the edge and the
+# previews, so a change of them hydrates the gitops repo again.
+check defaults.yaml "the GitopsRepo CRD has status.edgeDigest" '^              edgeDigest:$' 1
 check domain-token.yaml "the domain's token alone renders infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check domain-token.yaml "...with no cloudflare-api-token" '^  cloudflare-api-token: ' 0
 check domain-token-existing.yaml "platformTokens.existingSecret: no infrared-platform-tokens, even with the domain's token" '^  name: infrared-platform-tokens$' 0

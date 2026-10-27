@@ -260,6 +260,17 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              edgeDigest:
+                description: |-
+                  EdgeDigest is a digest of what the hydration commit renders from the
+                  Installation's spec.edge and spec.previews: the edge, the platform
+                  domain, Infrared's host, custom hostnames, Let's Encrypt's contact and
+                  the key of the platform domain's own Cloudflare token. Empty when it
+                  renders none of them. A change of any of them hydrates the repo again,
+                  so a platform domain that moves, to a zone of its own among others
+                  (infrared-docs-internal ADR 0063), reaches the gitops repo without a
+                  new template version.
+                type: string
               hydratedByChartVersion:
                 description: |-
                   HydratedByChartVersion is the chart version of the operator that ran the

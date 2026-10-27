@@ -259,8 +259,9 @@ spec:
                 type: string
               returnRounds:
                 description: |-
-                  ReturnRounds counts how often a QA step sent the run back to the
-                  builder with CODE CHANGE NEEDED (ADR 0047, C10).
+                  ReturnRounds counts how often a step (QA or a reviewer) sent the run
+                  back to the builder with CODE CHANGE NEEDED (ADR 0047, C10). Each step
+                  may do so its own maxReturns times.
                 format: int32
                 type: integer
               startedAt:
@@ -488,12 +489,13 @@ spec:
                     rounds:
                       description: |-
                         Rounds are the step's earlier rounds, oldest first: each time a later
-                        step (QA) sent the run back to the builder with CODE CHANGE NEEDED, the
-                        step's result until then was kept here before it ran again.
+                        step (QA or a reviewer) sent the run back to the builder with CODE
+                        CHANGE NEEDED, the step's result until then was kept here before it ran
+                        again.
                       items:
                         description: |-
-                          StepRound is how a step ended in one round, before a QA step sent the run
-                          back to the builder (ADR 0047, C10).
+                          StepRound is how a step ended in one round, before a QA or reviewer step
+                          sent the run back to the builder (ADR 0047, C10).
                         properties:
                           attempts:
                             description: Attempts the step made in the round.

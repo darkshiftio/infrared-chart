@@ -203,8 +203,10 @@ spec:
                     maxReturns:
                       description: |-
                         MaxReturns bounds how often this step may send the run back to
-                        returnTo; the next CODE CHANGE NEEDED fails the step, and onFailure
-                        hands the Change to a person. Omitted means 2.
+                        returnTo; its next CODE CHANGE NEEDED fails the step, and onFailure
+                        hands the Change to a person. A reviewer's, on a net-new build (its
+                        issue labelled infrared:greenfield), becomes an issue labelled
+                        infrared:blocks-release instead, and the Change goes on. Omitted means 2.
                       format: int32
                       maximum: 5
                       minimum: 1
@@ -262,9 +264,12 @@ spec:
                       description: |-
                         ReturnTo names an earlier agentRole step the run goes back to when this
                         step ends with the verdict CODE CHANGE NEEDED: QA found that the product
-                        code, not the test, is wrong, so the builder fixes it on the same branch
-                        and every step from it runs again (ADR 0047, C10). The earlier rounds
-                        stay on each step as its rounds. Only agentRole steps.
+                        code, not the test, is wrong, or a reviewer found a problem whose fix is
+                        the builder's, so the builder fixes it on the same branch and every step
+                        from it runs again (ADR 0047, C10). The earlier rounds stay on each step
+                        as its rounds. A step whose AgentRole may answer TEST CHANGED is a QA
+                        step: Infrared reads CI for it before its agent starts. Only agentRole
+                        steps.
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string
                     timeout:

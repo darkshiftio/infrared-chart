@@ -138,7 +138,8 @@ spec:
                       type: string
                     source:
                       description: 'Source is a short identifier: diff, repo, issue,
-                        product-docs, logs, metrics, traces, release-notes, social.'
+                        attachments, product-docs, logs, metrics, traces, release-notes,
+                        social.'
                       type: string
                   required:
                   - source

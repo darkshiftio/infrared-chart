@@ -248,6 +248,30 @@ spec:
                   signIn.google.selfSignUp (infrared-docs-internal ADR 0057), changed by
                   a platform admin. Unset means none.
                 properties:
+                  newTeams:
+                    description: |-
+                      NewTeams caps the Teams the org may make besides the catalog's
+                      default Teams: unset means no cap, and 0 means none, the free tier's
+                      (it keeps its default Teams). A default Team the org removed may
+                      always be made again. The API refuses the Team past it, saying what to
+                      do; a platform admin may make Teams past it.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                  people:
+                    description: |-
+                      People caps the people the org names, counted in each place: its
+                      access groups' distinct addresses and GitHub logins, and its Humans.
+                      0 means no cap; the free tier is 1, its owner. AgentRoles are not
+                      people. While capped, an access group names no Workspace group or
+                      GitHub team it did not name before, since their people cannot be
+                      counted. The API refuses the person past it, saying what to do; a
+                      platform admin may add people past it.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
                   products:
                     description: |-
                       Products caps the org's Products; 0 means no cap. The API refuses the
@@ -256,6 +280,15 @@ spec:
                     maximum: 1000
                     minimum: 0
                     type: integer
+                  publicEnvironments:
+                    description: |-
+                      PublicEnvironments says whether the org may make an environment
+                      public, open to anyone without Infrared sign-in (a zone's public):
+                      unset allows it, and false refuses it, the free tier's, since a
+                      public zone would serve a stranger's site at the install's preview
+                      domain. A zone public already stays public. The API refuses making
+                      one public, saying what to do; a platform admin may.
+                    type: boolean
                 type: object
               modelTiers:
                 description: |-

@@ -475,8 +475,9 @@ spec:
                           SelfSignUp opens Sign in with Google to anyone with a verified Google
                           account, personal or Workspace, as a hosted control plane does
                           (infrared-docs-internal ADR 0057): a first sign-in that holds no role
-                          anywhere gets an org of its own on the install's Gitea, with Products
-                          Products allowed. Off (or unset), only the allowed domains sign in, as
+                          anywhere gets an org of its own on the install's Gitea, its limits
+                          copied from Products, People, NewTeams and PublicEnvironments, each
+                          field as it is set here. Off (or unset), only the allowed domains sign in, as
                           before. Set by a platform admin in Settings, Sign-in; refused on an
                           install without Gitea, where an org with no forge could hold no Product.
                         properties:
@@ -485,6 +486,24 @@ spec:
                               Enabled admits any Google account with a verified address, and makes a
                               first sign-in that holds no role an org of its own.
                             type: boolean
+                          newTeams:
+                            description: |-
+                              NewTeams is how many Teams the org a sign-up makes may make besides
+                              the catalog's default Teams (Organization.spec.limits.newTeams):
+                              unset means no limit, and 0 the default Teams alone.
+                            format: int32
+                            maximum: 1000
+                            minimum: 0
+                            type: integer
+                          people:
+                            description: |-
+                              People is how many people the org a sign-up makes may name
+                              (Organization.spec.limits.people): 1 is its owner alone, and 0 means
+                              no limit.
+                            format: int32
+                            maximum: 1000
+                            minimum: 0
+                            type: integer
                           products:
                             description: |-
                               Products is how many Products the org a sign-up makes may hold
@@ -493,6 +512,12 @@ spec:
                             maximum: 1000
                             minimum: 0
                             type: integer
+                          publicEnvironments:
+                            description: |-
+                              PublicEnvironments is whether the org a sign-up makes may make an
+                              environment public (Organization.spec.limits.publicEnvironments):
+                              unset allows it, and false keeps its environments behind sign-in.
+                            type: boolean
                         required:
                         - enabled
                         type: object

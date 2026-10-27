@@ -280,6 +280,15 @@ spec:
                     maximum: 1000
                     minimum: 0
                     type: integer
+                  publicEnvironments:
+                    description: |-
+                      PublicEnvironments says whether the org may make an environment
+                      public, open to anyone without Infrared sign-in (a zone's public):
+                      unset allows it, and false refuses it, the free tier's, since a
+                      public zone would serve a stranger's site at the install's preview
+                      domain. A zone public already stays public. The API refuses making
+                      one public, saying what to do; a platform admin may.
+                    type: boolean
                 type: object
               modelTiers:
                 description: |-

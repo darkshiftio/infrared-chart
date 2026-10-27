@@ -352,6 +352,47 @@ if [[ "$(secret domain-token infrared-platform-tokens cloudflare-domain-api-toke
 else bad "infrared-platform-tokens' cloudflare-domain-api-token is not the domain's token, trimmed, beside the platform's"; fi
 has domain-token-install.env "the previews' domainTokenKey reaches the operator, as JSON" \
   'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"managedRoots\":[],\"signInURL\":\"https://infrared.example.com\"}"'
+# The Cloudflare Tunnel a Gateway edge is reached through (infrared-docs-internal
+# ADR 0064): installation.tunnel reaches the operator as INFRARED_TUNNEL, as
+# JSON, only when set; the tunnel's credentials file is
+# cloudflare-tunnel-credentials, byte for byte but for one trailing newline,
+# inner whitespace kept; alone it renders the Secret, beside the platform's it
+# adds its key, and existingSecret renders none. The refusals are below.
+tunnel_id=6ff42ae2-765d-4adf-8112-31c55c1551ef
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"%s", "Endpoint": ""}\n' "$tunnel_id" \
+  >"$out/ci-tunnel-credentials"
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"%s", "Endpoint": ""}' "$tunnel_id" \
+  >"$out/ci-tunnel-credentials-stored"
+tunnel_credentials=(--set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-credentials")
+helm template infrared "$chart" -n infrared "${tunnel_credentials[@]}" >"$out/tunnel-credentials.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" "${tunnel_credentials[@]}" --set installation.tunnel.id="$tunnel_id" \
+  >"$out/tunnel-install.yaml"
+helm template infrared "$chart" -n infrared "${tunnel_credentials[@]}" --set platformTokens.existingSecret=infrared-platform-tokens \
+  >"$out/tunnel-existing.yaml"
+# A credentials key of the install's own, kept in a Secret it makes, as after
+# Argo CD adopts the release: the gitops template carries the key.
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.credentialsKey=tunnel-saas2 --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-own-key.yaml"
+envs tunnel-install
+envs tunnel-own-key
+check defaults.env "no tunnel by default" '^INFRARED_TUNNEL=' 0
+check install.env "no tunnel without installation.tunnel" '^INFRARED_TUNNEL=' 0
+has tunnel-install.env "installation.tunnel reaches the operator, as JSON" 'INFRARED_TUNNEL="{\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
+has tunnel-own-key.env "a credentials key of the install's own reaches the operator with the tunnel" \
+  'INFRARED_TUNNEL="{\"credentialsKey\":\"tunnel-saas2\",\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
+check defaults.yaml "the Installation CRD has spec.tunnel" '^              tunnel:$' 1
+check defaults.yaml "...whose credentialsKey defaults to cloudflare-tunnel-credentials" '^                    default: cloudflare-tunnel-credentials$' 1
+check install.yaml "no cloudflare-tunnel-credentials without platformTokens.cloudflareTunnelCredentials" '^  cloudflare-tunnel-credentials: ' 0
+check tunnel-credentials.yaml "the tunnel's credentials alone render infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
+check tunnel-credentials.yaml "...with no other key" '^  (cloudflare-api-token|cloudflare-domain-api-token|backup-access-key-id|backup-secret-access-key): ' 0
+check tunnel-existing.yaml "platformTokens.existingSecret: no infrared-platform-tokens, even with the tunnel's credentials" '^  name: infrared-platform-tokens$' 0
+check tunnel-install.yaml "beside the platform's tokens, the tunnel's credentials and the bucket's key" \
+  '^  (cloudflare-api-token|cloudflare-tunnel-credentials|backup-access-key-id|backup-secret-access-key): ' 4
+secret tunnel-install infrared-platform-tokens cloudflare-tunnel-credentials >"$out/tunnel-stored"
+secret tunnel-credentials infrared-platform-tokens cloudflare-tunnel-credentials >"$out/tunnel-stored-alone"
+if cmp -s "$out/tunnel-stored" "$out/ci-tunnel-credentials-stored" && cmp -s "$out/tunnel-stored-alone" "$out/ci-tunnel-credentials-stored"; then
+  ok "the tunnel's credentials under cloudflare-tunnel-credentials, byte for byte but the trailing newline, inner whitespace kept"
+else bad "infrared-platform-tokens' cloudflare-tunnel-credentials is not the credentials file less its trailing newline"; fi
 # Every field of installation.previews that values.yaml documents, set at once
 # in one values file: the schema takes them all, and the operator gets them
 # whole in INFRARED_PREVIEWS.
@@ -953,6 +994,38 @@ refuse "a domainTokenKey that is no Secret's key fails" "at '/installation/previ
 refuse "a domainTokenKey no Secret takes fails" "at '/installation/previews/domainTokenKey'" \
   --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
   --set-string installation.previews.domainTokenKey=..
+# The tunnel (ADR 0064): its id a lower-case UUID and required, its key a
+# Secret's; a credentials file that is no JSON object with a TunnelID, or
+# another tunnel's, and a credentials key the chart does not write, each
+# refused without the file in the message.
+refuse "a tunnel id that is no lower-case UUID fails" "at '/installation/tunnel/id'" \
+  --set installation.tunnel.id=6FF42AE2-765D-4ADF-8112-31C55C1551EF
+refuse "a tunnel id that is its name fails" "at '/installation/tunnel/id'" --set installation.tunnel.id=saas2
+refuse "a tunnel without an id fails" "missing property 'id'" --set installation.tunnel.credentialsKey=cloudflare-tunnel-credentials
+refuse "a tunnel's credentialsKey that is no Secret's key fails" "at '/installation/tunnel/credentialsKey'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.credentialsKey=tokens/tunnel
+refuse "a tunnel's credentialsKey no Secret takes fails" "at '/installation/tunnel/credentialsKey'" \
+  --set installation.tunnel.id="$tunnel_id" --set-string installation.tunnel.credentialsKey=..
+printf 'ci-not-json\n' >"$out/ci-tunnel-not-json"
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret="}\n' >"$out/ci-tunnel-no-id"
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"0b2a7a51-1c39-4d4e-9b0e-2f6a31e4c7d8"}\n' \
+  >"$out/ci-tunnel-other"
+: >"$out/tunnel-refusals.log"
+refuse "tunnel credentials that are no JSON fail" "a JSON object with its TunnelID" \
+  --set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-not-json"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+refuse "tunnel credentials without a TunnelID fail" "a JSON object with its TunnelID" \
+  --set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-no-id"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+refuse "another tunnel's credentials fail" "is another tunnel's" --set installation.tunnel.id="$tunnel_id" \
+  --set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-other"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+refuse "the tunnel's credentials under a key installation.tunnel.credentialsKey does not name fail" "does not name" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.credentialsKey=tunnel-saas2 "${tunnel_credentials[@]}"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+if [ -s "$out/tunnel-refusals.log" ] && ! grep -q 'ci-not-json\|ci-tunnel-secret\|ci-account' "$out/tunnel-refusals.log"; then
+  ok "a refused tunnel credentials file is never printed"
+else bad "a refused tunnel credentials file is printed, or nothing was refused"; fi
 refuse "a template version that is a branch fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=main
 refuse "a short commit SHA fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=0123456
 refuse "imageCredentials without imagePullSecrets fail" "imageCredentials needs imagePullSecrets[0].name" \

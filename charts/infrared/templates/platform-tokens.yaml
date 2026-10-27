@@ -27,6 +27,14 @@ installation.previews.domainTokenKey names (infrared-docs-internal ADR 0063):
 the template copies it for the edge's certificate of *.<domain> and for the
 external-dns of that zone.
 
+A plane behind a Cloudflare Tunnel (installation.tunnel, infrared-docs-internal
+ADR 0064) keeps the tunnel's credentials file as cloudflare-tunnel-credentials
+(platformTokens.cloudflareTunnelCredentials), which the template copies to
+cloudflared. It is JSON, so only one trailing newline is trimmed, and it must
+be an object with a TunnelID, the same UUID as installation.tunnel.id when that
+is set; with it, installation.tunnel.credentialsKey names this key or none.
+No check prints the file.
+
 Kept on uninstall, and when the values stop carrying the tokens (Argo CD renders
 the chart without them after adoption, and with existingSecret once the
 template's `infrared` Application carries the code index), like the generated
@@ -35,6 +43,8 @@ Secrets.
 {{- $t := .Values.platformTokens }}
 {{- $cloudflare := trim (default "" $t.cloudflareApiToken) }}
 {{- $cloudflareDomain := trim (default "" $t.cloudflareDomainApiToken) }}
+{{- $tunnelCredentials := trimSuffix "\n" (default "" $t.cloudflareTunnelCredentials) }}
+{{- $tunnel := .Values.installation.tunnel | default dict }}
 {{- $backupID := trim (default "" $t.backupAccessKeyId) }}
 {{- $backupSecret := trim (default "" $t.backupSecretAccessKey) }}
 {{- $appID := trim (default "" $t.codeIndexGithubAppId) }}
@@ -65,10 +75,26 @@ Secrets.
 {{- fail "platformTokens.codeIndexGithubAppId and platformTokens.codeIndexGithubAppInstallationId are numbers: the App's ID and its installation's" }}
 {{- end }}
 {{- end }}
+{{- if $tunnelCredentials }}
+{{- $credentials := fromJson $tunnelCredentials }}
+{{- $credentialsID := "" }}
+{{- if and (not (hasKey $credentials "Error")) (kindIs "string" (get $credentials "TunnelID")) }}
+{{- $credentialsID = get $credentials "TunnelID" | lower }}
+{{- end }}
+{{- if not $credentialsID }}
+{{- fail "platformTokens.cloudflareTunnelCredentials is a Cloudflare Tunnel's credentials file: a JSON object with its TunnelID, passed with --set-file" }}
+{{- end }}
+{{- if and $tunnel.id (ne $credentialsID $tunnel.id) }}
+{{- fail "platformTokens.cloudflareTunnelCredentials is another tunnel's: its TunnelID is not installation.tunnel.id" }}
+{{- end }}
+{{- if and (not $t.existingSecret) (ne (default "cloudflare-tunnel-credentials" $tunnel.credentialsKey) "cloudflare-tunnel-credentials") }}
+{{- fail "platformTokens.cloudflareTunnelCredentials writes the key cloudflare-tunnel-credentials, which installation.tunnel.credentialsKey does not name: leave the key empty, or keep the credentials under it in platformTokens.existingSecret" }}
+{{- end }}
+{{- end }}
 {{- if and (or $googleID $googleSecret) (not (and $googleID $googleSecret)) }}
 {{- fail "platformTokens.googleClientId and platformTokens.googleClientSecret go together, Sign in with Google's OAuth client: pass both (the secret with --set-file)" }}
 {{- end }}
-{{- if and (or $cloudflare $cloudflareDomain $backupID $appKey $googleID (and $codeIndex $knowledgeURL)) (not $t.existingSecret) }}
+{{- if and (or $cloudflare $cloudflareDomain $tunnelCredentials $backupID $appKey $googleID (and $codeIndex $knowledgeURL)) (not $t.existingSecret) }}
 {{- if and $codeIndex (not $knowledgeURL) }}
 {{- fail "codeIndex.enabled needs codeIndex.knowledge.url, the record the code index reads: infrared-platform-tokens carries it to the gitops template, which copies it to code-index/code-index-settings" }}
 {{- end }}
@@ -88,6 +114,9 @@ data:
   {{- end }}
   {{- with $cloudflareDomain }}
   cloudflare-domain-api-token: {{ . | b64enc | quote }}
+  {{- end }}
+  {{- with $tunnelCredentials }}
+  cloudflare-tunnel-credentials: {{ . | b64enc | quote }}
   {{- end }}
   {{- with $backupID }}
   backup-access-key-id: {{ . | b64enc | quote }}

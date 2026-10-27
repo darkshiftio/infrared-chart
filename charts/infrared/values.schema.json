@@ -153,6 +153,37 @@
             }
           ]
         },
+        "tunnel": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "spec.tunnel (INFRARED_TUNNEL, as JSON): the Cloudflare Tunnel a Gateway edge is reached through (infrared-docs-internal ADR 0064); empty, the edge is on the nodes' own ports.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "The tunnel's UUID, lower case; not a secret."
+            },
+            "credentialsKey": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[-._a-zA-Z0-9]+$",
+              "not": {
+                "pattern": "^[.]([.]|$)"
+              },
+              "description": "The key of infrared-platform-tokens that holds the tunnel's credentials file. A Secret's key: letters, digits, '-', '_' and '.', neither . nor starting with ..; empty: cloudflare-tunnel-credentials, which platformTokens.cloudflareTunnelCredentials writes."
+            }
+          },
+          "anyOf": [
+            {
+              "maxProperties": 0
+            },
+            {
+              "required": [
+                "id"
+              ]
+            }
+          ]
+        },
         "telemetry": {
           "type": "object",
           "additionalProperties": false,
@@ -360,6 +391,10 @@
         "cloudflareDomainApiToken": {
           "type": "string",
           "description": "Key cloudflare-domain-api-token: a Cloudflare token for installation.previews.domain's zone alone, which installation.previews.domainTokenKey names (infrared-docs-internal ADR 0063). Pass it with --set-file; surrounding whitespace is trimmed."
+        },
+        "cloudflareTunnelCredentials": {
+          "type": "string",
+          "description": "Key cloudflare-tunnel-credentials: a Cloudflare Tunnel's credentials file, a JSON object whose TunnelID is installation.tunnel.id (infrared-docs-internal ADR 0064). Pass it with --set-file; one trailing newline is trimmed, nothing else."
         },
         "backupAccessKeyId": {
           "type": "string",

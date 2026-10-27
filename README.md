@@ -168,7 +168,7 @@ newline.
 | Secret (namespace = release) | Type, key | From | Read by |
 |---|---|---|---|
 | The name in `imagePullSecrets[0]` | `kubernetes.io/dockerconfigjson`, `.dockerconfigjson`: one entry for `imageCredentials.registry` (default `ghcr.io`) | `imageCredentials.username` and `imageCredentials.password`, both or neither. Neither: the Secret must already exist, as before | The kubelet for every pod; the operator for Argo CD's chart repository Secret and for runner Jobs, which it copies the Secret to |
-| `infrared-platform-tokens` | `Opaque`: `cloudflare-api-token`, `cloudflare-domain-api-token`, `backup-access-key-id` and `backup-secret-access-key`, `google-client-id` and `google-client-secret`, a key for each token set; with `codeIndex.enabled`, also the code index's five keys (see "The code index") | `platformTokens.cloudflareApiToken`; `platformTokens.cloudflareDomainApiToken` (see "The Installation's edge and previews"); `platformTokens.backupAccessKeyId` and `platformTokens.backupSecretAccessKey`, both or neither; `platformTokens.googleClientId` and `platformTokens.googleClientSecret`, both or neither; the code index's record (`codeIndex.knowledge`) and GitHub App (`platformTokens.codeIndexGithubAppId`, `.codeIndexGithubAppInstallationId` and `.codeIndexGithubAppPrivateKey`, all three or none); `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it. The API reads the Google client itself |
+| `infrared-platform-tokens` | `Opaque`: `cloudflare-api-token`, `cloudflare-domain-api-token`, `cloudflare-tunnel-credentials`, `backup-access-key-id` and `backup-secret-access-key`, `google-client-id` and `google-client-secret`, a key for each token set; with `codeIndex.enabled`, also the code index's five keys (see "The code index") | `platformTokens.cloudflareApiToken`; `platformTokens.cloudflareDomainApiToken` and `platformTokens.cloudflareTunnelCredentials` (see "The Installation's edge and previews"); `platformTokens.backupAccessKeyId` and `platformTokens.backupSecretAccessKey`, both or neither; `platformTokens.googleClientId` and `platformTokens.googleClientSecret`, both or neither; the code index's record (`codeIndex.knowledge`) and GitHub App (`platformTokens.codeIndexGithubAppId`, `.codeIndexGithubAppInstallationId` and `.codeIndexGithubAppPrivateKey`, all three or none); `platformTokens.existingSecret: infrared-platform-tokens` when it already exists | The gitops template's External Secrets component: the ClusterSecretStore `infrared-platform` reads this Secret, and an ExternalSecret copies each token to the namespace that uses it. The API reads the Google client itself |
 | `infrared-license` | `Opaque`, `license`: the install's licence, one line starting `irl1.` | `license.key` (`--set-file license.key=<file>`); refused with `license.existingSecret`, which names a Secret of your own with key `license` instead and renders none | The API (`GET`/`PUT /v1/license`, Settings) and the operator, which pause new agent steps and promotions to production zones without a valid licence once the 48-hour trial ends; both read `license.existingSecret`'s Secret when it is set (`INFRARED_LICENSE_SECRET`) |
 
 ```bash
@@ -369,6 +369,35 @@ with `--set-file platformTokens.cloudflareDomainApiToken=<file>` beside
 `platformTokens.cloudflareApiToken` at install. On a plane whose
 `infrared-platform-tokens` is the chart's `existingSecret`, the key is added to
 that Secret instead.
+
+A hosted plane can be reached through a Cloudflare Tunnel of its own instead of
+its nodes' ports (infrared-docs-internal ADR 0064). `installation.tunnel` names
+the tunnel, and the operator writes it to the Installation's `spec.tunnel`
+(`INFRARED_TUNNEL`, as JSON) while that is empty. On a Gateway edge the gitops
+template then runs cloudflared beside Envoy, binds no node's ports, gives the
+edge a certificate from a certificate authority inside the cluster, and leaves
+external-dns and Cloudflare's origin issuer out, so the plane needs no
+Cloudflare token for its own names; its names are proxied CNAMEs to
+`<id>.cfargotunnel.com`, made once by a person:
+
+```yaml
+installation:
+  edge: gateway
+  previews:
+    domain: darkshift.cloud
+    signInURL: https://saas2.darkshift.io
+  tunnel:
+    id: 6ff42ae2-765d-4adf-8112-31c55c1551ef   # the tunnel's UUID, lower case; not a secret
+    # credentialsKey: cloudflare-tunnel-credentials   # the default
+```
+
+with `--set-file platformTokens.cloudflareTunnelCredentials=<the tunnel's
+credentials file>` at install, written to `infrared-platform-tokens` as
+`cloudflare-tunnel-credentials`. The file is JSON, so one trailing newline is
+trimmed and nothing else, and the chart refuses one that is no JSON object with
+a `TunnelID`, or whose `TunnelID` is not `installation.tunnel.id`, without
+printing it. A `credentialsKey` other than the default names a key the chart
+does not write, so it goes with `platformTokens.existingSecret`.
 
 ## The stores, the backup bucket and the components left out
 
@@ -806,6 +835,7 @@ only after the pin to a chart with `api.flags` is Synced.
 | `oidc.mcpURL` | `""` | Where MCP clients on people's machines (Claude Code, `ir` for localred) reach the code index's tools, signed in through Infrared: the UI's address followed by `/mcp/code`, such as `https://infrared.example.com/mcp/code`, `https://` (plain `http://` only for localhost), a trailing slash trimmed. Set, the API has the public client `mcp` (`INFRARED_OIDC_MCP_URL`); with `oidc.enabled`, infrared-mcp serves the code tools and `knowledge_sources` there, for the platform org alone, to the provider's access tokens for this address (`INFRARED_MCP_CODE_URL`). Empty: the code tools stay inside the cluster |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
 | `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret` and `cloudflareTokenKey` (the managed roots' token; empty key is `api-token`), `customHostnames` and `acmeEmail` (a Gateway edge serves addresses under orgs' own domains as Cloudflare for SaaS custom hostnames, with Let's Encrypt's contact), and `domainTokenKey`: the key of `infrared-platform-tokens` with a Cloudflare token for `domain`'s zone alone, `cloudflare-domain-api-token` (see "The Installation's edge and previews"). The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
+| `installation.tunnel` | `{}` | The Cloudflare Tunnel a Gateway edge is reached through (infrared-docs-internal ADR 0064): `id`, its UUID in lower case (required when set), and `credentialsKey`, the key of `infrared-platform-tokens` with its credentials file, empty for `cloudflare-tunnel-credentials`. The operator writes it to the Installation's `spec.tunnel` while that is empty (`INFRARED_TUNNEL`, JSON). Empty: the edge on the nodes' own ports. See "The Installation's edge and previews" |
 | `cloud` | `""` | The control plane's cloud, `gcp` or `aws` (empty is `gcp`): the default image registry and chart repository, Artifact Registry or ECR (ADR 0033) |
 | `gitops.chartRepository` | `""` | This chart's OCI repository; empty for the cloud's (Artifact Registry's `.../infrared/charts`, or ECR's `<ecr>/charts` with `cloud: aws`), no `oci://` (`INFRARED_CHART_REPO`): the gitops repo's `infrared` Application pulls the chart from it, and the operator registers it with Argo CD with the pull secret's credential for its registry |
 | `gitops.templateVersion` | `532ed486…` (main, after #34; an operator from api/v0.100.0 or later renders it) | infrared-gitops-template tag, or a full 40-character commit SHA, the API asks the operator to render (`INFRARED_GITOPS_TEMPLATE_VERSION`); new gitops repos take it, an existing one keeps its `spec.template.version` until that is patched |
@@ -837,6 +867,7 @@ only after the pin to a chart with `api.flags` is Synced.
 | `registryToken.image` | `docker.io/alpine/k8s:1.37.0@sha256:b421c2e9…` | The token Job's image: curl, jq, kubectl and the AWS CLI, by digest |
 | `platformTokens.cloudflareApiToken` / `.existingSecret` | `""` | Token rendered into Secret `infrared-platform-tokens`, key `cloudflare-api-token`; or `infrared-platform-tokens` when it already exists. Pass the token with `--set-file` |
 | `platformTokens.cloudflareDomainApiToken` | `""` | A Cloudflare token for the zone of `installation.previews.domain` alone, when that zone is not the one of Infrared's own name (a hosted plane's tenants' domain, infrared-docs-internal ADR 0063), rendered into `infrared-platform-tokens`, key `cloudflare-domain-api-token`, and named by `installation.previews.domainTokenKey`; absent when empty. Pass it with `--set-file` |
+| `platformTokens.cloudflareTunnelCredentials` | `""` | A Cloudflare Tunnel's credentials file, for `installation.tunnel` (ADR 0064), rendered into `infrared-platform-tokens`, key `cloudflare-tunnel-credentials`, which the gitops template copies to cloudflared; absent when empty. JSON: one trailing newline is trimmed, nothing else, and the chart refuses a file that is no JSON object with a `TunnelID`, or another tunnel's than `installation.tunnel.id`. Pass it with `--set-file` |
 | `platformTokens.backupAccessKeyId` / `.backupSecretAccessKey` | `""` | The backup bucket's key, both or neither, rendered into `infrared-platform-tokens`, keys `backup-access-key-id` and `backup-secret-access-key`; refused with Google Cloud Storage, which takes none. Pass them with `--set-file` |
 | `platformTokens.codeIndexGithubAppId` / `.codeIndexGithubAppInstallationId` / `.codeIndexGithubAppPrivateKey` | `""` | The code index's GitHub App, all three or none and only with `codeIndex.enabled`: its ID and its installation's (numbers) and its private key (PEM), rendered into `infrared-platform-tokens`, keys `code-index-github-app-id`, `-installation-id` and `-private-key`; empty for none. Pass them with `--set-file` |
 | `platformTokens.googleClientId` / `.googleClientSecret` | `""` | Sign in with Google's OAuth client (a Web application client), both or neither, rendered into `infrared-platform-tokens`, keys `google-client-id` and `google-client-secret`; the API reads them at use, so a client patched into the Secret later needs no restart. Its redirect URIs are `<address>/api/v1/auth/google/callback` for every address people open Infrared at. Which Google Workspace domains may sign in is a setting in Infrared (Settings, Sign-in). Pass the secret with `--set-file` |

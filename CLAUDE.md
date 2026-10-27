@@ -45,6 +45,17 @@ The Helm chart for Infrared (`charts/infrared`), published to
   post-init step `configure-infrared-sign-in`, which never fails Gitea's start.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
+- Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,
+  never here: `api.flags` takes any camelCase key, and the API lists a key no
+  release declares as unknown and ignores it, so neither a new rollout flag nor
+  its retirement changes the chart. What an install opts into elsewhere is a
+  value here, off by default: for the operator, runner or code index, rendered
+  on the operator only when set, as `stores.singleNode` is
+  `INFRARED_STORES_SINGLE_NODE` (until the operator reads flags, ADR 0061
+  decision 9); for a new object the chart renders, `<thing>.enabled: false`;
+  never `api.flags`. Such a value retires the other way round from a flag: the
+  schema refuses an unknown key, so every values file drops it first and the
+  schema follows in a later release.
 - `make verify` must pass before a PR. Pin every upstream version.
 - Never apply from CI; CI only verifies and publishes the chart. AWS work uses
   the `darkshift-preprod` profile only, never the default profile.

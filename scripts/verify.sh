@@ -32,6 +32,8 @@ else bad "dependencies: run make deps"; fi
 # that end in a newline; these stand in for them.
 printf 'ci-password\n' >"$out/ci-password"
 printf '  ci-cloudflare-token\n\n' >"$out/ci-cloudflare-token"
+# A second Cloudflare token, for the zone of the tenants' domain alone (ADR 0063).
+printf '  ci-cloudflare-domain-token\n\n' >"$out/ci-cloudflare-domain-token"
 printf 'ci-backup-key-id\n' >"$out/ci-backup-key-id"
 printf 'ci-backup-secret\n' >"$out/ci-backup-secret"
 backup_key=(--set-file "platformTokens.backupAccessKeyId=$out/ci-backup-key-id"
@@ -321,6 +323,32 @@ if [[ "$(secret install infrared-platform-tokens backup-access-key-id)" == ci-ba
       "$(secret install infrared-platform-tokens backup-secret-access-key)" == ci-backup-secret ]]; then
   ok "the backup bucket's key under backup-access-key-id and backup-secret-access-key, trimmed"
 else bad "infrared-platform-tokens' backup-access-key-id or backup-secret-access-key is not the key, trimmed"; fi
+# The platform domain's own Cloudflare token (infrared-docs-internal ADR 0063):
+# key cloudflare-domain-api-token, trimmed, only when it is set; alone it
+# renders the Secret, beside the platform's it adds its key, existingSecret
+# renders none; and installation.previews.domainTokenKey, which names it,
+# reaches the operator in INFRARED_PREVIEWS.
+domain_token=(--set-file "platformTokens.cloudflareDomainApiToken=$out/ci-cloudflare-domain-token")
+helm template infrared "$chart" -n infrared "${domain_token[@]}" >"$out/domain-token.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" "${domain_token[@]}" \
+  --set installation.previews.domainTokenKey=cloudflare-domain-api-token >"$out/domain-token-install.yaml"
+helm template infrared "$chart" -n infrared "${domain_token[@]}" --set platformTokens.existingSecret=infrared-platform-tokens \
+  >"$out/domain-token-existing.yaml"
+envs domain-token-install
+check install.yaml "no cloudflare-domain-api-token without platformTokens.cloudflareDomainApiToken" '^  cloudflare-domain-api-token: ' 0
+check defaults.yaml "the Installation CRD has spec.previews.domainTokenKey" '^                  domainTokenKey:$' 1
+check domain-token.yaml "the domain's token alone renders infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
+check domain-token.yaml "...with no cloudflare-api-token" '^  cloudflare-api-token: ' 0
+check domain-token-existing.yaml "platformTokens.existingSecret: no infrared-platform-tokens, even with the domain's token" '^  name: infrared-platform-tokens$' 0
+check domain-token-install.yaml "beside the platform's, both Cloudflare keys and the bucket's" \
+  '^  (cloudflare-api-token|cloudflare-domain-api-token|backup-access-key-id|backup-secret-access-key): ' 4
+if [[ "$(secret domain-token infrared-platform-tokens cloudflare-domain-api-token)" == ci-cloudflare-domain-token &&
+      "$(secret domain-token-install infrared-platform-tokens cloudflare-domain-api-token)" == ci-cloudflare-domain-token &&
+      "$(secret domain-token-install infrared-platform-tokens cloudflare-api-token)" == ci-cloudflare-token ]]; then
+  ok "the domain's Cloudflare token under cloudflare-domain-api-token, trimmed, beside the platform's"
+else bad "infrared-platform-tokens' cloudflare-domain-api-token is not the domain's token, trimmed, beside the platform's"; fi
+has domain-token-install.env "the previews' domainTokenKey reaches the operator, as JSON" \
+  'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"managedRoots\":[],\"signInURL\":\"https://infrared.example.com\"}"'
 # The stores, the backup bucket and the components left out: none by default,
 # each handed to the operator for the gitops template from the install's values,
 # and still handed on once the template's Application carries them.
@@ -905,6 +933,12 @@ refuse "an edge other than traefik or gateway fails" "at '/installation/edge'" -
 refuse "previews without a signInURL fail" "missing property 'signInURL'" --set installation.previews.domain=preview.example.com
 refuse "a signInURL that is not https fails" "at '/installation/previews/signInURL'" \
   --set installation.previews.domain=preview.example.com,installation.previews.signInURL=http://infrared.example.com
+refuse "a domainTokenKey that is no Secret's key fails" "at '/installation/previews/domainTokenKey'" \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
+  --set installation.previews.domainTokenKey=tokens/cloudflare
+refuse "a domainTokenKey no Secret takes fails" "at '/installation/previews/domainTokenKey'" \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
+  --set-string installation.previews.domainTokenKey=..
 refuse "a template version that is a branch fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=main
 refuse "a short commit SHA fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=0123456
 refuse "imageCredentials without imagePullSecrets fail" "imageCredentials needs imagePullSecrets[0].name" \

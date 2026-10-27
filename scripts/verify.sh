@@ -176,7 +176,12 @@ helm template infrared "$chart" -n infrared "${install[@]}" --set stores.singleN
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
   -f "$chart/ci/stores-adopted-values.yaml" --set stores.singleNode=true >"$out/single-node-adopted.yaml"
 helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/single-node-no-stores.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted"
+# The tools agent steps copy in, from an install's own images, as a mirror names them.
+mirror_go='registry.example.com/golang:1.26.10@sha256:0000000000000000000000000000000000000000000000000000000000000031'
+mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
+helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
+  >"$out/runner-tools.yaml"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -186,7 +191,7 @@ envs() {
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
     test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores \
-    code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted; do envs "$f"; done
+    code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -205,7 +210,7 @@ check() { # check <file> <description> <grep -E pattern> [count]
 check defaults.yaml "UI Service is named exactly 'infrared', port 80 -> http" '^  name: infrared$'
 check defaults.yaml "default images are the pinned preprod builds" 'image: us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-(operator|api|ui|mcp):v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}$' 4
 check defaults.yaml "operator runs steps in the pinned runner" 'value: "us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-runner:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
-check defaults.yaml "Go toolchain image pinned by digest" 'value: "golang:[0-9.]+@sha256:[0-9a-f]{64}"$' 1
+check defaults.yaml "Go toolchain image a Go patch release, pinned by digest" 'value: "golang:1\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
 check defaults.yaml "operator knows the API's cluster address for alert webhooks" 'value: "http://infrared-api.infrared.svc:8080"$' 1
 check defaults.yaml "the API and the operator's release guard read SLOs from VictoriaMetrics" 'value: "http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428"$' 2
 check defaults.yaml "API reads runner pod logs" '^    resources: \["pods/log"\]$' 1
@@ -254,6 +259,16 @@ has ghcr.env "the operator's own image handed to it, by tag and digest" \
   'INFRARED_OPERATOR_IMAGE="ghcr.io/darkshiftio/infrared-operator:one-install-0000001@sha256:0000000000000000000000000000000000000000000000000000000000000021"'
 check defaults.env "the operator's own image handed to it, the default pin" \
   '^INFRARED_OPERATOR_IMAGE="us-central1-docker\.pkg\.dev/darkshift-preprod/infrared/infrared-operator:v0\.1\.0-alpha\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
+# The tools every agent step's init containers copy into /tools (runner.*Image):
+# Go and make from a Go patch release (steps build with GOTOOLCHAIN=local), and
+# golangci-lint from a v2 release's alpine image, each pinned by digest.
+check defaults.env "agent steps' Go toolchain, a Go patch release pinned by digest" \
+  '^INFRARED_GO_TOOLCHAIN_IMAGE="golang:1\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}"$' 1
+check defaults.env "agent steps' golangci-lint, a v2 release pinned by digest" \
+  '^INFRARED_GOLANGCI_LINT_IMAGE="golangci/golangci-lint:v2\.[0-9]+\.[0-9]+-alpine@sha256:[0-9a-f]{64}"$' 1
+check ghcr-adopted.env "after adoption the operator still gets golangci-lint's image" '^INFRARED_GOLANGCI_LINT_IMAGE="golangci/golangci-lint:' 1
+has runner-tools.env "an install's own Go toolchain image handed to the operator" "INFRARED_GO_TOOLCHAIN_IMAGE=\"$mirror_go\""
+has runner-tools.env "an install's own golangci-lint image handed to the operator" "INFRARED_GOLANGCI_LINT_IMAGE=\"$mirror_lint\""
 check ghcr.yaml "no pull Secret without imageCredentials" '^type: kubernetes\.io/dockerconfigjson$' 0
 has ghcr-adopted.env "after adoption the operator still gets the registry" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
 has ghcr-adopted.env "after adoption the operator still gets every pin" "INFRARED_IMAGES=\"$ghcr_pins\""
@@ -885,6 +900,7 @@ refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
   --set "$ext,ui.extensions[0].upstream=back-office:8080,ui.extensionsProxySecret.existingSecret=x"
 refuse "a duplicate extension id fails" 'id "back-office" is listed more than once' \
   --set "$ext,ui.extensions[1].id=back-office,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
+refuse "an empty golangci-lint image fails" "at '/runner/golangciLintImage'" --set runner.golangciLintImage=
 refuse "an edge other than traefik or gateway fails" "at '/installation/edge'" --set installation.edge=nginx
 refuse "previews without a signInURL fail" "missing property 'signInURL'" --set installation.previews.domain=preview.example.com
 refuse "a signInURL that is not https fails" "at '/installation/previews/signInURL'" \

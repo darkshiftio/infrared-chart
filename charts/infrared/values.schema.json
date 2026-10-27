@@ -119,6 +119,18 @@
               "type": "string",
               "description": "A Secret in the release namespace whose api-token key may edit DNS for the managed roots."
             },
+            "cloudflareTokenKey": {
+              "type": "string",
+              "description": "The key of cloudflareTokenSecret that holds the token; empty is api-token. infrared-platform-tokens holds it as cloudflare-api-token."
+            },
+            "customHostnames": {
+              "type": "boolean",
+              "description": "On a Gateway edge behind Cloudflare, an address under an org's external Domain becomes a Cloudflare for SaaS custom hostname on the zone of the managed root that holds ingressHost, its origin certificate from Let's Encrypt over HTTP-01."
+            },
+            "acmeEmail": {
+              "type": "string",
+              "description": "The address Let's Encrypt writes to about the custom hostnames' origin certificates; empty registers without one."
+            },
             "domainTokenKey": {
               "type": "string",
               "maxLength": 253,

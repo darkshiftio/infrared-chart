@@ -352,6 +352,17 @@ if [[ "$(secret domain-token infrared-platform-tokens cloudflare-domain-api-toke
 else bad "infrared-platform-tokens' cloudflare-domain-api-token is not the domain's token, trimmed, beside the platform's"; fi
 has domain-token-install.env "the previews' domainTokenKey reaches the operator, as JSON" \
   'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"managedRoots\":[],\"signInURL\":\"https://infrared.example.com\"}"'
+# Every field of installation.previews that values.yaml documents, set at once
+# in one values file: the schema takes them all, and the operator gets them
+# whole in INFRARED_PREVIEWS.
+if helm template infrared "$chart" -n infrared -f "$chart/ci/previews-values.yaml" >"$out/previews.yaml" 2>"$out/previews.err"; then
+  ok "a values file setting every documented field of installation.previews renders"
+  envs previews
+  has previews.env "every field of installation.previews reaches the operator, as JSON" \
+    'INFRARED_PREVIEWS="{\"acmeEmail\":\"alerts@example.com\",\"cloudflareTokenKey\":\"cloudflare-api-token\",\"cloudflareTokenSecret\":\"infrared-platform-tokens\",\"customHostnames\":true,\"domain\":\"tenants.example.net\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"ingressHost\":\"edge.tenants.example.net\",\"ingressIP\":\"203.0.113.7\",\"managedRoots\":[\"example.com\"],\"signInURL\":\"https://infrared.example.com\"}"'
+else
+  cat "$out/previews.err"; bad "a values file setting every documented field of installation.previews renders"
+fi
 # The stores, the backup bucket and the components left out: none by default,
 # each handed to the operator for the gitops template from the install's values,
 # and still handed on once the template's Application carries them.

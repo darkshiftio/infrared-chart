@@ -828,7 +828,9 @@ only after the pin to a chart with `api.flags` is Synced.
 | `mcp.access.token` / `mcp.access.existingSecret` | `""` | Bearer token MCP clients must send to `/mcp` / existing Secret |
 | `observability.metricsURL` | `http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428` | Where the API reads SLO error ratios (`INFRARED_METRICS_URL`); empty reports every SLO as no-data |
 | `runner.image.repository` / `.tag` / `.digest` | `infrared-runner`, pinned | The image AgentWorkflowRun agent steps run in (`INFRARED_RUNNER_IMAGE`, operator). Steps run as Jobs in `ir-org-<org>` and need that namespace's Secret `model-provider-anthropic` (key `api-key`). |
-| `runner.goToolchainImage` | `golang:1.26@sha256:...` | Image an init container copies a Go toolchain from, so agents can build and test Go repos (`INFRARED_GO_TOOLCHAIN_IMAGE`) |
+| `runner.goToolchainImage` | `golang:1.26.10@sha256:...` | Image an init container copies a Go toolchain and make from, so agents can build and test Go repos (`INFRARED_GO_TOOLCHAIN_IMAGE`): a Go patch release, pinned by digest. Steps build with `GOTOOLCHAIN=local`, so a repo whose `go.mod` asks for a newer Go than this image's fails to build |
+| `runner.helmImage` | `alpine/helm:3.19.0@sha256:...` | Image an init container copies helm from, so agents can lint and template a Product's chart (`INFRARED_HELM_IMAGE`) |
+| `runner.golangciLintImage` | `golangci/golangci-lint:v2.15.0-alpine@sha256:...` | Image an init container copies golangci-lint from (`/usr/bin/golangci-lint`), into `/tools/bin` on every agent step's `PATH`, so agents can lint Go repos (`INFRARED_GOLANGCI_LINT_IMAGE`, operator; an operator from before infrared-operator's golangci-lint init container ignores it). A v2 release built with a Go at least as new as `runner.goToolchainImage`'s, pinned by digest |
 | `podSecurityContext` | runAsNonRoot, seccomp RuntimeDefault | Pod security for every component |
 | `containerSecurityContext` | read-only root fs, drop ALL, no privilege escalation, seccomp RuntimeDefault | Container security for every component |
 | `commonLabels` | `{}` | Extra labels on every resource |

@@ -1349,6 +1349,11 @@
           "type": "string",
           "minLength": 1
         },
+        "golangciLintImage": {
+          "type": "string",
+          "minLength": 1,
+          "description": "INFRARED_GOLANGCI_LINT_IMAGE: the image an init container copies golangci-lint (/usr/bin/golangci-lint) from into every agent step's /tools/bin."
+        },
         "placement": {
           "type": "object",
           "additionalProperties": false,

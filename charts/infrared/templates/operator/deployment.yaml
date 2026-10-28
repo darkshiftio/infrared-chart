@@ -122,6 +122,11 @@ spec:
             - name: INFRARED_REGISTRY
               value: {{ . | quote }}
             {{- end }}
+            {{- if .Values.operator.moveIssueToHydratedRepo }}
+            # A Change follows the Product repo its hydration names.
+            - name: INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO
+              value: "true"
+            {{- end }}
             {{- if .Values.stores.enabled }}
             # The platform's stores, which the gitops template installs.
             - name: INFRARED_STORES

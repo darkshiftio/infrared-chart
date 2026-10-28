@@ -178,12 +178,14 @@ helm template infrared "$chart" -n infrared "${install[@]}" --set stores.singleN
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
   -f "$chart/ci/stores-adopted-values.yaml" --set stores.singleNode=true >"$out/single-node-adopted.yaml"
 helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/single-node-no-stores.yaml"
+# A Change that follows the repo its hydration names.
+helm template infrared "$chart" -n infrared --set operator.moveIssueToHydratedRepo=true >"$out/move-issues.yaml"
 # The tools agent steps copy in, from an install's own images, as a mirror names them.
 mirror_go='registry.example.com/golang:1.26.10@sha256:0000000000000000000000000000000000000000000000000000000000000031'
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -192,7 +194,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -384,6 +386,10 @@ for f in single-node single-node-adopted; do
   has "$f.env" "$f: the stores on the cluster's one node" 'INFRARED_STORES_SINGLE_NODE="true"'
 done
 check single-node-no-stores.env "stores.singleNode without the stores hands on nothing" '^INFRARED_STORES(_SINGLE_NODE)?=' 0
+# A Change follows its hydration's repo only when asked for: off, the operator
+# gets nothing and leaves the Change where it opened.
+check defaults.env "a Change stays on the repo it opened on by default" '^INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO=' 0
+has move-issues.env "a Change follows the repo its hydration names" 'INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO="true"'
 # Substrate's test actors (sandbox-v1 runs any command it is sent) are off
 # unless substrate.testActors is true, at install and after adoption alike;
 # without the stores and a registry the template runs no Substrate, and the
@@ -974,6 +980,7 @@ refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
   --set backup.bucket=CI-Backup,backup.endpoint=https://backup.example.com,backup.region=us-east-1
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
 refuse "stores.singleNode as a string fails" "at '/stores/singleNode'" --set-string stores.singleNode=true
+refuse "operator.moveIssueToHydratedRepo as a string fails" "at '/operator/moveIssueToHydratedRepo'" --set-string operator.moveIssueToHydratedRepo=true
 refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
 refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
 refuse "gitea.enabled as a string fails" "at '/gitea/enabled'" --set-string gitea.enabled=true

@@ -466,6 +466,10 @@
             ]
           }
         },
+        "moveIssueToHydratedRepo": {
+          "type": "boolean",
+          "description": "Move a Change to the Product repo its hydration names (INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO)."
+        },
         "resources": {
           "$ref": "#/$defs/resources"
         },

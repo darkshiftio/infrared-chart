@@ -871,6 +871,7 @@ only after the pin to a chart with `api.flags` is Synced.
 | `ui.extensionsProxySecret.existingSecret` / `.key` | `""` / `secret` | Secret whose value the UI sends to every extension upstream as `X-Infrared-Proxy-Secret` (`INFRARED_EXT_PROXY_SECRET`); required when `ui.extensions` is set |
 | `<c>.podAnnotations`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints` | empty | Scheduling |
 | `<c>.podSecurityContext` / `<c>.containerSecurityContext` | unset | Per-component override of the shared security contexts |
+| `operator.moveIssueToHydratedRepo` | `false` | Move a Change to the Product repo its hydration names (`INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO`, operator): an issue opened without a repo on a Product of several repos is transferred (GitHub) or copied with the original closed (Gitea) to the repo the work is in, before triage; off, hydration's repo is only recorded and a person moves the Change |
 | `operator.rbac.extraRules` | `[]` | Rules appended to the generated operator ClusterRole |
 
 `values.schema.json` rejects unknown keys and malformed digests.

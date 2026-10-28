@@ -622,6 +622,12 @@ operator:
   extraArgs: []
   # -- Extra environment variables.
   extraEnv: []
+  # -- Move a Change to the Product repo its hydration names
+  # (INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO, operator): an issue opened without a repo on a Product
+  # of several repos is transferred (GitHub) or copied with the original closed (Gitea) to the
+  # repo the work is in, before triage. Off, hydration's repo is only recorded and a person
+  # moves the Change. Until the operator reads rollout flags (ADR 0061 decision 9).
+  moveIssueToHydratedRepo: false
   resources:
     requests:
       cpu: 50m

@@ -438,6 +438,10 @@ check gitea.yaml "Gitea 1.27.3, rootless, by digest, in each of its five contain
 if [[ "$(objn gitea Deployment gitea '^  replicas: 1$|^    type: Recreate$')" == 2 ]]; then
   ok "one Gitea pod, replaced with Recreate: its volume is ReadWriteOnce"
 else bad "Gitea is not one pod with strategy Recreate"; fi
+# The operator's cache grows with the orgs: 480 MiB on the home in October 2026 (workspace TODO 463).
+if [[ "$(objn defaults Deployment infrared-operator '^              memory: 512Mi$|^              memory: 1Gi$')" == 2 ]]; then
+  ok "the operator requests 512Mi of memory and is limited to 1Gi"
+else bad "the operator's memory is not a 512Mi request and a 1Gi limit"; fi
 # api.strategy Recreate renders no rollingUpdate block: the API server refuses one beside it.
 if [[ "$(objn defaults Deployment infrared-api '^    type: RollingUpdate$|^      maxSurge: 1$|^      maxUnavailable: 0$')" == 3 ]]; then
   ok "the API rolls out by default with one pod surged and none unavailable"

@@ -628,12 +628,15 @@ operator:
   # repo the work is in, before triage. Off, hydration's repo is only recorded and a person
   # moves the Change. Until the operator reads rollout flags (ADR 0061 decision 9).
   moveIssueToHydratedRepo: false
+  # The manager's cache holds every org's namespaces, so its memory grows with the orgs: on the home
+  # it rose from 350 MiB to 480 MiB in the week to 2026-10-28 and touched the old 512Mi limit
+  # (workspace TODO 463). The request is what it uses there; the limit leaves it room to double.
   resources:
     requests:
       cpu: 50m
-      memory: 128Mi
-    limits:
       memory: 512Mi
+    limits:
+      memory: 1Gi
   rbac:
     # -- Rules appended to the generated operator ClusterRole.
     extraRules: []

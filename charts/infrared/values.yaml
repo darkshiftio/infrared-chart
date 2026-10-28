@@ -424,10 +424,11 @@ session:
 
 # The install's Infrared licence (infrared-docs operate/licensing). The API and
 # the operator read it from the Secret `infrared-license`, key `license`, in the
-# release namespace, or from the Secret existingSecret names. Without a valid
-# licence an install runs a 48-hour trial, then pauses new agent steps and
-# promotions to production zones until one is installed. Install one here, in
-# Settings, or with `ir license install`.
+# release namespace, or from the Secret existingSecret names. Infrared 0.1 is an
+# open beta: without a valid licence an install runs fully through November 30,
+# 2026 (until 2026-12-01 00:00 UTC), then pauses new agent steps and promotions
+# to production zones until one is installed. Later releases need a licence
+# from darkshift. Install one here, in Settings, or with `ir license install`.
 license:
   # -- A licence from darkshift (one line starting `irl1.`), for the Secret
   # `infrared-license`, key `license`. Pass it with --set-file so it is never in

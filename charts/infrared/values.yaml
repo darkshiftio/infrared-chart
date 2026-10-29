@@ -257,6 +257,24 @@ substrate:
   # (INFRARED_DISABLED_COMPONENTS) unless this is true.
   testActors: false
 
+# How the install fences one org from another and from the platform: a hosted
+# plane's tenancy (infrared-docs-internal ADR 0066). Every switch is off by
+# default, so an install that sets none behaves as before.
+tenancy:
+  networkPolicies:
+    # -- The network fence (ADR 0066 D1; INFRARED_NETWORK_POLICIES, operator).
+    # The operator gives every org's namespaces (ir-org-<org>, builds-<org> and
+    # each zone) a NetworkPolicy that denies all but the org's own namespaces,
+    # DNS, the internet outside the private ranges and the platform's callers of
+    # a zone; the gitops template gives every platform namespace an ingress
+    # policy that admits the platform alone; and this chart fences its own
+    # namespace: the API admits its callers alone, Gitea and MCP the org's
+    # steps and builds, and a zone snapshot reaches its zone and the internet
+    # alone. Needs a CNI that enforces NetworkPolicy (GKE Dataplane V2). Off:
+    # no policy, as before. The gitops template's `infrared` Application
+    # carries it, so adoption keeps it.
+    enabled: false
+
 codeIndex:
   # -- Infrared's code index: Zoekt and the code service, which the gitops
   # template runs in the namespace code-index, reached by infrared-api alone at

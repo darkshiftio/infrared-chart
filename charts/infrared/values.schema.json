@@ -1302,6 +1302,23 @@
         }
       }
     },
+    "tenancy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the install fences one org from another and from the platform (infrared-docs-internal ADR 0066). Every switch is off by default.",
+      "properties": {
+        "networkPolicies": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "The network fence (ADR 0066 D1): the operator fences every org's namespaces (INFRARED_NETWORK_POLICIES), the gitops template every platform namespace, and this chart its own. Needs a CNI that enforces NetworkPolicy."
+            }
+          }
+        }
+      }
+    },
     "codeIndex": {
       "type": "object",
       "additionalProperties": false,

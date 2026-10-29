@@ -1682,8 +1682,46 @@ if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && g
   ok "the chart is infrared-core, and what it renders is still named infrared"
 else bad "the chart's name leaks into what it renders"; fi
 
+step "the network fence (tenancy.networkPolicies, ADR 0066 D1)"
+# Off by default: no NetworkPolicy, nothing handed to the operator. On: the
+# operator fences every org's namespaces, and this chart its own namespace.
+helm template infrared "$chart" -n infrared --set tenancy.networkPolicies.enabled=true >"$out/network-policies.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" --set tenancy.networkPolicies.enabled=true \
+  >"$out/network-policies-gitea.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" --set tenancy.networkPolicies.enabled=true >"$out/lint.log" 2>&1; then
+  ok "lint install with Gitea and the network fence"
+else cat "$out/lint.log"; bad "lint install with Gitea and the network fence"; fi
+check defaults.yaml "no NetworkPolicy by default" '^kind: NetworkPolicy$' 0
+check defaults.yaml "the network fence handed to nobody by default" 'INFRARED_NETWORK_POLICIES' 0
+check network-policies.yaml "three NetworkPolicies with the fence on" '^kind: NetworkPolicy$' 3
+if [[ "$(envv network-policies INFRARED_NETWORK_POLICIES)" == true ]]; then ok "the fence handed to the operator (INFRARED_NETWORK_POLICIES)"
+else bad "INFRARED_NETWORK_POLICIES is '$(envv network-policies INFRARED_NETWORK_POLICIES)', want true"; fi
+np() { yq -N -o json -I0 "select(.kind == \"NetworkPolicy\" and .metadata.name == \"$2\") | .spec" "$out/$1.yaml"; }
+platform_peer='{"from":[{"namespaceSelector":{"matchExpressions":[{"key":"infrared.darkshift.io/org","operator":"DoesNotExist"},{"key":"infrared.darkshift.io/zone","operator":"DoesNotExist"}]}}]}'
+fence="$(np network-policies infrared-fence)"
+if [[ "$(yq -p json -o json -I0 '.podSelector' <<<"$fence")" == '{"matchExpressions":[{"key":"app.kubernetes.io/component","operator":"NotIn","values":["api"]}]}' ]] \
+  && [[ "$(yq -p json -o json -I0 '.ingress[0]' <<<"$fence")" == "$platform_peer" ]] \
+  && [[ "$(yq -p json -o json -I0 '[.ingress[1].ports[].port, .ingress[2].ports[].port]' <<<"$fence")" == '[3000,8081]' ]] \
+  && [[ "$(yq -p json -o json -I0 '[.ingress[1].from[0].namespaceSelector, .ingress[2].from[0].podSelector.matchLabels]' <<<"$fence")" \
+    == '[{"matchLabels":{"app.kubernetes.io/managed-by":"infrared"},"matchExpressions":[{"key":"infrared.darkshift.io/org","operator":"Exists"}]},{"infrared.darkshift.io/mcp":"true"}]' ]]; then
+  ok "every pod but the API admits the platform alone, Gitea the org's steps and builds, and MCP's code listener the steps that may use it"
+else bad "infrared-fence is wrong: $fence"; fi
+api="$(np network-policies infrared-api)"
+# The API's callers, by rule: what each admits, as namespace/pod and port.
+callers="$(yq -p json -o json -I0 '[.ingress[] | ([.from[] | ((.namespaceSelector.matchLabels["kubernetes.io/metadata.name"]) // "infrared") + "/" + ((.podSelector.matchLabels["app.kubernetes.io/component"]) // (.podSelector.matchLabels["app.kubernetes.io/name"]) // (.podSelector.matchLabels["gateway.envoyproxy.io/owning-gateway-name"]) // (.podSelector.matchExpressions[0].values | join("+")))] | join(",")) + "@" + ([.ports[].port | tostring] | join(","))]' <<<"$api")"
+if [[ "$callers" == '["infrared/ui,infrared/mcp,infrared/operator,infrared/summary-video@8080","envoy-gateway-system/edge,kube-system/traefik@8080","monitoring/vmalertmanager+grafana@8080","monitoring/vmagent@9090"]' ]] \
+  && [[ "$(yq -p json -o json -I0 '.podSelector.matchLabels["app.kubernetes.io/component"]' <<<"$api")" == '"api"' ]]; then
+  ok "the API admits the UI, MCP, the operator, the summary videos, the edge, Alertmanager, Grafana and vmagent alone (ADR 0066 D2)"
+else bad "infrared-api's callers are $callers"; fi
+snap="$(np network-policies infrared-zone-snapshot)"
+if [[ "$(yq -p json -o json -I0 '[.policyTypes[], (.egress | length | tostring), .egress[1].to[0].namespaceSelector.matchExpressions[0].key, .egress[2].to[0].ipBlock.cidr]' <<<"$snap")" \
+    == '["Egress","3","infrared.darkshift.io/zone","0.0.0.0/0"]' ]]; then
+  ok "a zone snapshot reaches DNS, the zones and the internet outside the private ranges alone"
+else bad "infrared-zone-snapshot is wrong: $snap"; fi
+check network-policies-gitea.yaml "Gitea's install keeps the three policies" '^kind: NetworkPolicy$' 3
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

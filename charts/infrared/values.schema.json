@@ -1316,6 +1316,26 @@
               "description": "The network fence (ADR 0066 D1): the operator fences every org's namespaces (INFRARED_NETWORK_POLICIES), the gitops template every platform namespace, and this chart its own. Needs a CNI that enforces NetworkPolicy."
             }
           }
+        },
+        "registryPulls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "The registry by identity (ADR 0066 D3; INFRARED_REGISTRY_PULLS): the install's registry reads for no one without a login, and each zone pulls as its org's own registry user (the Secret zot-pull on its default ServiceAccount). Needs registry.address."
+            }
+          }
+        },
+        "storesSecurity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "The stores' own security (ADR 0066 D3; INFRARED_STORES_SECURITY): SeaweedFS under mutual TLS from cert-manager and signed tokens, the master's HTTP API off. Needs stores.enabled."
+            }
+          }
         }
       }
     },

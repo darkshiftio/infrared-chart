@@ -1720,8 +1720,31 @@ if [[ "$(yq -p json -o json -I0 '[.policyTypes[], (.egress | length | tostring),
 else bad "infrared-zone-snapshot is wrong: $snap"; fi
 check network-policies-gitea.yaml "Gitea's install keeps the three policies" '^kind: NetworkPolicy$' 3
 
+step "the registry by identity and the stores' own security (tenancy.registryPulls, tenancy.storesSecurity, ADR 0066 D3)"
+# Off by default: nothing handed to the operator. On: one variable each, and no
+# object of their own: the operator writes each zone's zot-pull, and the gitops
+# template closes the registry's reads and secures SeaweedFS.
+helm template infrared "$chart" -n infrared --include-crds --set tenancy.registryPulls.enabled=true --set tenancy.storesSecurity.enabled=true \
+  >"$out/registry-pulls.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set tenancy.registryPulls.enabled=true --set tenancy.storesSecurity.enabled=true \
+  >"$out/lint.log" 2>&1; then
+  ok "lint install with the registry by identity and the stores' own security"
+else cat "$out/lint.log"; bad "lint install with the registry by identity and the stores' own security"; fi
+check defaults.yaml "the registry by identity handed to nobody by default" 'INFRARED_REGISTRY_PULLS' 0
+check defaults.yaml "the stores' own security handed to nobody by default" 'INFRARED_STORES_SECURITY' 0
+if [[ "$(envv registry-pulls INFRARED_REGISTRY_PULLS)" == true ]] && [[ "$(envv registry-pulls INFRARED_STORES_SECURITY)" == true ]]; then
+  ok "both handed to the operator (INFRARED_REGISTRY_PULLS, INFRARED_STORES_SECURITY)"
+else bad "INFRARED_REGISTRY_PULLS is '$(envv registry-pulls INFRARED_REGISTRY_PULLS)', INFRARED_STORES_SECURITY '$(envv registry-pulls INFRARED_STORES_SECURITY)', want true"; fi
+objects() { yq -N -r 'select(.kind != null) | .kind + "/" + (.metadata.namespace // "") + "/" + .metadata.name' "$out/$1.yaml" | sort; }
+if [[ "$(objects registry-pulls)" == "$(objects defaults)" ]]; then ok "neither renders an object of its own"
+else bad "the switches render objects of their own: $(diff <(objects defaults) <(objects registry-pulls) | tr '\n' ' ')"; fi
+for key in tenancy.registryPulls.enable tenancy.storesSecurity.on; do
+  if helm template infrared "$chart" -n infrared --set "$key=true" >/dev/null 2>&1; then bad "the schema took $key"
+  else ok "the schema refuses $key"; fi
+done
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

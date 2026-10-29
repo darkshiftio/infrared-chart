@@ -353,9 +353,10 @@ tenancy:
     # endpoints, a route on another zone's name, the platform's kinds,
     # egress to the private ranges, pods off the tenants' placement or with
     # a token (with tenantPods), and changes to what Infrared made; and any
-    # namespace deleted by Argo CD. Needs Kubernetes 1.30 or later. Off: no
-    # policy, as before, and the operator removes its own. The gitops
-    # template's `infrared` Application carries it.
+    # namespace deleted by Argo CD. Needs Kubernetes 1.31 or later (CEL's IP
+    # and CIDR libraries in new expressions). Off: no policy, as before, and
+    # the operator removes its own. The gitops template's `infrared`
+    # Application carries it.
     enabled: false
   denyLogging:
     # -- Deny logging (ADR 0066 D10; INFRARED_DENY_LOGGING, operator). GKE

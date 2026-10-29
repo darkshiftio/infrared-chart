@@ -1449,7 +1449,7 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES): ValidatingAdmissionPolicies that refuse, in the namespaces of every org but the platform org, what anyone but Infrared makes that would cross the tenancy. Needs Kubernetes 1.30 or later."
+              "description": "Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES): ValidatingAdmissionPolicies that refuse, in the namespaces of every org but the platform org, what anyone but Infrared makes that would cross the tenancy. Needs Kubernetes 1.31 or later (CEL's IP and CIDR libraries in new expressions)."
             }
           }
         },

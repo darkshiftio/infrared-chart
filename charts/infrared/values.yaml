@@ -555,7 +555,7 @@ runner:
     tolerations: []
     # -- The agent's container's requests and limits, where Claude Code, the Product's builds and
     # its linters run, e.g. `{limits: {memory: 6Gi}}`. Each one left out keeps the operator's
-    # default: 250m CPU and 1Gi asked for, a 4Gi memory limit. An attempt whose agent is
+    # default: 250m CPU and 2Gi asked for, a 6Gi memory limit. An attempt whose agent is
     # OOMKilled says so on its step and opens an info Incident on its Product.
     resources: {}
   image:

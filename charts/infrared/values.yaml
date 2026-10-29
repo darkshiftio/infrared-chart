@@ -274,6 +274,32 @@ tenancy:
     # no policy, as before. The gitops template's `infrared` Application
     # carries it, so adoption keeps it.
     enabled: false
+  registryPulls:
+    # -- The registry by identity (ADR 0066 D3; INFRARED_REGISTRY_PULLS,
+    # operator). The install's own registry (`registry.address`) reads for no
+    # one without a login: the gitops template's zot-base grants neither
+    # anonymous nor default read, every signed-in user reads platform/ (kpack's
+    # builder), and each org's user alone reads its own path. The operator
+    # writes each zone of an org the Secret `zot-pull`, the org's own registry
+    # user, and lists it on the zone's `default` ServiceAccount, so a zone's
+    # pods pull their org's images and no other's. With Agent Substrate's test
+    # actors (`substrate.testActors`), anyone still reads platform/substrate/:
+    # atelet pulls with no login. Needs `registry.address`; without it,
+    # nothing changes. Off: anyone in the cluster reads the registry, as
+    # before. The gitops template's `infrared` Application carries it.
+    enabled: false
+  storesSecurity:
+    # -- The stores' own security (ADR 0066 D3; INFRARED_STORES_SECURITY,
+    # operator, for the gitops template). SeaweedFS takes no caller it cannot
+    # identify: gRPC under mutual TLS from cert-manager, the filer's HTTP and
+    # volume writes under signed tokens whose keys the template's hook
+    # generates in the cluster, the master's HTTP API off. Zot, Agent
+    # Substrate and the backups speak S3 with their own identities, as before.
+    # Needs `stores.enabled`; without it, nothing changes. Turned on over
+    # stores that already run, the object store refuses for a few minutes
+    # while its servers roll. Off: as before. The gitops template's `infrared`
+    # Application carries it.
+    enabled: false
 
 codeIndex:
   # -- Infrared's code index: Zoekt and the code service, which the gitops

@@ -146,6 +146,37 @@ spec:
             - name: INFRARED_STORES_SECURITY
               value: "true"
             {{- end }}
+            {{- with .Values.tenancy.tenantPods }}
+            {{- if .enabled }}
+            # Tenants' pods (tenancy.tenantPods, ADR 0066 D4, D5): no Kubernetes
+            # token, and the placement, in every zone of an org but the platform's.
+            - name: INFRARED_TENANT_PODS
+              value: {{ dict "placement" (.placement | default dict) | toJson | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.tenancy.quotas }}
+            {{- if .enabled }}
+            # Quotas (tenancy.quotas, ADR 0066 D4): one org's budget, split over its
+            # zones here, and its builds' cap.
+            - name: INFRARED_TENANT_QUOTAS
+              value: {{ dict "zones" .zones "builds" .builds | toJson | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.tenancy.admissionPolicies.enabled }}
+            # The admission policies on tenants' namespaces (ADR 0066 D6).
+            - name: INFRARED_ADMISSION_POLICIES
+              value: "true"
+            {{- end }}
+            {{- if .Values.tenancy.denyLogging.enabled }}
+            # GKE logs the denies of tenants' namespaces (ADR 0066 D10).
+            - name: INFRARED_DENY_LOGGING
+              value: "true"
+            {{- end }}
+            {{- if .Values.tenancy.argoCD.restrictDefaultProject }}
+            # Argo CD's default project takes the platform's root alone (ADR 0066 D10).
+            - name: INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT
+              value: "true"
+            {{- end }}
             {{- if .Values.stores.enabled }}
             # The platform's stores, which the gitops template installs.
             - name: INFRARED_STORES

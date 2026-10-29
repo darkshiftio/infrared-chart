@@ -1060,6 +1060,11 @@
             },
             "resources": {
               "type": "object"
+            },
+            "runtimeClassName": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+              "description": "The RuntimeClass the pods run under, e.g. gvisor for GKE Sandbox (ADR 0066 D5). Left out: none, as before."
             }
           }
         }
@@ -1336,6 +1341,137 @@
               "description": "The stores' own security (ADR 0066 D3; INFRARED_STORES_SECURITY): SeaweedFS under mutual TLS from cert-manager and signed tokens, the master's HTTP API off. Needs stores.enabled."
             }
           }
+        },
+        "tenantPods": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Tenants' pods (ADR 0066 D4, D5; INFRARED_TENANT_PODS): every zone of an org but the platform org carries what the install requires of its pods (no Kubernetes token, the placement), which the scaffolded chart applies; each such zone's default ServiceAccount and each org's builder mount no token."
+            },
+            "placement": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Where tenants' zone pods run: nodeSelector, tolerations and runtimeClassName. Empty: anywhere.",
+              "properties": {
+                "nodeSelector": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "tolerations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "runtimeClassName": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                  "description": "The RuntimeClass the pods run under, e.g. gvisor for GKE Sandbox (ADR 0066 D5). Left out: none, as before."
+                }
+              }
+            }
+          }
+        },
+        "quotas": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Quotas (ADR 0066 D4; INFRARED_TENANT_QUOTAS): the zones on this cluster of an org but the platform org share zones evenly, each with a ResourceQuota and a LimitRange, and its builds namespace gets builds."
+            },
+            "zones": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "One org's zones on this cluster, together.",
+              "properties": {
+                "cpu": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "CPU asked for, e.g. \"2\". Above zero."
+                },
+                "memory": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Memory asked for, and its limit, e.g. 4Gi. Above zero."
+                },
+                "storage": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Disk across the org's volumes, e.g. 10Gi."
+                },
+                "pods": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Pods across the org's zones; each zone gets at least 2."
+                },
+                "volumes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "PersistentVolumeClaims across the org's zones; 0 allows none."
+                }
+              }
+            },
+            "builds": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "One org's builds.",
+              "properties": {
+                "concurrency": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Builds of one org at once."
+                },
+                "memory": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "The most memory one build container may have, e.g. 4Gi. Above zero."
+                }
+              }
+            }
+          }
+        },
+        "admissionPolicies": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES): ValidatingAdmissionPolicies that refuse, in the namespaces of every org but the platform org, what anyone but Infrared makes that would cross the tenancy. Needs Kubernetes 1.30 or later."
+            }
+          }
+        },
+        "denyLogging": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Deny logging (ADR 0066 D10; INFRARED_DENY_LOGGING): GKE Dataplane V2 logs each connection a NetworkPolicy refuses in the namespaces of every org but the platform org."
+            }
+          }
+        },
+        "argoCD": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "restrictDefaultProject": {
+              "type": "boolean",
+              "description": "Argo CD's default project (ADR 0066 D10; INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT): restricted to the platform org's gitops repo and Argo CD's own objects in its namespace."
+            }
+          }
         }
       }
     },
@@ -1448,6 +1584,11 @@
                   "type": "object"
                 }
               }
+            },
+            "runtimeClassName": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+              "description": "The RuntimeClass the pods run under, e.g. gvisor for GKE Sandbox (ADR 0066 D5). Left out: none, as before."
             }
           }
         }

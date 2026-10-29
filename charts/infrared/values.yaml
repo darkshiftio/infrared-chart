@@ -137,6 +137,8 @@ builds:
   # a node selector, tolerations and resources the operator writes into each kpack Image's
   # spec.build, the Images already in the gitops repos included, so builds keep off the nodes
   # Infrared runs on, e.g. a node pool of their own. Empty: the scheduler places builds anywhere.
+  # It also takes `runtimeClassName`, e.g. `gvisor` for GKE Sandbox on a hosted plane (ADR 0066
+  # D5), which kpack copies to each build's pod; left out, builds run as before.
   placement:
     nodeSelector: {}
     tolerations: []
@@ -300,6 +302,77 @@ tenancy:
     # while its servers roll. Off: as before. The gitops template's `infrared`
     # Application carries it.
     enabled: false
+  tenantPods:
+    # -- Tenants' pods (ADR 0066 D4, D5; INFRARED_TENANT_PODS, operator). Each
+    # zone on this cluster of an org but the platform org carries, in its
+    # values file, what the install requires of its pods: no Kubernetes token,
+    # and `placement`. The chart Infrared scaffolds applies it (`.Values.tenancy`),
+    # and a Product's own chart must too. Each such zone's `default`
+    # ServiceAccount and each org's `builder` mount no token. Off: as before,
+    # and the operator takes the zones' block out. The gitops template's
+    # `infrared` Application carries it.
+    enabled: false
+    # -- Where tenants' zone pods run: `nodeSelector`, `tolerations` and
+    # `runtimeClassName`, as builds.placement but without resources, e.g. the
+    # tenants pool under GKE Sandbox's `gvisor`. Empty: anywhere, as before.
+    placement: {}
+  quotas:
+    # -- Quotas (ADR 0066 D4; INFRARED_TENANT_QUOTAS, operator). The zones on
+    # this cluster of an org but the platform org share `zones` evenly: each
+    # gets the ResourceQuota `infrared-quota` (no LoadBalancer or NodePort
+    # Service either) and the LimitRange `infrared-limits` (a container
+    # without resources gets the scaffolded chart's defaults; at most 2Gi of
+    # scratch disk). The org's builds namespace gets `builds`. Off: no quota,
+    # as before, and the operator removes its own. The gitops template's
+    # `infrared` Application carries it.
+    enabled: false
+    zones:
+      # -- CPU one org's zones may ask for, together.
+      cpu: "2"
+      # -- Memory one org's zones may ask for, and their limit, together.
+      memory: 4Gi
+      # -- Disk across one org's volumes.
+      storage: 10Gi
+      # -- Pods across one org's zones; each zone gets at least 2, so a
+      # rollout's new pod fits.
+      pods: 20
+      # -- Volumes (PersistentVolumeClaims) across one org's zones; 0 allows
+      # none.
+      volumes: 4
+    builds:
+      # -- Builds of one org at once; one more waits for a slot.
+      concurrency: 2
+      # -- The most memory one build container may have, and its default.
+      memory: 4Gi
+  admissionPolicies:
+    # -- Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES,
+    # operator). The operator applies ValidatingAdmissionPolicies
+    # `infrared-tenancy-*` that refuse, in the namespaces of every org but the
+    # platform org, what anyone but Infrared's own ServiceAccounts makes:
+    # LoadBalancer, NodePort and ExternalName Services, hand-written
+    # endpoints, a route on another zone's name, the platform's kinds,
+    # egress to the private ranges, pods off the tenants' placement or with
+    # a token (with tenantPods), and changes to what Infrared made; and any
+    # namespace deleted by Argo CD. Needs Kubernetes 1.30 or later. Off: no
+    # policy, as before, and the operator removes its own. The gitops
+    # template's `infrared` Application carries it.
+    enabled: false
+  denyLogging:
+    # -- Deny logging (ADR 0066 D10; INFRARED_DENY_LOGGING, operator). GKE
+    # Dataplane V2 logs each connection a NetworkPolicy refuses in the
+    # namespaces of every org but the platform org (NetworkLogging `default`,
+    # and an annotation on each namespace). Elsewhere it logs nothing. Off:
+    # as before. The gitops template's `infrared` Application carries it.
+    enabled: false
+  argoCD:
+    # -- Argo CD's default project (ADR 0066 D10;
+    # INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT, operator). The operator
+    # restricts the project `default`, which the gitops template's root
+    # Applications use, to the platform org's gitops repo and Argo CD's own
+    # objects in its namespace, so no other Application can use it to deploy
+    # anywhere. Off: Argo CD's own `default`, put back if the operator
+    # restricted it. The gitops template's `infrared` Application carries it.
+    restrictDefaultProject: false
 
 codeIndex:
   # -- Infrared's code index: Zoekt and the code service, which the gitops
@@ -593,7 +666,8 @@ observability:
 runner:
   # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a
   # node selector and tolerations, e.g. a node pool of their own away from the nodes Infrared runs
-  # on. Empty: the scheduler places steps anywhere.
+  # on. Empty: the scheduler places steps anywhere. It also takes `runtimeClassName`, e.g.
+  # `gvisor` for GKE Sandbox (ADR 0066 D5); left out, steps run as before.
   placement:
     nodeSelector: {}
     tolerations: []

@@ -549,10 +549,15 @@ observability:
 runner:
   # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a
   # node selector and tolerations, e.g. a node pool of their own away from the nodes Infrared runs
-  # on. Each step keeps its own resources. Empty: the scheduler places steps anywhere.
+  # on. Empty: the scheduler places steps anywhere.
   placement:
     nodeSelector: {}
     tolerations: []
+    # -- The agent's container's requests and limits, where Claude Code, the Product's builds and
+    # its linters run, e.g. `{limits: {memory: 6Gi}}`. Each one left out keeps the operator's
+    # default: 250m CPU and 1Gi asked for, a 4Gi memory limit. An attempt whose agent is
+    # OOMKilled says so on its step and opens an info Incident on its Product.
+    resources: {}
   image:
     # -- Repository under image.registry.
     repository: infrared-runner

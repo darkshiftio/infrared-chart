@@ -1386,7 +1386,7 @@
         "placement": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Where agent steps' runner pods run.",
+          "description": "Where agent steps' runner pods run, and the agent's container's resources.",
           "properties": {
             "nodeSelector": {
               "type": "object",
@@ -1398,6 +1398,18 @@
               "type": "array",
               "items": {
                 "type": "object"
+              }
+            },
+            "resources": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "requests": {
+                  "type": "object"
+                },
+                "limits": {
+                  "type": "object"
+                }
               }
             }
           }

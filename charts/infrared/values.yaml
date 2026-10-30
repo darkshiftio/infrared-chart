@@ -133,15 +133,15 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here main's 07033a8 (#35): the
-  # Gateway edge behind a Cloudflare Tunnel (spec.tunnel, infrared-docs-internal
-  # ADR 0064), which only an operator from infrared-operator de981e1
-  # (api/v0.103.0) or later renders; after #36 and #37 (the network fence, the
-  # registry by identity and the stores' own security, each off until its
-  # tenancy value turns it on; workspace TODO 473).
+  # to install from a branch of the template. Here main's 86d8900 (#40): the
+  # rest of the hosted plane's tenancy (#38) and its caps (#41), each off until
+  # its tenancy value turns it on, which only an operator from
+  # infrared-operator 650c92f or later renders; SeaweedFS's buckets made by a
+  # Job of the template's own under the stores' own security (#39); and the
+  # runners' egress check (#40). Workspace TODO 473, after #35 (the tunnel).
   # New gitops repos take it; an existing one keeps its spec.template.version
   # until that is patched.
-  templateVersion: 07033a8c9edf9ab9e95eeaebad51cff3ddf9fcdb
+  templateVersion: 86d890006c5023f3e1c4553a7e717af1b57fbb50
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

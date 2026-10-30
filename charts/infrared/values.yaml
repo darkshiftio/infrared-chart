@@ -127,14 +127,15 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here main's 532ed48 (#34): the
-  # platform domain on a Cloudflare token of its own (spec.previews.domainTokenKey,
-  # infrared-docs-internal ADR 0063), which only an operator from
-  # infrared-operator 9b9090e (api/v0.100.0) or later renders; after #33 (the
-  # builder's first group builds a Go service's UI with Node before Go).
+  # to install from a branch of the template. Here main's 07033a8 (#35): the
+  # Gateway edge behind a Cloudflare Tunnel (spec.tunnel, infrared-docs-internal
+  # ADR 0064), which only an operator from infrared-operator de981e1
+  # (api/v0.103.0) or later renders; after #36 and #37 (the network fence, the
+  # registry by identity and the stores' own security, each off until its
+  # tenancy value turns it on; workspace TODO 473).
   # New gitops repos take it; an existing one keeps its spec.template.version
   # until that is patched.
-  templateVersion: 532ed486f9ff22c50b3e8d5bf84676f1614af7cf
+  templateVersion: 07033a8c9edf9ab9e95eeaebad51cff3ddf9fcdb
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

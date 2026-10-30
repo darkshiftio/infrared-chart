@@ -88,6 +88,20 @@ installation:
   previews: {}
   #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
   #   signInURL: https://infrared.example.com  # where preview visitors sign in
+  # -- The Cloudflare Tunnel a Gateway edge is reached through (INFRARED_TUNNEL,
+  # operator, as JSON; infrared-docs-internal ADR 0064): `id`, the tunnel's UUID
+  # in lower case, required when set and not a secret, and `credentialsKey`, the
+  # key of infrared-platform-tokens that holds its credentials file, empty for
+  # `cloudflare-tunnel-credentials`, which platformTokens.cloudflareTunnelCredentials
+  # writes. The gitops template then runs cloudflared beside Envoy, binds no
+  # node's ports, gives the edge a certificate from a certificate authority
+  # inside the cluster and leaves external-dns and Cloudflare's origin issuer
+  # out, so the install needs no Cloudflare token for its own names; the edge's
+  # names are proxied CNAMEs to <id>.cfargotunnel.com, made once by a person.
+  # Written to the Installation's `spec.tunnel`. Empty: the edge is on the
+  # nodes' own ports, as before.
+  tunnel: {}
+  #   id: 6ff42ae2-765d-4adf-8112-31c55c1551ef
   # The telemetry plane (infrared-docs-internal ADR 0044): where an install without
   # the metrics stack sends its numbers, and the platform label every series
   # carries, <login>-<stack> for a Mac's stack (INFRARED_TELEMETRY_URL and
@@ -113,14 +127,15 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here main's 532ed48 (#34): the
-  # platform domain on a Cloudflare token of its own (spec.previews.domainTokenKey,
-  # infrared-docs-internal ADR 0063), which only an operator from
-  # infrared-operator 9b9090e (api/v0.100.0) or later renders; after #33 (the
-  # builder's first group builds a Go service's UI with Node before Go).
+  # to install from a branch of the template. Here main's 07033a8 (#35): the
+  # Gateway edge behind a Cloudflare Tunnel (spec.tunnel, infrared-docs-internal
+  # ADR 0064), which only an operator from infrared-operator de981e1
+  # (api/v0.103.0) or later renders; after #36 and #37 (the network fence, the
+  # registry by identity and the stores' own security, each off until its
+  # tenancy value turns it on; workspace TODO 473).
   # New gitops repos take it; an existing one keeps its spec.template.version
   # until that is patched.
-  templateVersion: 532ed486f9ff22c50b3e8d5bf84676f1614af7cf
+  templateVersion: 07033a8c9edf9ab9e95eeaebad51cff3ddf9fcdb
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
@@ -600,9 +615,10 @@ license:
 # `infrared-platform` and copies each token to the namespace that uses it. The
 # Secret is rendered when a token is set, or with codeIndex.enabled the code
 # index's record, which it then holds as well. Pass each token with --set-file
-# so it is never in a values file; surrounding whitespace is trimmed. It is kept
-# on uninstall and when the values stop carrying the token, as under Argo CD
-# after adoption.
+# so it is never in a values file; surrounding whitespace is trimmed, and from
+# the tunnel's credentials file one trailing newline alone. It is kept on
+# uninstall and when the values stop carrying the token, as under Argo CD after
+# adoption.
 platformTokens:
   # -- Cloudflare API token (key `cloudflare-api-token`), for the edge's DNS
   # records and origin certificates.
@@ -617,6 +633,14 @@ platformTokens:
   # DNS Edit and SSL and Certificates Edit on that zone. Pass it with
   # --set-file.
   cloudflareDomainApiToken: ""
+  # -- A Cloudflare Tunnel's credentials file, the JSON cloudflared runs it with
+  # (key `cloudflare-tunnel-credentials`), for `installation.tunnel` (ADR 0064):
+  # the gitops template copies it to cloudflared in envoy-gateway-system. Pass
+  # it with --set-file; one trailing newline is trimmed, nothing else, and it
+  # must be a JSON object whose TunnelID is installation.tunnel.id when that is
+  # set. It can answer for the tunnel's names, so it never goes in a values
+  # file.
+  cloudflareTunnelCredentials: ""
   # -- Access key ID of the backup bucket's key (key `backup-access-key-id`);
   # required with the secret access key. Not with Google Cloud Storage
   # (`backup.endpoint` `https://storage.googleapis.com`), which takes no key:

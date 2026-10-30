@@ -64,6 +64,12 @@ spec:
             - name: INFRARED_PREVIEWS
               value: {{ toJson . | quote }}
             {{- end }}
+            {{- with .Values.installation.tunnel }}
+            # The Installation's spec.tunnel, written while it is empty: the
+            # Cloudflare Tunnel a Gateway edge is reached through (ADR 0064).
+            - name: INFRARED_TUNNEL
+              value: {{ toJson . | quote }}
+            {{- end }}
             # Under an umbrella chart, its version is Infrared's (ADR 0038).
             - name: INFRARED_VERSION
               value: {{ include "infrared.deployedAppVersion" . | quote }}

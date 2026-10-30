@@ -271,6 +271,50 @@ substrate:
   # (INFRARED_DISABLED_COMPONENTS) unless this is true.
   testActors: false
 
+# How the install fences one org from another and from the platform: a hosted
+# plane's tenancy (infrared-docs-internal ADR 0066). Every switch is off by
+# default, so an install that sets none behaves as before.
+tenancy:
+  networkPolicies:
+    # -- The network fence (ADR 0066 D1; INFRARED_NETWORK_POLICIES, operator).
+    # The operator gives every org's namespaces (ir-org-<org>, builds-<org> and
+    # each zone) a NetworkPolicy that denies all but the org's own namespaces,
+    # DNS, the internet outside the private ranges and the platform's callers of
+    # a zone; the gitops template gives every platform namespace an ingress
+    # policy that admits the platform alone; and this chart fences its own
+    # namespace: the API admits its callers alone, Gitea and MCP the org's
+    # steps and builds, and a zone snapshot reaches its zone and the internet
+    # alone. Needs a CNI that enforces NetworkPolicy (GKE Dataplane V2). Off:
+    # no policy, as before. The gitops template's `infrared` Application
+    # carries it, so adoption keeps it.
+    enabled: false
+  registryPulls:
+    # -- The registry by identity (ADR 0066 D3; INFRARED_REGISTRY_PULLS,
+    # operator). The install's own registry (`registry.address`) reads for no
+    # one without a login: the gitops template's zot-base grants neither
+    # anonymous nor default read, every signed-in user reads platform/ (kpack's
+    # builder), and each org's user alone reads its own path. The operator
+    # writes each zone of an org the Secret `zot-pull`, the org's own registry
+    # user, and lists it on the zone's `default` ServiceAccount, so a zone's
+    # pods pull their org's images and no other's. With Agent Substrate's test
+    # actors (`substrate.testActors`), anyone still reads platform/substrate/:
+    # atelet pulls with no login. Needs `registry.address`; without it,
+    # nothing changes. Off: anyone in the cluster reads the registry, as
+    # before. The gitops template's `infrared` Application carries it.
+    enabled: false
+  storesSecurity:
+    # -- The stores' own security (ADR 0066 D3; INFRARED_STORES_SECURITY,
+    # operator, for the gitops template). SeaweedFS takes no caller it cannot
+    # identify: gRPC under mutual TLS from cert-manager, the filer's HTTP and
+    # volume writes under signed tokens whose keys the template's hook
+    # generates in the cluster, the master's HTTP API off. Zot, Agent
+    # Substrate and the backups speak S3 with their own identities, as before.
+    # Needs `stores.enabled`; without it, nothing changes. Turned on over
+    # stores that already run, the object store refuses for a few minutes
+    # while its servers roll. Off: as before. The gitops template's `infrared`
+    # Application carries it.
+    enabled: false
+
 codeIndex:
   # -- Infrared's code index: Zoekt and the code service, which the gitops
   # template runs in the namespace code-index, reached by infrared-api alone at
@@ -438,10 +482,11 @@ session:
 
 # The install's Infrared licence (infrared-docs operate/licensing). The API and
 # the operator read it from the Secret `infrared-license`, key `license`, in the
-# release namespace, or from the Secret existingSecret names. Without a valid
-# licence an install runs a 48-hour trial, then pauses new agent steps and
-# promotions to production zones until one is installed. Install one here, in
-# Settings, or with `ir license install`.
+# release namespace, or from the Secret existingSecret names. Infrared 0.1 is an
+# open beta: without a valid licence an install runs fully through November 30,
+# 2026 (until 2026-12-01 00:00 UTC), then pauses new agent steps and promotions
+# to production zones until one is installed. Later releases need a licence
+# from darkshift. Install one here, in Settings, or with `ir license install`.
 license:
   # -- A licence from darkshift (one line starting `irl1.`), for the Secret
   # `infrared-license`, key `license`. Pass it with --set-file so it is never in
@@ -571,10 +616,15 @@ observability:
 runner:
   # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a
   # node selector and tolerations, e.g. a node pool of their own away from the nodes Infrared runs
-  # on. Each step keeps its own resources. Empty: the scheduler places steps anywhere.
+  # on. Empty: the scheduler places steps anywhere.
   placement:
     nodeSelector: {}
     tolerations: []
+    # -- The agent's container's requests and limits, where Claude Code, the Product's builds and
+    # its linters run, e.g. `{limits: {memory: 6Gi}}`. Each one left out keeps the operator's
+    # default: 250m CPU and 2Gi asked for, a 6Gi memory limit. An attempt whose agent is
+    # OOMKilled says so on its step and opens an info Incident on its Product.
+    resources: {}
   image:
     # -- Repository under image.registry.
     repository: infrared-runner
@@ -645,12 +695,21 @@ operator:
   extraArgs: []
   # -- Extra environment variables.
   extraEnv: []
+  # -- Move a Change to the Product repo its hydration names
+  # (INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO, operator): an issue opened without a repo on a Product
+  # of several repos is transferred (GitHub) or copied with the original closed (Gitea) to the
+  # repo the work is in, before triage. Off, hydration's repo is only recorded and a person
+  # moves the Change. Until the operator reads rollout flags (ADR 0061 decision 9).
+  moveIssueToHydratedRepo: false
+  # The manager's cache holds every org's namespaces, so its memory grows with the orgs: on the home
+  # it rose from 350 MiB to 480 MiB in the week to 2026-10-28 and touched the old 512Mi limit
+  # (workspace TODO 463). The request is what it uses there; the limit leaves it room to double.
   resources:
     requests:
       cpu: 50m
-      memory: 128Mi
-    limits:
       memory: 512Mi
+    limits:
+      memory: 1Gi
   rbac:
     # -- Rules appended to the generated operator ClusterRole.
     extraRules: []

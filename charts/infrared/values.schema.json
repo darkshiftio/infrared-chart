@@ -501,6 +501,10 @@
             ]
           }
         },
+        "moveIssueToHydratedRepo": {
+          "type": "boolean",
+          "description": "Move a Change to the Product repo its hydration names (INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO)."
+        },
         "resources": {
           "$ref": "#/$defs/resources"
         },
@@ -1333,6 +1337,43 @@
         }
       }
     },
+    "tenancy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the install fences one org from another and from the platform (infrared-docs-internal ADR 0066). Every switch is off by default.",
+      "properties": {
+        "networkPolicies": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "The network fence (ADR 0066 D1): the operator fences every org's namespaces (INFRARED_NETWORK_POLICIES), the gitops template every platform namespace, and this chart its own. Needs a CNI that enforces NetworkPolicy."
+            }
+          }
+        },
+        "registryPulls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "The registry by identity (ADR 0066 D3; INFRARED_REGISTRY_PULLS): the install's registry reads for no one without a login, and each zone pulls as its org's own registry user (the Secret zot-pull on its default ServiceAccount). Needs registry.address."
+            }
+          }
+        },
+        "storesSecurity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "The stores' own security (ADR 0066 D3; INFRARED_STORES_SECURITY): SeaweedFS under mutual TLS from cert-manager and signed tokens, the master's HTTP API off. Needs stores.enabled."
+            }
+          }
+        }
+      }
+    },
     "codeIndex": {
       "type": "object",
       "additionalProperties": false,
@@ -1417,7 +1458,7 @@
         "placement": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Where agent steps' runner pods run.",
+          "description": "Where agent steps' runner pods run, and the agent's container's resources.",
           "properties": {
             "nodeSelector": {
               "type": "object",
@@ -1429,6 +1470,18 @@
               "type": "array",
               "items": {
                 "type": "object"
+              }
+            },
+            "resources": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "requests": {
+                  "type": "object"
+                },
+                "limits": {
+                  "type": "object"
+                }
               }
             }
           }

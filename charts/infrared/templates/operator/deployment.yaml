@@ -128,6 +128,30 @@ spec:
             - name: INFRARED_REGISTRY
               value: {{ . | quote }}
             {{- end }}
+            {{- if .Values.operator.moveIssueToHydratedRepo }}
+            # A Change follows the Product repo its hydration names.
+            - name: INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO
+              value: "true"
+            {{- end }}
+            {{- if .Values.tenancy.networkPolicies.enabled }}
+            # The network fence (tenancy.networkPolicies.enabled, ADR 0066 D1):
+            # every org's namespaces fenced, and the template's side handed on.
+            - name: INFRARED_NETWORK_POLICIES
+              value: "true"
+            {{- end }}
+            {{- if .Values.tenancy.registryPulls.enabled }}
+            # The registry by identity (tenancy.registryPulls.enabled, ADR 0066
+            # D3): each zone pulls as its org, and the template's registry reads
+            # for no one without a login.
+            - name: INFRARED_REGISTRY_PULLS
+              value: "true"
+            {{- end }}
+            {{- if .Values.tenancy.storesSecurity.enabled }}
+            # The stores' own security (tenancy.storesSecurity.enabled, ADR 0066
+            # D3), handed on to the template.
+            - name: INFRARED_STORES_SECURITY
+              value: "true"
+            {{- end }}
             {{- if .Values.stores.enabled }}
             # The platform's stores, which the gitops template installs.
             - name: INFRARED_STORES

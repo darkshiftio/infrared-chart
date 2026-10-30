@@ -154,6 +154,35 @@ spec:
               branch:
                 description: Branch is the branch the run's agents commit to, infrared/<run>.
                 type: string
+              change:
+                description: |-
+                  Change is where the Change went when Infrared moved it to another
+                  Product repo; nil while it is where spec.change puts it.
+                properties:
+                  issue:
+                    description: Issue is the issue on Repo, <repo>#<number>; empty
+                      when the run has none.
+                    type: string
+                  movedAt:
+                    format: date-time
+                    type: string
+                  movedBy:
+                    description: |-
+                      MovedBy is who moved it: the step whose report named the repo, or the
+                      person who asked.
+                    type: string
+                  movedFrom:
+                    description: |-
+                      MovedFrom is the issue the Change was opened as, <repo>#<number>: a
+                      GitHub issue transferred from there, or one closed there with a link.
+                    type: string
+                  repo:
+                    description: Repo is the Product repo the Change is made in from
+                      now on.
+                    type: string
+                required:
+                - repo
+                type: object
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -486,6 +515,12 @@ spec:
                         - question
                         type: object
                       type: array
+                    repo:
+                      description: |-
+                        Repo is the Product repo the step's report says the Change is made in,
+                        when it named one: hydration's choice, or a builder's that finds the
+                        work in another repo than the run's.
+                      type: string
                     rounds:
                       description: |-
                         Rounds are the step's earlier rounds, oldest first: each time a later

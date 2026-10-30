@@ -1,0 +1,207 @@
+{{- /*
+The network fence in Infrared's own namespace (tenancy.networkPolicies.enabled;
+infrared-docs-internal ADR 0066 D1 and D2). The operator fences every org's
+namespaces and the gitops template every other platform namespace; this is the
+release namespace's part:
+  infrared-fence          every pod but the API's admits the platform (every
+                          namespace that is neither an org's nor a zone: the
+                          edge and the tailnet router to the UI, Argo CD's repo
+                          server and kpack to Gitea, vmagent to the operator's
+                          metrics, and this namespace's own pods), the org's
+                          runner pods and builds to Gitea on 3000, and the steps
+                          that may use infrared-mcp to its code listener, 8081
+  infrared-api            the API admits its callers alone: the UI (every /api
+                          request), infrared-mcp, the operator, the summary
+                          video Jobs, the edge (zones' sign-in checks: Envoy's
+                          pods, or Traefik's), Alertmanager (its webhooks) and
+                          Grafana (its sign-in) on 8080, and vmagent on the
+                          metrics port
+  infrared-zone-snapshot  a zone snapshot, which runs a tenant's page in headless
+                          Chrome here, reaches DNS, the zones and the internet
+                          outside the private ranges alone; each zone admits
+                          only its own org's snapshots
+*/ -}}
+{{- if .Values.tenancy.networkPolicies.enabled }}
+{{- $ns := .Release.Namespace }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: infrared-fence
+  namespace: {{ $ns }}
+  labels:
+    {{- include "infrared.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: NotIn
+        values: [api]
+  policyTypes:
+    - Ingress
+  ingress:
+    # The platform: every namespace that is neither an org's nor a zone.
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: infrared.darkshift.io/org
+                operator: DoesNotExist
+              - key: infrared.darkshift.io/zone
+                operator: DoesNotExist
+    # An org's own namespaces the operator makes, ir-org-<org> and
+    # builds-<org>: its runner pods and its builds clone from Gitea.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: infrared
+            matchExpressions:
+              - key: infrared.darkshift.io/org
+                operator: Exists
+      ports:
+        - protocol: TCP
+          port: 3000
+    # The steps whose AgentRole names the infrared MCP server, to its code
+    # listener; the operator's own policy lets only those pods out to it.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: infrared
+            matchExpressions:
+              - key: infrared.darkshift.io/org
+                operator: Exists
+          podSelector:
+            matchLabels:
+              infrared.darkshift.io/mcp: "true"
+            matchExpressions:
+              - key: infrared.darkshift.io/run
+                operator: Exists
+      ports:
+        - protocol: TCP
+          port: 8081
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: infrared-api
+  namespace: {{ $ns }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "infrared.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Infrared's own: the UI's nginx, which proxies every /api request,
+    # infrared-mcp, the operator, and the summary video Jobs.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "infrared.selectorLabels" (dict "root" . "component" "ui") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "infrared.selectorLabels" (dict "root" . "component" "mcp") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "infrared.selectorLabels" (dict "root" . "component" "operator") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: summary-video
+      ports:
+        - protocol: TCP
+          port: 8080
+    # The edge: a zone's sign-in check, from Envoy's pods of the Gateway edge,
+    # or from Traefik's on a Traefik edge.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: edge
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8080
+    # The metrics stack: Alertmanager posts each org's alerts, and Grafana
+    # signs people in through Infrared on the API's Service.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [vmalertmanager, grafana]
+      ports:
+        - protocol: TCP
+          port: 8080
+    # vmagent, on the metrics port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.metricsPort }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: infrared-zone-snapshot
+  namespace: {{ $ns }}
+  labels:
+    {{- include "infrared.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: zone-snapshot
+  policyTypes:
+    - Egress
+  egress:
+    # DNS: kube-dns, and NodeLocal DNSCache where it runs.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: node-local-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The zones, each of which admits only its own org's snapshots.
+    - to:
+        - namespaceSelector:
+            matchExpressions:
+              - key: infrared.darkshift.io/zone
+                operator: Exists
+    # A public page's own assets, and a zone's public address.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+{{- end }}

@@ -178,12 +178,14 @@ helm template infrared "$chart" -n infrared "${install[@]}" --set stores.singleN
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/adopted-values.yaml" \
   -f "$chart/ci/stores-adopted-values.yaml" --set stores.singleNode=true >"$out/single-node-adopted.yaml"
 helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/single-node-no-stores.yaml"
+# A Change that follows the repo its hydration names.
+helm template infrared "$chart" -n infrared --set operator.moveIssueToHydratedRepo=true >"$out/move-issues.yaml"
 # The tools agent steps copy in, from an install's own images, as a mirror names them.
 mirror_go='registry.example.com/golang:1.26.10@sha256:0000000000000000000000000000000000000000000000000000000000000031'
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -192,7 +194,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -425,6 +427,10 @@ for f in single-node single-node-adopted; do
   has "$f.env" "$f: the stores on the cluster's one node" 'INFRARED_STORES_SINGLE_NODE="true"'
 done
 check single-node-no-stores.env "stores.singleNode without the stores hands on nothing" '^INFRARED_STORES(_SINGLE_NODE)?=' 0
+# A Change follows its hydration's repo only when asked for: off, the operator
+# gets nothing and leaves the Change where it opened.
+check defaults.env "a Change stays on the repo it opened on by default" '^INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO=' 0
+has move-issues.env "a Change follows the repo its hydration names" 'INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO="true"'
 # Substrate's test actors (sandbox-v1 runs any command it is sent) are off
 # unless substrate.testActors is true, at install and after adoption alike;
 # without the stores and a registry the template runs no Substrate, and the
@@ -473,6 +479,10 @@ check gitea.yaml "Gitea 1.27.3, rootless, by digest, in each of its five contain
 if [[ "$(objn gitea Deployment gitea '^  replicas: 1$|^    type: Recreate$')" == 2 ]]; then
   ok "one Gitea pod, replaced with Recreate: its volume is ReadWriteOnce"
 else bad "Gitea is not one pod with strategy Recreate"; fi
+# The operator's cache grows with the orgs: 480 MiB on the home in October 2026 (workspace TODO 463).
+if [[ "$(objn defaults Deployment infrared-operator '^              memory: 512Mi$|^              memory: 1Gi$')" == 2 ]]; then
+  ok "the operator requests 512Mi of memory and is limited to 1Gi"
+else bad "the operator's memory is not a 512Mi request and a 1Gi limit"; fi
 # api.strategy Recreate renders no rollingUpdate block: the API server refuses one beside it.
 if [[ "$(objn defaults Deployment infrared-api '^    type: RollingUpdate$|^      maxSurge: 1$|^      maxUnavailable: 0$')" == 3 ]]; then
   ok "the API rolls out by default with one pod surged and none unavailable"
@@ -1047,6 +1057,7 @@ refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
   --set backup.bucket=CI-Backup,backup.endpoint=https://backup.example.com,backup.region=us-east-1
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
 refuse "stores.singleNode as a string fails" "at '/stores/singleNode'" --set-string stores.singleNode=true
+refuse "operator.moveIssueToHydratedRepo as a string fails" "at '/operator/moveIssueToHydratedRepo'" --set-string operator.moveIssueToHydratedRepo=true
 refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
 refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
 refuse "gitea.enabled as a string fails" "at '/gitea/enabled'" --set-string gitea.enabled=true
@@ -1744,8 +1755,69 @@ if [[ "$(awk '/^name:/{print $2}' "$chart/Chart.yaml")" == infrared-core ]] && g
   ok "the chart is infrared-core, and what it renders is still named infrared"
 else bad "the chart's name leaks into what it renders"; fi
 
+step "the network fence (tenancy.networkPolicies, ADR 0066 D1)"
+# Off by default: no NetworkPolicy, nothing handed to the operator. On: the
+# operator fences every org's namespaces, and this chart its own namespace.
+helm template infrared "$chart" -n infrared --set tenancy.networkPolicies.enabled=true >"$out/network-policies.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" --set tenancy.networkPolicies.enabled=true \
+  >"$out/network-policies-gitea.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" --set tenancy.networkPolicies.enabled=true >"$out/lint.log" 2>&1; then
+  ok "lint install with Gitea and the network fence"
+else cat "$out/lint.log"; bad "lint install with Gitea and the network fence"; fi
+check defaults.yaml "no NetworkPolicy by default" '^kind: NetworkPolicy$' 0
+check defaults.yaml "the network fence handed to nobody by default" 'INFRARED_NETWORK_POLICIES' 0
+check network-policies.yaml "three NetworkPolicies with the fence on" '^kind: NetworkPolicy$' 3
+if [[ "$(envv network-policies INFRARED_NETWORK_POLICIES)" == true ]]; then ok "the fence handed to the operator (INFRARED_NETWORK_POLICIES)"
+else bad "INFRARED_NETWORK_POLICIES is '$(envv network-policies INFRARED_NETWORK_POLICIES)', want true"; fi
+np() { yq -N -o json -I0 "select(.kind == \"NetworkPolicy\" and .metadata.name == \"$2\") | .spec" "$out/$1.yaml"; }
+platform_peer='{"from":[{"namespaceSelector":{"matchExpressions":[{"key":"infrared.darkshift.io/org","operator":"DoesNotExist"},{"key":"infrared.darkshift.io/zone","operator":"DoesNotExist"}]}}]}'
+fence="$(np network-policies infrared-fence)"
+if [[ "$(yq -p json -o json -I0 '.podSelector' <<<"$fence")" == '{"matchExpressions":[{"key":"app.kubernetes.io/component","operator":"NotIn","values":["api"]}]}' ]] \
+  && [[ "$(yq -p json -o json -I0 '.ingress[0]' <<<"$fence")" == "$platform_peer" ]] \
+  && [[ "$(yq -p json -o json -I0 '[.ingress[1].ports[].port, .ingress[2].ports[].port]' <<<"$fence")" == '[3000,8081]' ]] \
+  && [[ "$(yq -p json -o json -I0 '[.ingress[1].from[0].namespaceSelector, .ingress[2].from[0].podSelector.matchLabels]' <<<"$fence")" \
+    == '[{"matchLabels":{"app.kubernetes.io/managed-by":"infrared"},"matchExpressions":[{"key":"infrared.darkshift.io/org","operator":"Exists"}]},{"infrared.darkshift.io/mcp":"true"}]' ]]; then
+  ok "every pod but the API admits the platform alone, Gitea the org's steps and builds, and MCP's code listener the steps that may use it"
+else bad "infrared-fence is wrong: $fence"; fi
+api="$(np network-policies infrared-api)"
+# The API's callers, by rule: what each admits, as namespace/pod and port.
+callers="$(yq -p json -o json -I0 '[.ingress[] | ([.from[] | ((.namespaceSelector.matchLabels["kubernetes.io/metadata.name"]) // "infrared") + "/" + ((.podSelector.matchLabels["app.kubernetes.io/component"]) // (.podSelector.matchLabels["app.kubernetes.io/name"]) // (.podSelector.matchLabels["gateway.envoyproxy.io/owning-gateway-name"]) // (.podSelector.matchExpressions[0].values | join("+")))] | join(",")) + "@" + ([.ports[].port | tostring] | join(","))]' <<<"$api")"
+if [[ "$callers" == '["infrared/ui,infrared/mcp,infrared/operator,infrared/summary-video@8080","envoy-gateway-system/edge,kube-system/traefik@8080","monitoring/vmalertmanager+grafana@8080","monitoring/vmagent@9090"]' ]] \
+  && [[ "$(yq -p json -o json -I0 '.podSelector.matchLabels["app.kubernetes.io/component"]' <<<"$api")" == '"api"' ]]; then
+  ok "the API admits the UI, MCP, the operator, the summary videos, the edge, Alertmanager, Grafana and vmagent alone (ADR 0066 D2)"
+else bad "infrared-api's callers are $callers"; fi
+snap="$(np network-policies infrared-zone-snapshot)"
+if [[ "$(yq -p json -o json -I0 '[.policyTypes[], (.egress | length | tostring), .egress[1].to[0].namespaceSelector.matchExpressions[0].key, .egress[2].to[0].ipBlock.cidr]' <<<"$snap")" \
+    == '["Egress","3","infrared.darkshift.io/zone","0.0.0.0/0"]' ]]; then
+  ok "a zone snapshot reaches DNS, the zones and the internet outside the private ranges alone"
+else bad "infrared-zone-snapshot is wrong: $snap"; fi
+check network-policies-gitea.yaml "Gitea's install keeps the three policies" '^kind: NetworkPolicy$' 3
+
+step "the registry by identity and the stores' own security (tenancy.registryPulls, tenancy.storesSecurity, ADR 0066 D3)"
+# Off by default: nothing handed to the operator. On: one variable each, and no
+# object of their own: the operator writes each zone's zot-pull, and the gitops
+# template closes the registry's reads and secures SeaweedFS.
+helm template infrared "$chart" -n infrared --include-crds --set tenancy.registryPulls.enabled=true --set tenancy.storesSecurity.enabled=true \
+  >"$out/registry-pulls.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set tenancy.registryPulls.enabled=true --set tenancy.storesSecurity.enabled=true \
+  >"$out/lint.log" 2>&1; then
+  ok "lint install with the registry by identity and the stores' own security"
+else cat "$out/lint.log"; bad "lint install with the registry by identity and the stores' own security"; fi
+check defaults.yaml "the registry by identity handed to nobody by default" 'INFRARED_REGISTRY_PULLS' 0
+check defaults.yaml "the stores' own security handed to nobody by default" 'INFRARED_STORES_SECURITY' 0
+if [[ "$(envv registry-pulls INFRARED_REGISTRY_PULLS)" == true ]] && [[ "$(envv registry-pulls INFRARED_STORES_SECURITY)" == true ]]; then
+  ok "both handed to the operator (INFRARED_REGISTRY_PULLS, INFRARED_STORES_SECURITY)"
+else bad "INFRARED_REGISTRY_PULLS is '$(envv registry-pulls INFRARED_REGISTRY_PULLS)', INFRARED_STORES_SECURITY '$(envv registry-pulls INFRARED_STORES_SECURITY)', want true"; fi
+objects() { yq -N -r 'select(.kind != null) | .kind + "/" + (.metadata.namespace // "") + "/" + .metadata.name' "$out/$1.yaml" | sort; }
+if [[ "$(objects registry-pulls)" == "$(objects defaults)" ]]; then ok "neither renders an object of its own"
+else bad "the switches render objects of their own: $(diff <(objects defaults) <(objects registry-pulls) | tr '\n' ' ')"; fi
+for key in tenancy.registryPulls.enable tenancy.storesSecurity.on; do
+  if helm template infrared "$chart" -n infrared --set "$key=true" >/dev/null 2>&1; then bad "the schema took $key"
+  else ok "the schema refuses $key"; fi
+done
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

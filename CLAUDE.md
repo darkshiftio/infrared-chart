@@ -43,6 +43,19 @@ The Helm chart for Infrared (`charts/infrared`), published to
   itself; no template renders them. Gitea's sign-in is the ConfigMap
   `infrared-gitea-sign-in`, `gitea.gitea.additionalConfigFromEnvs` and the
   post-init step `configure-infrared-sign-in`, which never fails Gitea's start.
+- ADR 0066 D1, the network fence: env `INFRARED_NETWORK_POLICIES`
+  (`tenancy.networkPolicies.enabled`) on the operator, rendered only when set,
+  and `templates/networkpolicy.yaml` (`infrared-fence`, `infrared-api`,
+  `infrared-zone-snapshot`) in the release namespace, rendered only then too.
+  The API's policy names its callers by the chart's selector labels and the
+  template's fixed names (`envoy-gateway-system`, `monitoring`); a new caller
+  of the API is a new rule there.
+- ADR 0066 D3, the registry by identity and the stores' own security: env
+  `INFRARED_REGISTRY_PULLS` (`tenancy.registryPulls.enabled`) and
+  `INFRARED_STORES_SECURITY` (`tenancy.storesSecurity.enabled`) on the
+  operator, each rendered only when set. The chart renders nothing else for
+  them: the operator writes each zone's `zot-pull`, and the gitops template
+  closes Zot's reads and secures SeaweedFS.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

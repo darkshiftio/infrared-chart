@@ -1743,8 +1743,44 @@ for key in tenancy.registryPulls.enable tenancy.storesSecurity.on; do
   else ok "the schema refuses $key"; fi
 done
 
+step "agent steps' permissions, runners' egress by name and the management cluster's egress (runner.permissions, runner.networkPolicy.egressByName, managementCluster.egressAddresses; ADR 0066 D7, workspace TODO 52 and 461)"
+# Off by default: nothing handed to the operator. On: one variable each, exact,
+# and no object of their own: the operator writes the runners' FQDN network
+# policies and sets each step's runner itself.
+helm template infrared "$chart" -n infrared --include-crds --set runner.permissions=strict \
+  --set runner.networkPolicy.egressByName.enabled=true --set 'managementCluster.egressAddresses={34.1.2.3,34.1.2.0/28}' \
+  >"$out/agent-reach.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set runner.permissions=strict --set runner.networkPolicy.egressByName.enabled=true \
+  --set 'managementCluster.egressAddresses={34.1.2.3}' >"$out/lint.log" 2>&1; then
+  ok "lint install with strict permissions, egress by name and the management cluster's egress"
+else cat "$out/lint.log"; bad "lint install with strict permissions, egress by name and the management cluster's egress"; fi
+for v in INFRARED_RUNNER_PERMISSIONS INFRARED_RUNNER_EGRESS INFRARED_MANAGEMENT_EGRESS; do
+  check defaults.yaml "$v handed to nobody by default" "name: $v\$" 0
+done
+opvar() { yq -r "select(.kind == \"Deployment\" and .metadata.name == \"infrared-operator\") | .spec.template.spec.containers[0].env[] | select(.name == \"$2\") | .value" "$out/$1.yaml"; }
+if [[ "$(opvar agent-reach INFRARED_RUNNER_PERMISSIONS)" == strict ]]; then ok "strict handed to the operator (INFRARED_RUNNER_PERMISSIONS)"
+else bad "INFRARED_RUNNER_PERMISSIONS is '$(opvar agent-reach INFRARED_RUNNER_PERMISSIONS)', want strict"; fi
+want_egress='{"hosts":["proxy.golang.org","sum.golang.org","registry.npmjs.org","pypi.org","files.pythonhosted.org"]}'
+if [[ "$(opvar agent-reach INFRARED_RUNNER_EGRESS)" == "$want_egress" ]]; then ok "the default hosts handed to the operator as JSON (INFRARED_RUNNER_EGRESS)"
+else bad "INFRARED_RUNNER_EGRESS is '$(opvar agent-reach INFRARED_RUNNER_EGRESS)', want $want_egress"; fi
+if [[ "$(opvar agent-reach INFRARED_MANAGEMENT_EGRESS)" == "34.1.2.3,34.1.2.0/28" ]]; then ok "the egress addresses handed to the operator (INFRARED_MANAGEMENT_EGRESS)"
+else bad "INFRARED_MANAGEMENT_EGRESS is '$(opvar agent-reach INFRARED_MANAGEMENT_EGRESS)', want 34.1.2.3,34.1.2.0/28"; fi
+if [[ "$(objects agent-reach)" == "$(objects defaults)" ]]; then ok "none renders an object of its own"
+else bad "the values render objects of their own: $(diff <(objects defaults) <(objects agent-reach) | tr '\n' ' ')"; fi
+if helm template infrared "$chart" -n infrared --set runner.networkPolicy.egressByName.enabled=true --set runner.networkPolicy.enabled=false \
+  >"$out/egress-no-policy.log" 2>&1; then bad "egress by name rendered without the runner NetworkPolicy"
+elif grep -q 'egressByName needs runner.networkPolicy.enabled' "$out/egress-no-policy.log"; then ok "egress by name refuses to render without the runner NetworkPolicy"
+else cat "$out/egress-no-policy.log"; bad "egress by name failed for another reason without the runner NetworkPolicy"; fi
+for set in runner.permissions=open 'runner.networkPolicy.egressByName.hosts={10.74.0.50}' \
+  'runner.networkPolicy.egressByName.hosts={https://proxy.golang.org}' 'managementCluster.egressAddresses={stores}' \
+  runner.networkPolicy.egressByName.host=proxy.golang.org; do
+  if helm template infrared "$chart" -n infrared --set "$set" >/dev/null 2>&1; then bad "the schema took $set"
+  else ok "the schema refuses $set"; fi
+done
+check defaults.yaml "the operator may write runners' FQDN network policies (generated RBAC)" 'fqdnnetworkpolicies' 1
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls agent-reach; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

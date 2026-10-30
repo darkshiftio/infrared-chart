@@ -10,6 +10,12 @@ fullnameOverride: ""
 managementCluster:
   # -- Name of the management cluster this installation runs on (INFRARED_CLUSTER_NAME).
   name: infrared-mgmt
+  # -- The addresses this cluster reaches the internet from (INFRARED_MANAGEMENT_EGRESS, operator):
+  # addresses or CIDRs, public and no wider than /24 or /56, such as a Cloud NAT's static address on
+  # a cluster with private nodes (infrared-iac-modules gcp/gke-cluster output `cloud_nat_ips`). A
+  # conformance run's new cluster admits these to its API, before the nodes' external addresses
+  # (workspace TODO 461). Empty: the nodes' external addresses, as before.
+  egressAddresses: []
 
 # -- The API's public base URL, ending in /api (e.g. https://infrared.example.com/api), if exposed
 # (INFRARED_EXTERNAL_URL). Optional: Infrared works it out from each request.
@@ -591,6 +597,12 @@ observability:
   metricsWriteURL: ""
 
 runner:
+  # -- How agent steps' tools are checked (INFRARED_RUNNER_PERMISSIONS, operator; the runner's
+  # INFRARED_PERMISSIONS). Empty: Claude Code runs a step without permission checks, fenced by the
+  # runner's deny lists, as before. `strict`: the step's AgentRole's allowed tools, with the runner's
+  # workspace tools, are the agent's whole surface, and anything else is refused (infrared-docs-internal
+  # ADR 0066 D7). A hosted plane sets strict.
+  permissions: ""
   # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a
   # node selector and tolerations, e.g. a node pool of their own away from the nodes Infrared runs
   # on. Empty: the scheduler places steps anywhere.
@@ -628,6 +640,27 @@ runner:
     # -- Private networks runners may also reach over HTTP(S), e.g. a GitHub
     # Enterprise Server: a list of CIDRs.
     extraEgressCIDRs: []
+    egressByName:
+      # -- Runners' internet egress by name (ADR 0066 D7; INFRARED_RUNNER_EGRESS, operator, as
+      # JSON). Needs GKE Dataplane V2 with FQDN network policy on (infrared-iac-modules
+      # gcp/gke-cluster `fqdn_network_policy`) and networkPolicy.enabled. The runner NetworkPolicy
+      # loses its rule for the internet, and the operator writes a GKE FQDNNetworkPolicy per host,
+      # on TCP 443: the model API (api.anthropic.com) and `hosts` for every step; for each step its
+      # org's forge, the hosts its AgentRole's egressAllowlist names (its Product's zones for
+      # $(ZONE_HOSTS)) and Slack when it posts there. DNS, Gitea, the registry and infrared-mcp keep
+      # their NetworkPolicy rules. A step on a cluster without FQDN network policy dead-letters,
+      # saying so. An FQDN policy admits the addresses a host resolves to: a host on a shared front
+      # end admits what else those addresses serve. Off: the internet on 80 and 443, as before.
+      enabled: false
+      # -- Hosts every step may reach besides the model API: the module proxies its builds use (Go,
+      # npm, PyPI). A name, or a wildcard over one level (*.example.com); never an address or a
+      # name only the cluster resolves.
+      hosts:
+        - proxy.golang.org
+        - sum.golang.org
+        - registry.npmjs.org
+        - pypi.org
+        - files.pythonhosted.org
 
 summaryvideo:
   # -- Provision summary videos of Changes (a narrated scene per step) and product

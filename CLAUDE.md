@@ -56,6 +56,14 @@ The Helm chart for Infrared (`charts/infrared`), published to
   operator, each rendered only when set. The chart renders nothing else for
   them: the operator writes each zone's `zot-pull`, and the gitops template
   closes Zot's reads and secures SeaweedFS.
+- ADR 0066 D7 and workspace TODO 461, the operator's side: env
+  `INFRARED_RUNNER_PERMISSIONS` (`runner.permissions`, `strict`),
+  `INFRARED_RUNNER_EGRESS` (`runner.networkPolicy.egressByName`, JSON
+  `{"hosts": [...]}`, which needs `runner.networkPolicy.enabled`: the render
+  fails without it) and `INFRARED_MANAGEMENT_EGRESS`
+  (`managementCluster.egressAddresses`, comma-separated), each rendered only
+  when set. The operator writes the runners' FQDN network policies; the chart
+  renders none.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

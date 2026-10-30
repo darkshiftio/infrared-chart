@@ -68,6 +68,13 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `runtimeClassName` in `builds.placement` and `runner.placement` is schema and
   a comment, never a default key, so `INFRARED_BUILD_PLACEMENT` and
   `INFRARED_AGENT_STEP_PLACEMENT` keep their bytes.
+- Workspace TODO 473's caps: env `INFRARED_BUILD_CAPS` (`tenancy.buildCaps`,
+  JSON `{"deadlineMinutes", "minutesPerOrgPerDay"}`) and
+  `INFRARED_TENANT_STORAGE` (`tenancy.tenantStorage`, JSON `{"capGi",
+  "minDiskGi"}`) on the operator, each rendered only when enabled. The
+  operator refuses to start on a cap it cannot keep, so the schema refuses the
+  same first: both build caps zero, or no `capGi`. The chart renders nothing
+  else for them.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

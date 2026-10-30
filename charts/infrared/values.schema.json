@@ -1507,6 +1507,100 @@
               "description": "Argo CD's default project (ADR 0066 D10; INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT): restricted to the platform org's gitops repo and Argo CD's own objects in its namespace."
             }
           }
+        },
+        "buildCaps": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Build caps (workspace TODO 473; INFRARED_BUILD_CAPS): for every org but the platform org, each build's deadline, and its build minutes a UTC day, counted by the operator in the ConfigMap build-minutes-<org>, past which its new build pods wait for midnight UTC."
+            },
+            "deadlineMinutes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Minutes one build may run; 0 sets no deadline."
+            },
+            "minutesPerOrgPerDay": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Build minutes one org may use a UTC day; 0 neither counts nor holds."
+            }
+          },
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "deadlineMinutes": {
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "deadlineMinutes"
+                ]
+              },
+              {
+                "properties": {
+                  "minutesPerOrgPerDay": {
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "minutesPerOrgPerDay"
+                ]
+              }
+            ]
+          }
+        },
+        "tenantStorage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Tenants' storage (workspace TODO 473; INFRARED_TENANT_STORAGE): the volumes of every org but the platform org share capGi, which the admission policy infrared-tenancy-storage enforces. Needs Kubernetes 1.30 or later."
+            },
+            "capGi": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "GiB every tenant org's volumes may hold together; above zero when enabled."
+            },
+            "minDiskGi": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The smallest volume the cloud makes, in GiB: a smaller one counts as this."
+            }
+          },
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "properties": {
+              "capGi": {
+                "minimum": 1
+              }
+            },
+            "required": [
+              "capGi"
+            ]
+          }
         }
       }
     },

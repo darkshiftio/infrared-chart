@@ -1874,8 +1874,44 @@ if [[ "$(rules_on defaults admissionregistration.k8s.io)" == *validatingadmissio
   ok "the operator may keep the policies, GKE's NetworkLogging and the quotas"
 else bad "the operator's ClusterRole lacks the tenancy's rules: $(rules_on defaults admissionregistration.k8s.io) $(rules_on defaults networking.gke.io)"; fi
 
+step "the caps (tenancy.buildCaps, tenancy.tenantStorage; workspace TODO 473)"
+# Off by default: nothing handed to the operator. On: one variable each, as
+# the JSON the operator reads, and no object of their own: the operator
+# writes the tallies, the pause quotas and the storage policy, and the gitops
+# template carries both.
+caps_on=(--set tenancy.buildCaps.enabled=true --set tenancy.tenantStorage.enabled=true --set tenancy.tenantStorage.capGi=400)
+helm template infrared "$chart" -n infrared --include-crds "${caps_on[@]}" >"$out/caps.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${caps_on[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with the caps"
+else cat "$out/lint.log"; bad "lint install with the caps"; fi
+for v in INFRARED_BUILD_CAPS INFRARED_TENANT_STORAGE; do
+  check defaults.yaml "$v handed to nobody by default" "$v" 0
+done
+if [[ "$(openv caps INFRARED_BUILD_CAPS)" == '{"deadlineMinutes":20,"minutesPerOrgPerDay":60}' ]] \
+  && [[ "$(openv caps INFRARED_TENANT_STORAGE)" == '{"capGi":400,"minDiskGi":10}' ]]; then
+  ok "the build caps and the tenants' storage handed to the operator as the JSON it reads"
+else bad "INFRARED_BUILD_CAPS is '$(openv caps INFRARED_BUILD_CAPS)', INFRARED_TENANT_STORAGE '$(openv caps INFRARED_TENANT_STORAGE)'"; fi
+helm template infrared "$chart" -n infrared --set tenancy.buildCaps.enabled=true --set tenancy.buildCaps.deadlineMinutes=0 >"$out/caps-minutes.yaml"
+if [[ "$(openv caps-minutes INFRARED_BUILD_CAPS)" == '{"deadlineMinutes":0,"minutesPerOrgPerDay":60}' ]]; then
+  ok "the build minutes alone, with no deadline"
+else bad "INFRARED_BUILD_CAPS is '$(openv caps-minutes INFRARED_BUILD_CAPS)'"; fi
+if [[ "$(objects caps)" == "$(objects defaults)" ]]; then ok "neither renders an object of its own"
+else bad "the caps render objects of their own: $(diff <(objects defaults) <(objects caps) | tr '\n' ' ')"; fi
+# The operator refuses to start on a cap it cannot keep, so the schema
+# refuses it first: both caps zero, no storage to share, a key the operator
+# does not read, or minutes that are not whole.
+for keys in "tenancy.buildCaps.enabled=true,tenancy.buildCaps.deadlineMinutes=0,tenancy.buildCaps.minutesPerOrgPerDay=0" \
+  "tenancy.tenantStorage.enabled=true" "tenancy.tenantStorage.enabled=true,tenancy.tenantStorage.capGi=-1" \
+  "tenancy.buildCaps.minutes=60" "tenancy.tenantStorage.capGB=400" "tenancy.buildCaps.deadlineMinutes=1.5"; do
+  if helm template infrared "$chart" -n infrared --set "$keys" >/dev/null 2>&1; then bad "the schema took $keys"
+  else ok "the schema refuses $keys"; fi
+done
+if [[ "$(rules_on defaults kpack.io)" == *builds* ]] && [[ "$(rules_on defaults '')" == *persistentvolumeclaims* ]]; then
+  ok "the operator may read kpack's Builds and the volumes"
+else bad "the operator's ClusterRole lacks the caps' rules: $(rules_on defaults kpack.io) $(rules_on defaults '')"; fi
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

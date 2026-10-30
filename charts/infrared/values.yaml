@@ -389,6 +389,39 @@ tenancy:
     # anywhere. Off: Argo CD's own `default`, put back if the operator
     # restricted it. The gitops template's `infrared` Application carries it.
     restrictDefaultProject: false
+  buildCaps:
+    # -- Build caps (workspace TODO 473; INFRARED_BUILD_CAPS, operator). For
+    # every org but the platform org, each build pod gets `deadlineMinutes` as
+    # its activeDeadlineSeconds, so a build that runs past it fails, and the
+    # minutes the org's builds ran are added up per UTC day, each build once,
+    # in the ConfigMap `build-minutes-<org>` in this namespace, which the API's
+    # Usage page reads. At `minutesPerOrgPerDay` the operator holds the org's
+    # new build pods (the ResourceQuota `infrared-build-pause`, no pods, in its
+    # builds namespace) until midnight UTC; a build already running finishes.
+    # Off: no deadline and no count, as before, and the operator removes its
+    # own. The gitops template's `infrared` Application carries it.
+    enabled: false
+    # -- Minutes one build may run; 0 sets no deadline.
+    deadlineMinutes: 20
+    # -- Build minutes one org may use a UTC day; 0 neither counts nor holds.
+    minutesPerOrgPerDay: 60
+  tenantStorage:
+    # -- Tenants' storage (workspace TODO 473; INFRARED_TENANT_STORAGE,
+    # operator). The volumes of every org but the platform org share `capGi`:
+    # the ValidatingAdmissionPolicy `infrared-tenancy-storage` refuses a
+    # tenant's new or larger volume past what remains, counting each volume at
+    # least `minDiskGi`. Size `capGi` from the cloud's disk quota, less the
+    # nodes' disks at the node pools' most and the platform's own volumes.
+    # Needs Kubernetes 1.30 or later. Off: no cap, as before, and the operator
+    # removes its policy. The gitops template's `infrared` Application carries
+    # it.
+    enabled: false
+    # -- GiB every tenant org's volumes may hold together; above zero when
+    # enabled.
+    capGi: 0
+    # -- The smallest volume the cloud makes, in GiB (10 for GKE's balanced
+    # persistent disk): a smaller one counts as this.
+    minDiskGi: 10
 
 codeIndex:
   # -- Infrared's code index: Zoekt and the code service, which the gitops

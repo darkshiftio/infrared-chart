@@ -183,6 +183,22 @@ spec:
             - name: INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT
               value: "true"
             {{- end }}
+            {{- with .Values.tenancy.buildCaps }}
+            {{- if .enabled }}
+            # Build caps (tenancy.buildCaps, workspace TODO 473): each tenant
+            # build's deadline, and its org's build minutes a UTC day.
+            - name: INFRARED_BUILD_CAPS
+              value: {{ dict "deadlineMinutes" (int .deadlineMinutes) "minutesPerOrgPerDay" (int .minutesPerOrgPerDay) | toJson | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.tenancy.tenantStorage }}
+            {{- if .enabled }}
+            # Tenants' storage (tenancy.tenantStorage, workspace TODO 473): the
+            # cap on every tenant org's volumes together.
+            - name: INFRARED_TENANT_STORAGE
+              value: {{ dict "capGi" (int .capGi) "minDiskGi" (int .minDiskGi) | toJson | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.stores.enabled }}
             # The platform's stores, which the gitops template installs.
             - name: INFRARED_STORES

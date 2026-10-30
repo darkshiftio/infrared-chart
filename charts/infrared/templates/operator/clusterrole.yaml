@@ -29,6 +29,7 @@ rules:
   - ""
   resources:
   - nodes
+  - persistentvolumeclaims
   verbs:
   - get
   - list
@@ -41,6 +42,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 - apiGroups:
   - ""

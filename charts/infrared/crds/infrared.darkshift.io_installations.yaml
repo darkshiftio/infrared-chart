@@ -554,6 +554,39 @@ spec:
                 description: TokenVerified is set once the one-time setup token has
                   been presented.
                 type: boolean
+              tunnel:
+                description: |-
+                  Tunnel is the Cloudflare Tunnel a Gateway edge is reached through
+                  (infrared-docs-internal ADR 0064). Set, the gitops template binds no
+                  node's ports: Envoy's Service is a ClusterIP, cloudflared routes
+                  Infrared's own name and *.<previews domain> to it, the edge's
+                  certificate comes from a certificate authority inside the cluster, and
+                  neither external-dns nor Cloudflare's origin issuer runs. The edge's
+                  names are proxied CNAMEs to the tunnel, made once by a person. Only a
+                  Gateway edge reads it; empty, nothing changes. The operator fills it
+                  from INFRARED_TUNNEL while it is empty, and never overwrites a value
+                  someone set.
+                properties:
+                  credentialsKey:
+                    default: cloudflare-tunnel-credentials
+                    description: |-
+                      CredentialsKey is the key of the Secret infrared-platform-tokens that
+                      holds the tunnel's credentials file, the JSON cloudflared runs the
+                      tunnel with. The chart's platformTokens.cloudflareTunnelCredentials
+                      writes it under the default, cloudflare-tunnel-credentials.
+                    maxLength: 253
+                    pattern: ^[-._a-zA-Z0-9]+$
+                    type: string
+                  id:
+                    description: |-
+                      ID is the tunnel's UUID, lower case, as Cloudflare names it, e.g.
+                      6ff42ae2-765d-4adf-8112-31c55c1551ef. It is not a secret: the edge's
+                      names are proxied CNAMEs to <id>.cfargotunnel.com.
+                    pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                    type: string
+                required:
+                - id
+                type: object
             type: object
           status:
             description: InstallationStatus is the observed state of the install.

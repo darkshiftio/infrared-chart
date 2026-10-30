@@ -70,6 +70,12 @@ spec:
             - name: INFRARED_PREVIEWS
               value: {{ toJson . | quote }}
             {{- end }}
+            {{- with .Values.installation.tunnel }}
+            # The Installation's spec.tunnel, written while it is empty: the
+            # Cloudflare Tunnel a Gateway edge is reached through (ADR 0064).
+            - name: INFRARED_TUNNEL
+              value: {{ toJson . | quote }}
+            {{- end }}
             # Under an umbrella chart, its version is Infrared's (ADR 0038).
             - name: INFRARED_VERSION
               value: {{ include "infrared.deployedAppVersion" . | quote }}
@@ -151,6 +157,53 @@ spec:
             # D3), handed on to the template.
             - name: INFRARED_STORES_SECURITY
               value: "true"
+            {{- end }}
+            {{- with .Values.tenancy.tenantPods }}
+            {{- if .enabled }}
+            # Tenants' pods (tenancy.tenantPods, ADR 0066 D4, D5): no Kubernetes
+            # token, and the placement, in every zone of an org but the platform's.
+            - name: INFRARED_TENANT_PODS
+              value: {{ dict "placement" (.placement | default dict) | toJson | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.tenancy.quotas }}
+            {{- if .enabled }}
+            # Quotas (tenancy.quotas, ADR 0066 D4): one org's budget, split over its
+            # zones here, and its builds' cap.
+            - name: INFRARED_TENANT_QUOTAS
+              value: {{ dict "zones" .zones "builds" .builds | toJson | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.tenancy.admissionPolicies.enabled }}
+            # The admission policies on tenants' namespaces (ADR 0066 D6).
+            - name: INFRARED_ADMISSION_POLICIES
+              value: "true"
+            {{- end }}
+            {{- if .Values.tenancy.denyLogging.enabled }}
+            # GKE logs the denies of tenants' namespaces (ADR 0066 D10).
+            - name: INFRARED_DENY_LOGGING
+              value: "true"
+            {{- end }}
+            {{- if .Values.tenancy.argoCD.restrictDefaultProject }}
+            # Argo CD's default project takes the platform's root alone (ADR 0066 D10).
+            - name: INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT
+              value: "true"
+            {{- end }}
+            {{- with .Values.tenancy.buildCaps }}
+            {{- if .enabled }}
+            # Build caps (tenancy.buildCaps, workspace TODO 473): each tenant
+            # build's deadline, and its org's build minutes a UTC day.
+            - name: INFRARED_BUILD_CAPS
+              value: {{ dict "deadlineMinutes" (int .deadlineMinutes) "minutesPerOrgPerDay" (int .minutesPerOrgPerDay) | toJson | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.tenancy.tenantStorage }}
+            {{- if .enabled }}
+            # Tenants' storage (tenancy.tenantStorage, workspace TODO 473): the
+            # cap on every tenant org's volumes together.
+            - name: INFRARED_TENANT_STORAGE
+              value: {{ dict "capGi" (int .capGi) "minDiskGi" (int .minDiskGi) | toJson | quote }}
+            {{- end }}
             {{- end }}
             {{- if .Values.stores.enabled }}
             # The platform's stores, which the gitops template installs.

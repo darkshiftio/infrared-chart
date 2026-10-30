@@ -13,7 +13,9 @@ rules:
   - ""
   resources:
   - configmaps
+  - limitranges
   - namespaces
+  - resourcequotas
   - serviceaccounts
   verbs:
   - create
@@ -27,6 +29,7 @@ rules:
   - ""
   resources:
   - nodes
+  - persistentvolumeclaims
   verbs:
   - get
   - list
@@ -39,6 +42,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 - apiGroups:
   - ""
@@ -74,6 +78,19 @@ rules:
   - '*'
   verbs:
   - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -328,6 +345,14 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
+- apiGroups:
+  - networking.gke.io
+  resources:
+  - networkloggings
+  verbs:
+  - get
   - patch
   - update
 - apiGroups:

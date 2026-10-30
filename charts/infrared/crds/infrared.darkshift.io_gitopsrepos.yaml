@@ -263,13 +263,15 @@ spec:
               edgeDigest:
                 description: |-
                   EdgeDigest is a digest of what the hydration commit renders from the
-                  Installation's spec.edge and spec.previews: the edge, the platform
-                  domain, Infrared's host, custom hostnames, Let's Encrypt's contact and
-                  the key of the platform domain's own Cloudflare token. Empty when it
-                  renders none of them. A change of any of them hydrates the repo again,
-                  so a platform domain that moves, to a zone of its own among others
-                  (infrared-docs-internal ADR 0063), reaches the gitops repo without a
-                  new template version.
+                  Installation's spec.edge, spec.previews and spec.tunnel: the edge, the
+                  platform domain, Infrared's host, custom hostnames, Let's Encrypt's
+                  contact, the key of the platform domain's own Cloudflare token, and the
+                  Cloudflare Tunnel's id and credentials key. Empty when it renders none
+                  of them. A change of any of them hydrates the repo again, so a platform
+                  domain that moves, to a zone of its own among others
+                  (infrared-docs-internal ADR 0063), or an edge that moves behind a
+                  tunnel (ADR 0064), reaches the gitops repo without a new template
+                  version.
                 type: string
               hydratedByChartVersion:
                 description: |-

@@ -354,6 +354,47 @@ if [[ "$(secret domain-token infrared-platform-tokens cloudflare-domain-api-toke
 else bad "infrared-platform-tokens' cloudflare-domain-api-token is not the domain's token, trimmed, beside the platform's"; fi
 has domain-token-install.env "the previews' domainTokenKey reaches the operator, as JSON" \
   'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"managedRoots\":[],\"signInURL\":\"https://infrared.example.com\"}"'
+# The Cloudflare Tunnel a Gateway edge is reached through (infrared-docs-internal
+# ADR 0064): installation.tunnel reaches the operator as INFRARED_TUNNEL, as
+# JSON, only when set; the tunnel's credentials file is
+# cloudflare-tunnel-credentials, byte for byte but for one trailing newline,
+# inner whitespace kept; alone it renders the Secret, beside the platform's it
+# adds its key, and existingSecret renders none. The refusals are below.
+tunnel_id=6ff42ae2-765d-4adf-8112-31c55c1551ef
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"%s", "Endpoint": ""}\n' "$tunnel_id" \
+  >"$out/ci-tunnel-credentials"
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"%s", "Endpoint": ""}' "$tunnel_id" \
+  >"$out/ci-tunnel-credentials-stored"
+tunnel_credentials=(--set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-credentials")
+helm template infrared "$chart" -n infrared "${tunnel_credentials[@]}" >"$out/tunnel-credentials.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" "${tunnel_credentials[@]}" --set installation.tunnel.id="$tunnel_id" \
+  >"$out/tunnel-install.yaml"
+helm template infrared "$chart" -n infrared "${tunnel_credentials[@]}" --set platformTokens.existingSecret=infrared-platform-tokens \
+  >"$out/tunnel-existing.yaml"
+# A credentials key of the install's own, kept in a Secret it makes, as after
+# Argo CD adopts the release: the gitops template carries the key.
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.credentialsKey=tunnel-saas2 --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-own-key.yaml"
+envs tunnel-install
+envs tunnel-own-key
+check defaults.env "no tunnel by default" '^INFRARED_TUNNEL=' 0
+check install.env "no tunnel without installation.tunnel" '^INFRARED_TUNNEL=' 0
+has tunnel-install.env "installation.tunnel reaches the operator, as JSON" 'INFRARED_TUNNEL="{\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
+has tunnel-own-key.env "a credentials key of the install's own reaches the operator with the tunnel" \
+  'INFRARED_TUNNEL="{\"credentialsKey\":\"tunnel-saas2\",\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
+check defaults.yaml "the Installation CRD has spec.tunnel" '^              tunnel:$' 1
+check defaults.yaml "...whose credentialsKey defaults to cloudflare-tunnel-credentials" '^                    default: cloudflare-tunnel-credentials$' 1
+check install.yaml "no cloudflare-tunnel-credentials without platformTokens.cloudflareTunnelCredentials" '^  cloudflare-tunnel-credentials: ' 0
+check tunnel-credentials.yaml "the tunnel's credentials alone render infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
+check tunnel-credentials.yaml "...with no other key" '^  (cloudflare-api-token|cloudflare-domain-api-token|backup-access-key-id|backup-secret-access-key): ' 0
+check tunnel-existing.yaml "platformTokens.existingSecret: no infrared-platform-tokens, even with the tunnel's credentials" '^  name: infrared-platform-tokens$' 0
+check tunnel-install.yaml "beside the platform's tokens, the tunnel's credentials and the bucket's key" \
+  '^  (cloudflare-api-token|cloudflare-tunnel-credentials|backup-access-key-id|backup-secret-access-key): ' 4
+secret tunnel-install infrared-platform-tokens cloudflare-tunnel-credentials >"$out/tunnel-stored"
+secret tunnel-credentials infrared-platform-tokens cloudflare-tunnel-credentials >"$out/tunnel-stored-alone"
+if cmp -s "$out/tunnel-stored" "$out/ci-tunnel-credentials-stored" && cmp -s "$out/tunnel-stored-alone" "$out/ci-tunnel-credentials-stored"; then
+  ok "the tunnel's credentials under cloudflare-tunnel-credentials, byte for byte but the trailing newline, inner whitespace kept"
+else bad "infrared-platform-tokens' cloudflare-tunnel-credentials is not the credentials file less its trailing newline"; fi
 # Every field of installation.previews that values.yaml documents, set at once
 # in one values file: the schema takes them all, and the operator gets them
 # whole in INFRARED_PREVIEWS.
@@ -963,6 +1004,38 @@ refuse "a domainTokenKey that is no Secret's key fails" "at '/installation/previ
 refuse "a domainTokenKey no Secret takes fails" "at '/installation/previews/domainTokenKey'" \
   --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
   --set-string installation.previews.domainTokenKey=..
+# The tunnel (ADR 0064): its id a lower-case UUID and required, its key a
+# Secret's; a credentials file that is no JSON object with a TunnelID, or
+# another tunnel's, and a credentials key the chart does not write, each
+# refused without the file in the message.
+refuse "a tunnel id that is no lower-case UUID fails" "at '/installation/tunnel/id'" \
+  --set installation.tunnel.id=6FF42AE2-765D-4ADF-8112-31C55C1551EF
+refuse "a tunnel id that is its name fails" "at '/installation/tunnel/id'" --set installation.tunnel.id=saas2
+refuse "a tunnel without an id fails" "missing property 'id'" --set installation.tunnel.credentialsKey=cloudflare-tunnel-credentials
+refuse "a tunnel's credentialsKey that is no Secret's key fails" "at '/installation/tunnel/credentialsKey'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.credentialsKey=tokens/tunnel
+refuse "a tunnel's credentialsKey no Secret takes fails" "at '/installation/tunnel/credentialsKey'" \
+  --set installation.tunnel.id="$tunnel_id" --set-string installation.tunnel.credentialsKey=..
+printf 'ci-not-json\n' >"$out/ci-tunnel-not-json"
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret="}\n' >"$out/ci-tunnel-no-id"
+printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"0b2a7a51-1c39-4d4e-9b0e-2f6a31e4c7d8"}\n' \
+  >"$out/ci-tunnel-other"
+: >"$out/tunnel-refusals.log"
+refuse "tunnel credentials that are no JSON fail" "a JSON object with its TunnelID" \
+  --set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-not-json"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+refuse "tunnel credentials without a TunnelID fail" "a JSON object with its TunnelID" \
+  --set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-no-id"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+refuse "another tunnel's credentials fail" "is another tunnel's" --set installation.tunnel.id="$tunnel_id" \
+  --set-file "platformTokens.cloudflareTunnelCredentials=$out/ci-tunnel-other"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+refuse "the tunnel's credentials under a key installation.tunnel.credentialsKey does not name fail" "does not name" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.credentialsKey=tunnel-saas2 "${tunnel_credentials[@]}"
+cat "$out/refuse.log" >>"$out/tunnel-refusals.log"
+if [ -s "$out/tunnel-refusals.log" ] && ! grep -q 'ci-not-json\|ci-tunnel-secret\|ci-account' "$out/tunnel-refusals.log"; then
+  ok "a refused tunnel credentials file is never printed"
+else bad "a refused tunnel credentials file is printed, or nothing was refused"; fi
 refuse "a template version that is a branch fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=main
 refuse "a short commit SHA fails" "at '/gitops/templateVersion'" --set gitops.templateVersion=0123456
 refuse "imageCredentials without imagePullSecrets fail" "imageCredentials needs imagePullSecrets[0].name" \
@@ -1779,8 +1852,102 @@ for set in runner.permissions=open 'runner.networkPolicy.egressByName.hosts={10.
 done
 check defaults.yaml "the operator may write runners' FQDN network policies (generated RBAC)" 'fqdnnetworkpolicies' 1
 
+step "the rest of the tenancy (tenancy.tenantPods, quotas, admissionPolicies, denyLogging, argoCD; ADR 0066 D4, D5, D6, D10)"
+# Off by default: nothing handed to the operator. On: one variable each,
+# tenants' pods and quotas as the JSON the operator reads, and no object of
+# their own: the operator writes the zones' blocks, the quotas and the
+# admission policies, and the gitops template carries the five.
+tenancy_on=(--set tenancy.tenantPods.enabled=true
+  --set-json 'tenancy.tenantPods.placement={"nodeSelector":{"infrared.darkshift.io/pool":"tenants"},"tolerations":[{"key":"infrared.darkshift.io/tenants","operator":"Equal","value":"true","effect":"NoSchedule"}],"runtimeClassName":"gvisor"}'
+  --set tenancy.quotas.enabled=true --set tenancy.admissionPolicies.enabled=true
+  --set tenancy.denyLogging.enabled=true --set tenancy.argoCD.restrictDefaultProject=true)
+helm template infrared "$chart" -n infrared --include-crds "${tenancy_on[@]}" >"$out/tenancy.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${tenancy_on[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with the rest of the tenancy"
+else cat "$out/lint.log"; bad "lint install with the rest of the tenancy"; fi
+for v in INFRARED_TENANT_PODS INFRARED_TENANT_QUOTAS INFRARED_ADMISSION_POLICIES INFRARED_DENY_LOGGING INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT; do
+  check defaults.yaml "$v handed to nobody by default" "$v" 0
+done
+# openv <render> <name>: the operator's variable, as the operator reads it.
+openv() {
+  yq -N -r "select(.kind == \"Deployment\" and .metadata.name == \"infrared-operator\") | .spec.template.spec.containers[]
+    | select(.name == \"operator\") | .env[] | select(.name == \"$2\") | .value" "$out/$1.yaml"
+}
+want_pods='{"placement":{"nodeSelector":{"infrared.darkshift.io/pool":"tenants"},"runtimeClassName":"gvisor","tolerations":[{"effect":"NoSchedule","key":"infrared.darkshift.io/tenants","operator":"Equal","value":"true"}]}}'
+want_quotas='{"builds":{"concurrency":2,"memory":"4Gi"},"zones":{"cpu":"2","memory":"4Gi","pods":20,"storage":"10Gi","volumes":4}}'
+if [[ "$(openv tenancy INFRARED_TENANT_PODS)" == "$want_pods" ]] && [[ "$(openv tenancy INFRARED_TENANT_QUOTAS)" == "$want_quotas" ]]; then
+  ok "tenants' pods and quotas handed to the operator as the JSON it reads"
+else bad "INFRARED_TENANT_PODS is '$(openv tenancy INFRARED_TENANT_PODS)', INFRARED_TENANT_QUOTAS '$(openv tenancy INFRARED_TENANT_QUOTAS)'"; fi
+switches="$(openv tenancy INFRARED_ADMISSION_POLICIES),$(openv tenancy INFRARED_DENY_LOGGING),$(openv tenancy INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT)"
+if [[ "$switches" == true,true,true ]]; then
+  ok "the admission policies, deny logging and Argo CD's default project handed to the operator"
+else bad "INFRARED_ADMISSION_POLICIES, INFRARED_DENY_LOGGING, INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT are $switches"; fi
+helm template infrared "$chart" -n infrared --set tenancy.tenantPods.enabled=true --set tenancy.quotas.enabled=true \
+  --set tenancy.quotas.zones.cpu=500m >"$out/tenancy-bare.yaml"
+if [[ "$(openv tenancy-bare INFRARED_TENANT_PODS)" == '{"placement":{}}' ]] \
+  && [[ "$(openv tenancy-bare INFRARED_TENANT_QUOTAS)" == '{"builds":{"concurrency":2,"memory":"4Gi"},"zones":{"cpu":"500m","memory":"4Gi","pods":20,"storage":"10Gi","volumes":4}}' ]]; then
+  ok "tenants' pods without a placement hand on an empty one, and a quota changed alone keeps the other defaults"
+else bad "INFRARED_TENANT_PODS is '$(openv tenancy-bare INFRARED_TENANT_PODS)', INFRARED_TENANT_QUOTAS '$(openv tenancy-bare INFRARED_TENANT_QUOTAS)'"; fi
+if [[ "$(objects tenancy)" == "$(objects defaults)" ]]; then ok "none renders an object of its own"
+else bad "the tenancy renders objects of its own: $(diff <(objects defaults) <(objects tenancy) | tr '\n' ' ')"; fi
+for key in tenancy.tenantPods.placement.resources.limits.memory=1Gi tenancy.quotas.zones.gpus=1 tenancy.quotas.builds.concurrency=0 \
+  tenancy.admissionPolicies.on=true tenancy.argoCD.restrictDefault=true tenancy.tenantPods.placement.runtimeClassName=Not_A_Name; do
+  if helm template infrared "$chart" -n infrared --set "$key" >/dev/null 2>&1; then bad "the schema took $key"
+  else ok "the schema refuses $key"; fi
+done
+# A placement's runtime class (ADR 0066 D5) reaches builds and steps; left
+# out, their placements are what they were.
+helm template infrared "$chart" -n infrared --set builds.placement.runtimeClassName=gvisor --set runner.placement.runtimeClassName=gvisor \
+  >"$out/runtime-class.yaml"
+if [[ "$(openv runtime-class INFRARED_BUILD_PLACEMENT)" == '{"nodeSelector":{},"resources":{},"runtimeClassName":"gvisor","tolerations":[]}' ]] \
+  && [[ "$(openv runtime-class INFRARED_AGENT_STEP_PLACEMENT)" == '{"nodeSelector":{},"resources":{},"runtimeClassName":"gvisor","tolerations":[]}' ]] \
+  && [[ "$(openv defaults INFRARED_BUILD_PLACEMENT)" == '{"nodeSelector":{},"resources":{},"tolerations":[]}' ]]; then
+  ok "runtimeClassName reaches the builds' and the steps' placements, and is absent by default"
+else bad "INFRARED_BUILD_PLACEMENT is '$(openv runtime-class INFRARED_BUILD_PLACEMENT)', INFRARED_AGENT_STEP_PLACEMENT '$(openv runtime-class INFRARED_AGENT_STEP_PLACEMENT)', by default '$(openv defaults INFRARED_BUILD_PLACEMENT)'"; fi
+rules_on() { yq -N -o json -I0 "select(.kind == \"ClusterRole\" and .metadata.name == \"infrared-operator\") | [.rules[] | select(.apiGroups[] == \"$2\") | .resources[]] | unique" "$out/$1.yaml"; }
+if [[ "$(rules_on defaults admissionregistration.k8s.io)" == *validatingadmissionpolicies* ]] && [[ "$(rules_on defaults networking.gke.io)" == *networkloggings* ]] \
+  && [[ "$(rules_on defaults '')" == *resourcequotas* ]]; then
+  ok "the operator may keep the policies, GKE's NetworkLogging and the quotas"
+else bad "the operator's ClusterRole lacks the tenancy's rules: $(rules_on defaults admissionregistration.k8s.io) $(rules_on defaults networking.gke.io)"; fi
+
+step "the caps (tenancy.buildCaps, tenancy.tenantStorage; workspace TODO 473)"
+# Off by default: nothing handed to the operator. On: one variable each, as
+# the JSON the operator reads, and no object of their own: the operator
+# writes the tallies, the pause quotas and the storage policy, and the gitops
+# template carries both.
+caps_on=(--set tenancy.buildCaps.enabled=true --set tenancy.tenantStorage.enabled=true --set tenancy.tenantStorage.capGi=400)
+helm template infrared "$chart" -n infrared --include-crds "${caps_on[@]}" >"$out/caps.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${caps_on[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with the caps"
+else cat "$out/lint.log"; bad "lint install with the caps"; fi
+for v in INFRARED_BUILD_CAPS INFRARED_TENANT_STORAGE; do
+  check defaults.yaml "$v handed to nobody by default" "$v" 0
+done
+if [[ "$(openv caps INFRARED_BUILD_CAPS)" == '{"deadlineMinutes":20,"minutesPerOrgPerDay":60}' ]] \
+  && [[ "$(openv caps INFRARED_TENANT_STORAGE)" == '{"capGi":400,"minDiskGi":10}' ]]; then
+  ok "the build caps and the tenants' storage handed to the operator as the JSON it reads"
+else bad "INFRARED_BUILD_CAPS is '$(openv caps INFRARED_BUILD_CAPS)', INFRARED_TENANT_STORAGE '$(openv caps INFRARED_TENANT_STORAGE)'"; fi
+helm template infrared "$chart" -n infrared --set tenancy.buildCaps.enabled=true --set tenancy.buildCaps.deadlineMinutes=0 >"$out/caps-minutes.yaml"
+if [[ "$(openv caps-minutes INFRARED_BUILD_CAPS)" == '{"deadlineMinutes":0,"minutesPerOrgPerDay":60}' ]]; then
+  ok "the build minutes alone, with no deadline"
+else bad "INFRARED_BUILD_CAPS is '$(openv caps-minutes INFRARED_BUILD_CAPS)'"; fi
+if [[ "$(objects caps)" == "$(objects defaults)" ]]; then ok "neither renders an object of its own"
+else bad "the caps render objects of their own: $(diff <(objects defaults) <(objects caps) | tr '\n' ' ')"; fi
+# The operator refuses to start on a cap it cannot keep, so the schema
+# refuses it first: both caps zero, no storage to share, a key the operator
+# does not read, or minutes that are not whole.
+for keys in "tenancy.buildCaps.enabled=true,tenancy.buildCaps.deadlineMinutes=0,tenancy.buildCaps.minutesPerOrgPerDay=0" \
+  "tenancy.tenantStorage.enabled=true" "tenancy.tenantStorage.enabled=true,tenancy.tenantStorage.capGi=-1" \
+  "tenancy.buildCaps.minutes=60" "tenancy.tenantStorage.capGB=400" "tenancy.buildCaps.deadlineMinutes=1.5"; do
+  if helm template infrared "$chart" -n infrared --set "$keys" >/dev/null 2>&1; then bad "the schema took $keys"
+  else ok "the schema refuses $keys"; fi
+done
+if [[ "$(rules_on defaults kpack.io)" == *builds* ]] && [[ "$(rules_on defaults '')" == *persistentvolumeclaims* ]]; then
+  ok "the operator may read kpack's Builds and the volumes"
+else bad "the operator's ClusterRole lacks the caps' rules: $(rules_on defaults kpack.io) $(rules_on defaults '')"; fi
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls agent-reach; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

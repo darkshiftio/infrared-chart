@@ -56,6 +56,25 @@ The Helm chart for Infrared (`charts/infrared`), published to
   operator, each rendered only when set. The chart renders nothing else for
   them: the operator writes each zone's `zot-pull`, and the gitops template
   closes Zot's reads and secures SeaweedFS.
+- ADR 0066 D4, D5, D6 and D10, the rest of the tenancy: env
+  `INFRARED_TENANT_PODS` (`tenancy.tenantPods`, JSON `{"placement": ...}`),
+  `INFRARED_TENANT_QUOTAS` (`tenancy.quotas`, JSON `{"zones", "builds"}`),
+  `INFRARED_ADMISSION_POLICIES`, `INFRARED_DENY_LOGGING` and
+  `INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT` on the operator, each rendered
+  only when set. The operator parses the JSON strictly, so a key the schema
+  takes is a key the operator reads. The chart renders nothing else for them:
+  the operator writes the zones' blocks, the quotas and the admission
+  policies, and the ClusterRole's rules come from `make sync-operator`.
+  `runtimeClassName` in `builds.placement` and `runner.placement` is schema and
+  a comment, never a default key, so `INFRARED_BUILD_PLACEMENT` and
+  `INFRARED_AGENT_STEP_PLACEMENT` keep their bytes.
+- Workspace TODO 473's caps: env `INFRARED_BUILD_CAPS` (`tenancy.buildCaps`,
+  JSON `{"deadlineMinutes", "minutesPerOrgPerDay"}`) and
+  `INFRARED_TENANT_STORAGE` (`tenancy.tenantStorage`, JSON `{"capGi",
+  "minDiskGi"}`) on the operator, each rendered only when enabled. The
+  operator refuses to start on a cap it cannot keep, so the schema refuses the
+  same first: both build caps zero, or no `capGi`. The chart renders nothing
+  else for them.
 - ADR 0066 D7 and workspace TODO 461, the operator's side: env
   `INFRARED_RUNNER_PERMISSIONS` (`runner.permissions`, `strict`),
   `INFRARED_RUNNER_EGRESS` (`runner.networkPolicy.egressByName`, JSON

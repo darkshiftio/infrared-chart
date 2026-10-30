@@ -56,6 +56,18 @@ The Helm chart for Infrared (`charts/infrared`), published to
   operator, each rendered only when set. The chart renders nothing else for
   them: the operator writes each zone's `zot-pull`, and the gitops template
   closes Zot's reads and secures SeaweedFS.
+- ADR 0066 D4, D5, D6 and D10, the rest of the tenancy: env
+  `INFRARED_TENANT_PODS` (`tenancy.tenantPods`, JSON `{"placement": ...}`),
+  `INFRARED_TENANT_QUOTAS` (`tenancy.quotas`, JSON `{"zones", "builds"}`),
+  `INFRARED_ADMISSION_POLICIES`, `INFRARED_DENY_LOGGING` and
+  `INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT` on the operator, each rendered
+  only when set. The operator parses the JSON strictly, so a key the schema
+  takes is a key the operator reads. The chart renders nothing else for them:
+  the operator writes the zones' blocks, the quotas and the admission
+  policies, and the ClusterRole's rules come from `make sync-operator`.
+  `runtimeClassName` in `builds.placement` and `runner.placement` is schema and
+  a comment, never a default key, so `INFRARED_BUILD_PLACEMENT` and
+  `INFRARED_AGENT_STEP_PLACEMENT` keep their bytes.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

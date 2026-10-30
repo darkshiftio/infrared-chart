@@ -1816,8 +1816,66 @@ for key in tenancy.registryPulls.enable tenancy.storesSecurity.on; do
   else ok "the schema refuses $key"; fi
 done
 
+step "the rest of the tenancy (tenancy.tenantPods, quotas, admissionPolicies, denyLogging, argoCD; ADR 0066 D4, D5, D6, D10)"
+# Off by default: nothing handed to the operator. On: one variable each,
+# tenants' pods and quotas as the JSON the operator reads, and no object of
+# their own: the operator writes the zones' blocks, the quotas and the
+# admission policies, and the gitops template carries the five.
+tenancy_on=(--set tenancy.tenantPods.enabled=true
+  --set-json 'tenancy.tenantPods.placement={"nodeSelector":{"infrared.darkshift.io/pool":"tenants"},"tolerations":[{"key":"infrared.darkshift.io/tenants","operator":"Equal","value":"true","effect":"NoSchedule"}],"runtimeClassName":"gvisor"}'
+  --set tenancy.quotas.enabled=true --set tenancy.admissionPolicies.enabled=true
+  --set tenancy.denyLogging.enabled=true --set tenancy.argoCD.restrictDefaultProject=true)
+helm template infrared "$chart" -n infrared --include-crds "${tenancy_on[@]}" >"$out/tenancy.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${tenancy_on[@]}" >"$out/lint.log" 2>&1; then
+  ok "lint install with the rest of the tenancy"
+else cat "$out/lint.log"; bad "lint install with the rest of the tenancy"; fi
+for v in INFRARED_TENANT_PODS INFRARED_TENANT_QUOTAS INFRARED_ADMISSION_POLICIES INFRARED_DENY_LOGGING INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT; do
+  check defaults.yaml "$v handed to nobody by default" "$v" 0
+done
+# openv <render> <name>: the operator's variable, as the operator reads it.
+openv() {
+  yq -N -r "select(.kind == \"Deployment\" and .metadata.name == \"infrared-operator\") | .spec.template.spec.containers[]
+    | select(.name == \"operator\") | .env[] | select(.name == \"$2\") | .value" "$out/$1.yaml"
+}
+want_pods='{"placement":{"nodeSelector":{"infrared.darkshift.io/pool":"tenants"},"runtimeClassName":"gvisor","tolerations":[{"effect":"NoSchedule","key":"infrared.darkshift.io/tenants","operator":"Equal","value":"true"}]}}'
+want_quotas='{"builds":{"concurrency":2,"memory":"4Gi"},"zones":{"cpu":"2","memory":"4Gi","pods":20,"storage":"10Gi","volumes":4}}'
+if [[ "$(openv tenancy INFRARED_TENANT_PODS)" == "$want_pods" ]] && [[ "$(openv tenancy INFRARED_TENANT_QUOTAS)" == "$want_quotas" ]]; then
+  ok "tenants' pods and quotas handed to the operator as the JSON it reads"
+else bad "INFRARED_TENANT_PODS is '$(openv tenancy INFRARED_TENANT_PODS)', INFRARED_TENANT_QUOTAS '$(openv tenancy INFRARED_TENANT_QUOTAS)'"; fi
+switches="$(openv tenancy INFRARED_ADMISSION_POLICIES),$(openv tenancy INFRARED_DENY_LOGGING),$(openv tenancy INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT)"
+if [[ "$switches" == true,true,true ]]; then
+  ok "the admission policies, deny logging and Argo CD's default project handed to the operator"
+else bad "INFRARED_ADMISSION_POLICIES, INFRARED_DENY_LOGGING, INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT are $switches"; fi
+helm template infrared "$chart" -n infrared --set tenancy.tenantPods.enabled=true --set tenancy.quotas.enabled=true \
+  --set tenancy.quotas.zones.cpu=500m >"$out/tenancy-bare.yaml"
+if [[ "$(openv tenancy-bare INFRARED_TENANT_PODS)" == '{"placement":{}}' ]] \
+  && [[ "$(openv tenancy-bare INFRARED_TENANT_QUOTAS)" == '{"builds":{"concurrency":2,"memory":"4Gi"},"zones":{"cpu":"500m","memory":"4Gi","pods":20,"storage":"10Gi","volumes":4}}' ]]; then
+  ok "tenants' pods without a placement hand on an empty one, and a quota changed alone keeps the other defaults"
+else bad "INFRARED_TENANT_PODS is '$(openv tenancy-bare INFRARED_TENANT_PODS)', INFRARED_TENANT_QUOTAS '$(openv tenancy-bare INFRARED_TENANT_QUOTAS)'"; fi
+if [[ "$(objects tenancy)" == "$(objects defaults)" ]]; then ok "none renders an object of its own"
+else bad "the tenancy renders objects of its own: $(diff <(objects defaults) <(objects tenancy) | tr '\n' ' ')"; fi
+for key in tenancy.tenantPods.placement.resources.limits.memory=1Gi tenancy.quotas.zones.gpus=1 tenancy.quotas.builds.concurrency=0 \
+  tenancy.admissionPolicies.on=true tenancy.argoCD.restrictDefault=true tenancy.tenantPods.placement.runtimeClassName=Not_A_Name; do
+  if helm template infrared "$chart" -n infrared --set "$key" >/dev/null 2>&1; then bad "the schema took $key"
+  else ok "the schema refuses $key"; fi
+done
+# A placement's runtime class (ADR 0066 D5) reaches builds and steps; left
+# out, their placements are what they were.
+helm template infrared "$chart" -n infrared --set builds.placement.runtimeClassName=gvisor --set runner.placement.runtimeClassName=gvisor \
+  >"$out/runtime-class.yaml"
+if [[ "$(openv runtime-class INFRARED_BUILD_PLACEMENT)" == '{"nodeSelector":{},"resources":{},"runtimeClassName":"gvisor","tolerations":[]}' ]] \
+  && [[ "$(openv runtime-class INFRARED_AGENT_STEP_PLACEMENT)" == '{"nodeSelector":{},"resources":{},"runtimeClassName":"gvisor","tolerations":[]}' ]] \
+  && [[ "$(openv defaults INFRARED_BUILD_PLACEMENT)" == '{"nodeSelector":{},"resources":{},"tolerations":[]}' ]]; then
+  ok "runtimeClassName reaches the builds' and the steps' placements, and is absent by default"
+else bad "INFRARED_BUILD_PLACEMENT is '$(openv runtime-class INFRARED_BUILD_PLACEMENT)', INFRARED_AGENT_STEP_PLACEMENT '$(openv runtime-class INFRARED_AGENT_STEP_PLACEMENT)', by default '$(openv defaults INFRARED_BUILD_PLACEMENT)'"; fi
+rules_on() { yq -N -o json -I0 "select(.kind == \"ClusterRole\" and .metadata.name == \"infrared-operator\") | [.rules[] | select(.apiGroups[] == \"$2\") | .resources[]] | unique" "$out/$1.yaml"; }
+if [[ "$(rules_on defaults admissionregistration.k8s.io)" == *validatingadmissionpolicies* ]] && [[ "$(rules_on defaults networking.gke.io)" == *networkloggings* ]] \
+  && [[ "$(rules_on defaults '')" == *resourcequotas* ]]; then
+  ok "the operator may keep the policies, GKE's NetworkLogging and the quotas"
+else bad "the operator's ClusterRole lacks the tenancy's rules: $(rules_on defaults admissionregistration.k8s.io) $(rules_on defaults networking.gke.io)"; fi
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

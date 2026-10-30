@@ -13,7 +13,9 @@ rules:
   - ""
   resources:
   - configmaps
+  - limitranges
   - namespaces
+  - resourcequotas
   - serviceaccounts
   verbs:
   - create
@@ -74,6 +76,19 @@ rules:
   - '*'
   verbs:
   - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -319,6 +334,14 @@ rules:
   - delete
   - get
   - list
+- apiGroups:
+  - networking.gke.io
+  resources:
+  - networkloggings
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - networking.k8s.io
   resources:

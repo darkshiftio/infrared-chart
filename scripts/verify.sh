@@ -180,12 +180,14 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "
 helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/single-node-no-stores.yaml"
 # A Change that follows the repo its hydration names.
 helm template infrared "$chart" -n infrared --set operator.moveIssueToHydratedRepo=true >"$out/move-issues.yaml"
+# Agent steps on Amazon Bedrock for the orgs that ask (runner.bedrock.enabled).
+helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"$out/bedrock.yaml"
 # The tools agent steps copy in, from an install's own images, as a mirror names them.
 mirror_go='registry.example.com/golang:1.26.10@sha256:0000000000000000000000000000000000000000000000000000000000000031'
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -194,7 +196,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -431,6 +433,11 @@ check single-node-no-stores.env "stores.singleNode without the stores hands on n
 # gets nothing and leaves the Change where it opened.
 check defaults.env "a Change stays on the repo it opened on by default" '^INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO=' 0
 has move-issues.env "a Change follows the repo its hydration names" 'INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO="true"'
+# Bedrock only when asked for: off, the operator gets nothing and every org stays on the
+# Anthropic API whatever its spec.modelProvider says.
+check defaults.env "agent steps on the Anthropic API by default" '^INFRARED_BEDROCK=' 0
+check install.env "agent steps on the Anthropic API unless runner.bedrock.enabled is set" '^INFRARED_BEDROCK=' 0
+has bedrock.env "agent steps on Bedrock for the orgs that ask" 'INFRARED_BEDROCK="true"'
 # Substrate's test actors (sandbox-v1 runs any command it is sent) are off
 # unless substrate.testActors is true, at install and after adoption alike;
 # without the stores and a registry the template runs no Substrate, and the

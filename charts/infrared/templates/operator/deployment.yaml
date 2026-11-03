@@ -303,6 +303,12 @@ spec:
             - name: INFRARED_RUNNER_PERMISSIONS
               value: {{ . | quote }}
             {{- end }}
+            {{- if .Values.runner.bedrock.enabled }}
+            # Agent steps on Amazon Bedrock for each org whose spec.modelProvider
+            # asks for it (runner.bedrock.enabled, infrared-operator #85).
+            - name: INFRARED_BEDROCK
+              value: "true"
+            {{- end }}
             {{- if .Values.runner.networkPolicy.egressByName.enabled }}
             {{- if not .Values.runner.networkPolicy.enabled }}
             {{- fail "runner.networkPolicy.egressByName needs runner.networkPolicy.enabled: without the runner NetworkPolicy runners lose Gitea, the registry and infrared-mcp" }}

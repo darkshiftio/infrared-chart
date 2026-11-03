@@ -290,6 +290,34 @@ spec:
                       one public, saying what to do; a platform admin may.
                     type: boolean
                 type: object
+              modelProvider:
+                description: |-
+                  ModelProvider is where the org's agent steps reach Claude. Unset is the
+                  Anthropic API with the org's key. Bedrock is honoured only where the
+                  install turns it on (INFRARED_BEDROCK); a Bedrock org's ModelTiers name
+                  Bedrock model IDs or inference profiles.
+                properties:
+                  bedrock:
+                    description: |-
+                      Bedrock runs the org's agent steps on AWS Bedrock; unset, on the
+                      Anthropic API.
+                    properties:
+                      cloudAccount:
+                        description: CloudAccount names an AWS CloudAccount in the
+                          org's namespace.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      region:
+                        description: Region is the AWS region Bedrock is called in,
+                          e.g. us-east-1.
+                        pattern: ^[a-z]{2}(-gov)?-[a-z]+-[0-9]$
+                        type: string
+                    required:
+                    - cloudAccount
+                    - region
+                    type: object
+                type: object
               modelTiers:
                 description: |-
                   ModelTiers overrides the Installation's tier-to-model mapping for this

@@ -734,6 +734,17 @@ runner:
   # workspace tools, are the agent's whole surface, and anything else is refused (infrared-docs-internal
   # ADR 0066 D7). A hosted plane sets strict.
   permissions: ""
+  bedrock:
+    # -- Agent steps on Claude through Amazon Bedrock, for each org that sets
+    # `spec.modelProvider.bedrock` (INFRARED_BEDROCK, operator; infrared-operator #85). Such an org
+    # names one of its AWS CloudAccounts, Verified, and a region; its steps' runner assumes the
+    # account's role with its pod's projected token (sts:AssumeRoleWithWebIdentity), so the role
+    # trusts the cluster's OIDC issuer for `system:serviceaccount:ir-org-<org>:default`, and the
+    # agent's container holds no credential. The org's model tiers name Bedrock model IDs or
+    # inference profiles. Off: every org runs on the Anthropic API with its key, as before, and an
+    # org's `modelProvider` is ignored. Until the operator reads rollout flags (ADR 0061 decision 9);
+    # retired once Bedrock is generally available.
+    enabled: false
   # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a
   # node selector and tolerations, e.g. a node pool of their own away from the nodes Infrared runs
   # on. Empty: the scheduler places steps anywhere. It also takes `runtimeClassName`, e.g.

@@ -1755,6 +1755,17 @@
               "description": "The RuntimeClass the pods run under, e.g. gvisor for GKE Sandbox (ADR 0066 D5). Left out: none, as before."
             }
           }
+        },
+        "bedrock": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Agent steps on Claude through Amazon Bedrock for each org that sets spec.modelProvider.bedrock (infrared-operator #85).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "INFRARED_BEDROCK on the operator, rendered only when true: an org whose spec.modelProvider.bedrock names a Verified AWS CloudAccount and a region runs its agent steps on Bedrock, its runner assuming the account role with the pod's projected token. Off: every org on the Anthropic API, as before."
+            }
+          }
         }
       }
     },

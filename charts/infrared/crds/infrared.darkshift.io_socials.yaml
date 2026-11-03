@@ -76,8 +76,9 @@ spec:
                   as.
                 properties:
                   accountID:
-                    description: AccountID is the platform's id for the account, e.g.
-                      an X user id.
+                    description: |-
+                      AccountID is the platform's id for the account, e.g. an X user id, or
+                      the bot's email a zulip-channel Social posts as.
                     maxLength: 128
                     type: string
                   accountName:
@@ -106,6 +107,18 @@ spec:
                       requests on.
                     maxLength: 200
                     type: string
+                  site:
+                    description: |-
+                      Site is the Zulip organization a zulip-channel Social posts in, e.g.
+                      https://acme.zulipchat.com: https and a host name, nothing after it.
+                    maxLength: 253
+                    pattern: ^https://[^/?#@:\s]+/?$
+                    type: string
+                  stream:
+                    description: Stream is the Zulip stream (channel) a zulip-channel
+                      Social posts in.
+                    maxLength: 60
+                    type: string
                   teamID:
                     description: TeamID is the connected Slack workspace a slack-channel
                       Social posts in.
@@ -117,6 +130,12 @@ spec:
                       token (keys token, refresh-token, expires-at) or, for a webhook, the
                       address (key url).
                     maxLength: 253
+                    type: string
+                  topic:
+                    description: |-
+                      Topic is the topic in Stream its posts go under; empty is
+                      announcements.
+                    maxLength: 60
                     type: string
                   url:
                     description: URL is the account's public address, e.g. https://x.com/goodguycorp.
@@ -163,6 +182,7 @@ spec:
                 - gitlab-releases
                 - gitea-releases
                 - webhook
+                - zulip-channel
                 type: string
               plan:
                 description: Plan is its announcement plan.
@@ -313,7 +333,7 @@ spec:
             - message: connection, plan, audience and planned are for Socials an org
                 announces to, not identity Socials
               rule: (!has(self.connection) && !has(self.plan) && !has(self.audience)
-                && !has(self.planned)) || self.kind in ['slack-channel','x','linkedin','bluesky','youtube','blog','github-releases','gitlab-releases','gitea-releases','webhook']
+                && !has(self.planned)) || self.kind in ['slack-channel','x','linkedin','bluesky','youtube','blog','github-releases','gitlab-releases','gitea-releases','webhook','zulip-channel']
           status:
             description: SocialStatus is what the Social controller found.
             properties:

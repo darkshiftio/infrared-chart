@@ -16,9 +16,11 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # Product builds: the API reads each Product's kpack Image in namespace builds.
+  # Product builds: the API reads each Product's kpack Image, and lists its
+  # Builds for the Builds tab (list-product-builds), in namespace builds and,
+  # for the platform Product, infrared-builds.
   - apiGroups: ["kpack.io"]
-    resources: ["images"]
+    resources: ["images", "builds"]
     verbs: ["get", "list"]
   # AgentWorkflowRun step logs: the API finds a step's runner pod by label and
   # streams its log.

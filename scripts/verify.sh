@@ -182,12 +182,14 @@ helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/
 helm template infrared "$chart" -n infrared --set operator.moveIssueToHydratedRepo=true >"$out/move-issues.yaml"
 # Agent steps on Amazon Bedrock for the orgs that ask (runner.bedrock.enabled).
 helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"$out/bedrock.yaml"
+# A platform Product's production outside the install (operator.externalZones, ADR 0067 D6).
+helm template infrared "$chart" -n infrared --set operator.externalZones=true >"$out/external-zones.yaml"
 # The tools agent steps copy in, from an install's own images, as a mirror names them.
 mirror_go='registry.example.com/golang:1.26.10@sha256:0000000000000000000000000000000000000000000000000000000000000031'
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -196,7 +198,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -438,6 +440,8 @@ has move-issues.env "a Change follows the repo its hydration names" 'INFRARED_MO
 check defaults.env "agent steps on the Anthropic API by default" '^INFRARED_BEDROCK=' 0
 check install.env "agent steps on the Anthropic API unless runner.bedrock.enabled is set" '^INFRARED_BEDROCK=' 0
 has bedrock.env "agent steps on Bedrock for the orgs that ask" 'INFRARED_BEDROCK="true"'
+check defaults.env "no external zones by default" '^INFRARED_EXTERNAL_ZONES=' 0
+has external-zones.env "a platform Product may have an external zone" 'INFRARED_EXTERNAL_ZONES="true"'
 # Substrate's test actors (sandbox-v1 runs any command it is sent) are off
 # unless substrate.testActors is true, at install and after adoption alike;
 # without the stores and a registry the template runs no Substrate, and the
@@ -1420,12 +1424,12 @@ else
 fi
 # ADR 0046 phase 5: a zone may target the control plane, and the delivery carries the charts it publishes.
 if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.delivery.properties.zones.items.properties.target.enum' \
-      "$chart/crds/infrared.darkshift.io_products.yaml")" == '["controlPlane"]' ]] &&
+      "$chart/crds/infrared.darkshift.io_products.yaml")" == '["controlPlane","external"]' ]] &&
    [[ "$(yq '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.delivery.properties.charts.properties.chartRegistry.type' \
       "$chart/crds/infrared.darkshift.io_products.yaml")" == "string" ]]; then
-  ok "the Product CRD's zones may target the control plane, with the delivery's charts"
+  ok "the Product CRD's zones may target the control plane or an external install (ADR 0067 D6), with the delivery's charts"
 else
-  bad "the Product CRD's zones may target the control plane, with the delivery's charts (run hack/sync-operator.sh)"
+  bad "the Product CRD's zones may target the control plane or an external install (ADR 0067 D6), with the delivery's charts (run hack/sync-operator.sh)"
 fi
 if [[ "$(yq -o=json -I=0 '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.admin.required' \
       "$chart/crds/infrared.darkshift.io_installations.yaml")" == '["email"]' ]]; then

@@ -627,8 +627,20 @@ spec:
                             umbrella delivery, components and charts. The zone's name is the
                             management cluster's, unless cluster names it; its checks (verify and
                             guard.checks) are the guard's own HTTP checks.
+
+                            external is an install this one never reaches, such as a hosted plane
+                            (infrared-docs-internal ADR 0067 D6, ADR 0057 S1): the Product's
+                            production outside the install. It sits beside a controlPlane zone of
+                            environment pre-release, with environment release, and only where the
+                            operator's chart value operator.externalZones is on. A pre-release
+                            version runs on the control plane zone alone; a final version promotes
+                            an rc that passed there, and is released (tagged and published) without
+                            touching this install. The external zone then waits for a person to say
+                            that install runs it (the zone's approval), and is Healthy once its
+                            checks (verify and guard.checks) pass.
                           enum:
                           - controlPlane
+                          - external
                           type: string
                         valuesPath:
                           description: |-
@@ -669,6 +681,10 @@ spec:
                       - message: controlPlane belongs to a zone whose target is controlPlane
                         rule: '!has(self.controlPlane) || (has(self.target) && self.target
                           == ''controlPlane'')'
+                      - message: 'an external zone is the Product''s production outside
+                          this install: set its environment to release'
+                        rule: '!has(self.target) || self.target != ''external'' ||
+                          (has(self.environment) && self.environment == ''release'')'
                     minItems: 1
                     type: array
                 required:

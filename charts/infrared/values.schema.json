@@ -1783,6 +1783,23 @@
         "metricsWriteURL": {
           "type": "string",
           "description": "INFRARED_METRICS_WRITE_URL: where remote-write bodies at POST /api/v1/telemetry/write are forwarded; empty means metricsURL plus /api/v1/write (ADR 0044)."
+        },
+        "platformProduct": {
+          "type": "string",
+          "pattern": "^$|^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "description": "INFRARED_PLATFORM_PRODUCT: the platform org's Product the install's own Incidents open on, through the Alertmanager's platform receiver (ADR 0069 T9); empty means an install-wide Incident."
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The telemetry plane an install registers with and writes to (ADR 0069 T1 and T3).",
+      "properties": {
+        "plane": {
+          "type": "string",
+          "pattern": "^$|^https://[^/\\s?#]+/?$|^http://(localhost|127\\.0\\.0\\.1)(:[0-9]+)?/?$",
+          "description": "INFRARED_TELEMETRY_PLANE: the plane's address, https and no path (plain http for localhost alone), a trailing slash trimmed; empty registers nowhere."
         }
       }
     },

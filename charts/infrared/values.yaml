@@ -108,13 +108,20 @@ installation:
   # nodes' own ports, as before.
   tunnel: {}
   #   id: 6ff42ae2-765d-4adf-8112-31c55c1551ef
-  # The telemetry plane (infrared-docs-internal ADR 0044): where an install without
-  # the metrics stack sends its numbers, and the platform label every series
-  # carries, <login>-<stack> for a Mac's stack (INFRARED_TELEMETRY_URL and
-  # INFRARED_TELEMETRY_PLATFORM, operator). Written to the Installation's
-  # `spec.observability.telemetry`; the gitops template then renders one vmagent
-  # that writes there. Empty: no telemetry component. `ir local telemetry connect`
-  # sets both on a local stack and writes the token's Secret.
+  # A seed for the Installation's `spec.observability.telemetry` (infrared-docs-
+  # internal ADR 0044; ADR 0069 T5): the telemetry plane this install writes its
+  # numbers to, and the platform label every series carries. The Installation is
+  # the source of truth, and `ir` and the API write it: `ir install`'s
+  # registration (platform install-<id>), `ir local telemetry connect`
+  # (<login>-<stack>), `ir telemetry connect` and Settings, Telemetry, each
+  # with the token's Secret monitoring/telemetry-token beside it. The operator
+  # copies these values (INFRARED_TELEMETRY_URL, INFRARED_TELEMETRY_PLATFORM)
+  # into the Installation only while its field is empty, as it does
+  # installation.edge; a connect or disconnect after that wins, and these stay
+  # as they were. The gitops template then renders the write: the metrics
+  # stack's own vmagent remote-writes there with the stack on, and one vmagent
+  # of its own (the telemetry component) without it. Empty, and nothing
+  # connected: no write. Where the install registers is telemetry.plane, below.
   telemetry:
     # -- The remote-write address: hosted's `https://<host>/api/v1/telemetry/write`.
     url: ""
@@ -726,6 +733,25 @@ observability:
   # (INFRARED_METRICS_WRITE_URL, ADR 0044). Empty: metricsURL plus `/api/v1/write`, the
   # VictoriaMetrics single's own write path. A later ingest elsewhere is a change here alone.
   metricsWriteURL: ""
+  # -- The platform org's Product that the install's own Incidents open on
+  # (INFRARED_PLATFORM_PRODUCT, api; infrared-docs-internal ADR 0069 T9): the gitops
+  # template routes every alert of the install itself (the API, the operator, the
+  # store, the metrics' copy, the Kubernetes rules) to the API's platform receiver,
+  # /v1/webhooks/alertmanager/_platform, which opens an Incident on this Product. The
+  # home's is infrared-platform. Empty: an install-wide Incident, shown on Settings'
+  # install-wide panels. Rendered only when set.
+  platformProduct: ""
+
+# The telemetry plane (infrared-docs-internal ADR 0069 T1 and T3): the Infrared
+# whose VictoriaMetrics every install's series go to, and whose API an install
+# registers with (POST /v1/telemetry/installs) when `ir install` or Settings
+# turns its telemetry on, behind the rollout flag installTelemetry.
+telemetry:
+  # -- The plane's address, https, no path (INFRARED_TELEMETRY_PLANE, api; a trailing
+  # slash trimmed): the home, infrared-cp-google, until groundcover's central ingestion
+  # takes over, when this value moves and no install changes. Overridable per install;
+  # empty: the API registers nowhere.
+  plane: "https://infrared.internal.darkshift.io"
 
 runner:
   # -- How agent steps' tools are checked (INFRARED_RUNNER_PERMISSIONS, operator; the runner's

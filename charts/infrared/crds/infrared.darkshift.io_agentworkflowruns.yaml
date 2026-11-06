@@ -325,6 +325,80 @@ spec:
                               records a Job's usage once, however often it reads the Job's result.
                               Empty for usage an operator recorded before it kept each attempt's.
                             type: string
+                          modelCalls:
+                            description: |-
+                              ModelCalls is what the runner's model proxy saw of the attempt's calls,
+                              for a runner that reported them.
+                            properties:
+                              byModel:
+                                description: ByModel splits the calls by the model
+                                  called and the provider's answer.
+                                items:
+                                  description: ModelCallsByModel is one model's calls
+                                    that the provider answered one way.
+                                  properties:
+                                    calls:
+                                      description: Calls is how many.
+                                      format: int64
+                                      type: integer
+                                    error:
+                                      description: |-
+                                        Error is the provider's error type when the answer carried one, e.g.
+                                        ThrottlingException.
+                                      maxLength: 64
+                                      type: string
+                                    model:
+                                      description: |-
+                                        Model is the model the calls named, e.g. us.anthropic.claude-sonnet-4-6;
+                                        empty for calls that named none, and other for the models past the ones
+                                        the runner keeps apart.
+                                      maxLength: 128
+                                      type: string
+                                    seconds:
+                                      description: Seconds is their wall time, in
+                                        seconds, as a decimal string.
+                                      maxLength: 32
+                                      type: string
+                                    status:
+                                      description: |-
+                                        Status is how the provider answered: 2xx, 403, 429, 4xx (any other
+                                        client error), 5xx, network (the provider could not be reached), or
+                                        other for an answer the operator does not know.
+                                      maxLength: 16
+                                      type: string
+                                  required:
+                                  - model
+                                  type: object
+                                maxItems: 64
+                                type: array
+                              forwarded:
+                                description: Forwarded is how many calls the proxy
+                                  forwarded to the provider.
+                                format: int64
+                                type: integer
+                              secondsTotal:
+                                description: |-
+                                  SecondsTotal is the wall time of the forwarded calls, in seconds, as a
+                                  decimal string.
+                                maxLength: 32
+                                type: string
+                            type: object
+                          provider:
+                            description: |-
+                              Provider is where the attempt's model calls went: anthropic, bedrock or
+                              claude-code. The runner names it; for a result that names none, the
+                              operator records the provider it placed the step on. Empty for an
+                              attempt an operator from before recorded.
+                            enum:
+                            - anthropic
+                            - bedrock
+                            - claude-code
+                            type: string
+                          region:
+                            description: Region is the AWS region a bedrock attempt's
+                              calls went to.
+                            maxLength: 32
+                            type: string
                           usage:
                             description: Usage is token and cost accounting for a
                               step or a run.

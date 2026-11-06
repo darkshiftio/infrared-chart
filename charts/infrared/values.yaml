@@ -148,7 +148,7 @@ gitops:
   # runners' egress check (#40). Workspace TODO 473, after #35 (the tunnel).
   # New gitops repos take it; an existing one keeps its spec.template.version
   # until that is patched.
-  templateVersion: 86d890006c5023f3e1c4553a7e717af1b57fbb50
+  templateVersion: 2e5ddd691d93d5620b349f267f76b78b759a0d52
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

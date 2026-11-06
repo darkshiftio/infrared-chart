@@ -274,6 +274,18 @@ same with one; `make verify` checks that they agree.
 {{- printf "http://%s:%d" (include "infrared.componentName" (dict "root" . "component" "mcp")) (int .Values.mcp.service.port) }}
 {{- end }}
 
+{{/*
+The edge's proof (api.clientAddressProof.enabled, workspace TODO 473, F4): the
+Secret <fullname>-edge-proof, whose key credential the edge stamps on every
+request for the API. The API and the operator make it; no template renders it.
+*/}}
+{{- define "infrared.edgeProofSecret" -}}
+{{- printf "%s-edge-proof" (include "infrared.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- define "infrared.edgeProofOn" -}}
+{{- if dig "clientAddressProof" "enabled" false .Values.api }}true{{ end }}
+{{- end }}
+
 {{/* The UI's extensions ConfigMap: <fullname>-ui-extensions. */}}
 {{- define "infrared.uiExtensionsName" -}}
 {{- printf "%s-extensions" (include "infrared.componentName" (dict "root" . "component" "ui")) | trunc 63 | trimSuffix "-" }}

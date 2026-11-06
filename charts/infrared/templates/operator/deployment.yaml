@@ -76,6 +76,14 @@ spec:
             - name: INFRARED_TUNNEL
               value: {{ toJson . | quote }}
             {{- end }}
+            {{- if include "infrared.edgeProofOn" . }}
+            # The edge's proof (api.clientAddressProof.enabled, workspace TODO
+            # 473, F4): on a Gateway edge with Infrared's own host the operator
+            # makes this Secret, then the template stamps its value on every
+            # request for the API.
+            - name: INFRARED_EDGE_PROOF_SECRET
+              value: {{ include "infrared.edgeProofSecret" . | quote }}
+            {{- end }}
             # Under an umbrella chart, its version is Infrared's (ADR 0038).
             - name: INFRARED_VERSION
               value: {{ include "infrared.deployedAppVersion" . | quote }}

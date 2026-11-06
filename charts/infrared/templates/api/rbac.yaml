@@ -85,6 +85,18 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list", "create", "update", "patch"]
+  # The install's telemetry token (ADR 0069 T6): PUT /v1/telemetry with enabled
+  # false deletes the Secret telemetry-token in monitoring, which the rule above
+  # writes but may not delete (and patches the Installation's
+  # spec.observability.telemetry, which the first rule covers). The namespace is
+  # the gitops template's, made by Argo CD after this chart installs, so a Role
+  # there would fail a fresh install, and the chart makes a namespace only for
+  # what is its own (tofuState.namespace, registryCredentials.namespace). By
+  # name instead, which RBAC matches for a delete: that one Secret, anywhere.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["telemetry-token"]
+    verbs: ["delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

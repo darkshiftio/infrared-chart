@@ -150,6 +150,21 @@ spec:
             - name: INFRARED_METRICS_WRITE_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.observability.platformProduct }}
+            # The platform org's Product the install's own Incidents open on
+            # (observability.platformProduct, ADR 0069 T9): what the gitops
+            # template's Alertmanager sends to /v1/webhooks/alertmanager/_platform.
+            # Unset, such an Incident is install-wide.
+            - name: INFRARED_PLATFORM_PRODUCT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.telemetry.plane }}
+            # The telemetry plane this install registers with and writes to
+            # (telemetry.plane, ADR 0069 T1 and T3): the home unless the install
+            # names another; empty, it registers nowhere.
+            - name: INFRARED_TELEMETRY_PLANE
+              value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
             # The API's own Prometheus metrics, on a port of their own off the public listener (ADR 0044).
             - name: INFRARED_METRICS_ADDR
               value: {{ printf ":%d" (int .Values.api.metricsPort) | quote }}

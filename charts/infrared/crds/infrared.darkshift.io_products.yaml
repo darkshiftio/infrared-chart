@@ -642,6 +642,16 @@ spec:
                           - controlPlane
                           - external
                           type: string
+                        url:
+                          description: |-
+                            URL is where people reach an external zone, e.g.
+                            https://infrared.darkshift.io/. Infrared links to it and takes its
+                            screenshot there, and manages nothing about it: no DNS record,
+                            certificate or ingress (the other install serves it). Empty falls back
+                            to the host of the zone's first check.
+                          maxLength: 512
+                          pattern: ^https?://[^\s/]+(/\S*)?$
+                          type: string
                         valuesPath:
                           description: |-
                             ValuesPath is the zone's values file in the gitops repo, holding the
@@ -685,6 +695,10 @@ spec:
                           this install: set its environment to release'
                         rule: '!has(self.target) || self.target != ''external'' ||
                           (has(self.environment) && self.environment == ''release'')'
+                      - message: url belongs to an external zone; a zone in this install
+                          takes addresses
+                        rule: '!has(self.url) || (has(self.target) && self.target
+                          == ''external'')'
                     minItems: 1
                     type: array
                 required:

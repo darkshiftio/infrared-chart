@@ -58,7 +58,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -1550,6 +1550,34 @@ refuse "a directory interval that is not a Go duration fails" "at '/api/director
   --set api.directory.interval=two-minutes
 refuse "a client address header that is not a header name fails" "at '/api/clientAddressHeader'" \
   --set-string 'api.clientAddressHeader=CF Connecting IP'
+# The edge's proof (api.clientAddressProof.enabled, workspace TODO 473, F4;
+# ADR 0066 D2): off by default, nothing gets it; on, with the client address
+# header, the API and the operator get the same Secret, <fullname>-edge-proof,
+# and no other container, and the extensions' locations clear the header; no
+# template renders the Secret, which the API and the operator make. Without
+# the header, and with a key the block does not take, the render fails.
+proof=(-f "$chart/ci/client-address-proof-values.yaml")
+helm template infrared "$chart" -n infrared "${install[@]}" "${proof[@]}" >"$out/proof.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" "${proof[@]}" >"$out/proof-extensions.yaml"
+helm template other "$chart" -n infrared --set fullnameOverride=acme "${proof[@]}" >"$out/proof-other.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${proof[@]}" >"$out/lint.log" 2>&1; then ok "lint install with the edge's proof"
+else cat "$out/lint.log"; bad "lint install with the edge's proof"; fi
+envs proof; envs proof-other
+check defaults.env "no edge proof by default" '^INFRARED_EDGE_PROOF_SECRET=' 0
+check extensions.yaml "...and the extensions' locations leave the header be" 'X-Infrared-Edge-Proof' 0
+has proof.env "the API and the operator get the same Secret, infrared-edge-proof" 'INFRARED_EDGE_PROOF_SECRET="infrared-edge-proof"' 2
+has proof.env "...beside the client address header" 'INFRARED_CLIENT_ADDRESS_HEADER="CF-Connecting-IP"'
+proof_env='^            - name: INFRARED_EDGE_PROOF_SECRET$'
+if [[ "$(objn proof Deployment infrared-api "$proof_env")" == 1 && "$(objn proof Deployment infrared-operator "$proof_env")" == 1 &&
+      "$(grep -cE -- "$proof_env" "$out/proof.yaml")" == 2 ]]; then
+  ok "...those two alone"
+else bad "the edge's proof reaches another container, or not the API and the operator"; fi
+has proof-other.env "the Secret follows the release's full name" 'INFRARED_EDGE_PROOF_SECRET="acme-edge-proof"' 2
+check proof-extensions.yaml "every extension location clears the edge's proof" '^      proxy_set_header X-Infrared-Edge-Proof "";$' 4
+check proof.yaml "no template renders the proof's Secret" '^  name: infrared-edge-proof$' 0
+refuse "the edge's proof without a client address header fails" \
+  "api.clientAddressProof.enabled needs api.clientAddressHeader" --set api.clientAddressProof.enabled=true
+refuse "a key api.clientAddressProof does not take fails" "at '/api/clientAddressProof'" --set api.clientAddressProof.stamp=true
 
 step "Infrared as the OpenID Connect provider of the install's own tools (ADR 0053)"
 # Off by default: no provider for the API or the operator. Gitea's sign-in is

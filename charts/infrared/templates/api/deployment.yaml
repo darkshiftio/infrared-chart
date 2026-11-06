@@ -1,6 +1,9 @@
 {{- if and .Values.gitea.browserURL (not .Values.gitea.enabled) }}
 {{- fail "gitea.browserURL is the address browsers open the Gitea this chart runs at: it needs gitea.enabled" }}
 {{- end }}
+{{- if and (include "infrared.edgeProofOn" .) (not .Values.api.clientAddressHeader) }}
+{{- fail "api.clientAddressProof.enabled needs api.clientAddressHeader: the edge's proof says when the API may believe that header, such as CF-Connecting-IP behind Cloudflare, and none is named" }}
+{{- end }}
 {{- $c := .Values.api }}
 {{- if .Values.summaryvideo.enabled }}
 {{- /* The media volume is the disk's own (root's on GKE's persistent disks): an
@@ -93,6 +96,13 @@ spec:
             # sign-in's limits count failures by (api.clientAddressHeader).
             - name: INFRARED_CLIENT_ADDRESS_HEADER
               value: {{ . | quote }}
+            {{- end }}
+            {{- if include "infrared.edgeProofOn" . }}
+            # The edge's proof (api.clientAddressProof.enabled, workspace TODO
+            # 473, F4): the header above counts only on a request that carries
+            # this Secret's value, which the edge stamps; the API makes it.
+            - name: INFRARED_EDGE_PROOF_SECRET
+              value: {{ include "infrared.edgeProofSecret" . | quote }}
             {{- end }}
             {{- with $c.directory }}
             # Workspace groups as roles (api.directory, ADR 0042): the Google

@@ -753,6 +753,17 @@
           "maxLength": 64,
           "description": "INFRARED_CLIENT_ADDRESS_HEADER: the header that carries a caller's address, which the password sign-in's limits count failures by, such as CF-Connecting-IP behind Cloudflare; empty means the first X-Forwarded-For address."
         },
+        "clientAddressProof": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The edge's proof (workspace TODO 473, F4; ADR 0066 D2): the API believes clientAddressHeader only on a request that carries X-Infrared-Edge-Proof with the value of the Secret <fullname>-edge-proof, which the edge stamps.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "INFRARED_EDGE_PROOF_SECRET on the API and the operator, the Secret <fullname>-edge-proof; needs clientAddressHeader. false: the header counts on every request, as before."
+            }
+          }
+        },
         "directory": {
           "type": "object",
           "additionalProperties": false,

@@ -81,6 +81,12 @@ data:
       proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET__";
       proxy_set_header Cookie "";
       proxy_set_header Authorization "";
+      {{- if include "infrared.edgeProofOn" $ }}
+      {{- /* The edge's proof (api.clientAddressProof.enabled) never reaches an
+      extension: the edge stamps only the API's paths, and this clears a copy
+      however it came, so no extension can replay it. */}}
+      proxy_set_header X-Infrared-Edge-Proof "";
+      {{- end }}
       proxy_hide_header Set-Cookie;
       proxy_hide_header X-Content-Type-Options;
     }

@@ -970,6 +970,19 @@ api:
   # Empty: the first X-Forwarded-For address. A caller can send any header, so
   # name one only when the proxy in front sets it on every request.
   clientAddressHeader: ""
+  # The edge's proof (workspace TODO 473, F4; infrared-docs-internal ADR 0066 D2).
+  clientAddressProof:
+    # -- The API believes clientAddressHeader only on a request that carries
+    # X-Infrared-Edge-Proof with the value of the Secret <fullname>-edge-proof
+    # (key credential), which a Gateway edge with Infrared's own host stamps on
+    # every request it takes for the API (INFRARED_EDGE_PROOF_SECRET, on the API
+    # and the operator). The API and the operator make the Secret; the gitops
+    # template renders the stamp. Needs clientAddressHeader. To turn it off,
+    # turn this off first, before the edge; to rotate the proof, replace the
+    # Secret's value in place and never delete the Secret, or every API request
+    # through the edge answers 500 until it is made again. false: the header
+    # counts on every request, as before.
+    enabled: false
   # Workspace groups as roles (ADR 0042): a team may name a Google Workspace
   # group whose people hold its role when they sign in with Google, and the API
   # reads those groups from Google's directory.

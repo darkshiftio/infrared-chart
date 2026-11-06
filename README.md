@@ -315,6 +315,23 @@ part is the API's settings below, each rendered only when set.
   the first `X-Forwarded-For` address, or the header `api.clientAddressHeader`
   names, such as `CF-Connecting-IP` behind Cloudflare. A caller can send any
   header, so name one only when the proxy in front sets it on every request.
+- **The edge's proof** (`api.clientAddressProof.enabled`, off by default;
+  workspace TODO 473, F4; infrared-docs-internal ADR 0066 D2): the API then
+  believes `api.clientAddressHeader` only on a request that carries
+  `X-Infrared-Edge-Proof` with the value of the Secret `<fullname>-edge-proof`
+  (key `credential`; `infrared-edge-proof`), which a Gateway edge with
+  Infrared's own host stamps on every request it takes for the API (the gitops
+  template's HTTPRouteFilter `infrared-edge-proof`). It arms on the first
+  request that carries the proof; until then the header counts as before.
+  The API and the operator get `INFRARED_EDGE_PROOF_SECRET` and make the
+  Secret themselves, 32 random bytes, base64url; no template renders it, and
+  the extensions' locations clear the header. It needs
+  `api.clientAddressHeader`: the render fails without it. To turn it off, turn
+  this off first, so the API restarts without it before the edge stops
+  stamping; never move the template back while it is on. To rotate the proof,
+  replace the Secret's value in place, with no trailing newline; never delete
+  the Secret, or every API request through the edge answers 500 until the API
+  or the operator makes it again.
 
 What Google needs for the directory, with no key anywhere:
 
@@ -329,6 +346,8 @@ api:
   directory:
     serviceAccount: infrared-directory@example-project.iam.gserviceaccount.com
   clientAddressHeader: CF-Connecting-IP   # only where every request comes through Cloudflare
+  clientAddressProof:
+    enabled: true                         # only where the edge stamps its proof (a Gateway edge with a host)
 ```
 
 ## The Installation's edge and previews
@@ -826,6 +845,7 @@ only after the pin to a chart with `api.flags` is Synced.
 | `externalURL` | `""` | The API's public base URL, ending in `/api` (for example `https://infrared.example.com/api`), if exposed (`INFRARED_EXTERNAL_URL`, api). Usually unnecessary: Infrared works it out from the request |
 | `signIn.password.enabled` | `true` | The root user's email and password sign-in, its break glass (`INFRARED_SIGN_IN_PASSWORD`, api): its password lives in a vault outside Infrared, which keeps only a bcrypt hash, in the BreakGlass `root`. `false` turns it off once Sign in with Google has worked on the install with its configured client; until then the password keeps working, so this value never locks everyone out. Deleting the ConfigMap `infrared-sign-in` turns it back on until the next Google sign-in. See "Sign-in, roles and git connectors" |
 | `api.clientAddressHeader` | `""` | The header that carries a caller's address, which the password sign-in's limits count failures by (`INFRARED_CLIENT_ADDRESS_HEADER`), such as `CF-Connecting-IP` where every request from outside comes through Cloudflare; empty: the first `X-Forwarded-For` address. Rendered only when set |
+| `api.clientAddressProof.enabled` | `false` | The edge's proof (`INFRARED_EDGE_PROOF_SECRET`, the Secret `<fullname>-edge-proof`, on the API and the operator alone; workspace TODO 473, F4): the client-address header counts only on a request that carries the value the edge stamps. Needs `api.clientAddressHeader`; turn it off before the edge, and rotate by replacing the Secret's value in place, never by deleting it. Rendered only when true |
 | `api.directory.serviceAccount` | `""` | The Google service account the API impersonates to read Workspace groups (`INFRARED_DIRECTORY_SERVICE_ACCOUNT`), `<name>@<project>.iam.gserviceaccount.com`, holding the Workspace role Groups Reader; empty: the directory is off, and no group gives a role. Rendered only when set. See "Sign-in, roles and git connectors" |
 | `api.directory.api` | `admin` | `admin`, the Admin SDK Directory API, which tells a suspended person (who then holds nothing) and needs `admin.googleapis.com` in the account's project; or `cloud-identity` (`INFRARED_DIRECTORY_API`) |
 | `api.directory.interval` / `.maxAge` | `2m` / `10m` | How often the groups are read, and how long a group's last good read gives roles (`INFRARED_DIRECTORY_INTERVAL`, `INFRARED_DIRECTORY_MAX_AGE`), Go durations; each empty one is left to the API, which has the same defaults |

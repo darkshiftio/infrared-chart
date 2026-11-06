@@ -1,0 +1,10 @@
+# The edge's proof (api.clientAddressProof.enabled, workspace TODO 473, F4;
+# infrared-docs-internal ADR 0066 D2): behind Cloudflare, the client-address
+# header counts only on a request that carries the value of the Secret
+# infrared-edge-proof, which a Gateway edge with Infrared's own host stamps.
+# The API and the operator get INFRARED_EDGE_PROOF_SECRET; the proof needs the
+# header.
+api:
+  clientAddressHeader: CF-Connecting-IP
+  clientAddressProof:
+    enabled: true

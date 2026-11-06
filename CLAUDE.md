@@ -25,11 +25,16 @@ The Helm chart for Infrared (`charts/infrared`), published to
 - ADR 0042, the API's side: env `INFRARED_DIRECTORY_SERVICE_ACCOUNT`,
   `INFRARED_DIRECTORY_API`, `INFRARED_DIRECTORY_INTERVAL`,
   `INFRARED_DIRECTORY_MAX_AGE` (`api.directory.*`), `INFRARED_CLIENT_ADDRESS_HEADER`
-  (`api.clientAddressHeader`) and `INFRARED_GITEA_BROWSER_URL`
-  (`gitea.browserURL`), each rendered only when set; never
+  (`api.clientAddressHeader`), `INFRARED_EDGE_PROOF_SECRET`
+  (`api.clientAddressProof.enabled`, the name `<fullname>-edge-proof`, on the
+  operator too, which needs the header: the render fails without it) and
+  `INFRARED_GITEA_BROWSER_URL` (`gitea.browserURL`), each rendered only when
+  set; never
   `INFRARED_DIRECTORY_BASE_URL` or `INFRARED_ALLOW_HTTP_CONNECTORS`, which are
   for tests. The API writes the Secret `infrared-git-connectors` (keys
-  `<connector>.client-secret`) and the BreakGlass `root` itself. No Secret holds
+  `<connector>.client-secret`) and the BreakGlass `root` itself, and the API
+  and the operator the Secret `<fullname>-edge-proof` (key `credential`); no
+  template renders it. No Secret holds
   the root user's password or its hash: no template names `infrared-admin`.
 - ADR 0053, Infrared as the OpenID Connect provider of the install's tools: env
   `INFRARED_OIDC` (`oidc.enabled`) and `INFRARED_OIDC_GRAFANA_URL`

@@ -184,6 +184,8 @@ helm template infrared "$chart" -n infrared --set operator.moveIssueToHydratedRe
 helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"$out/bedrock.yaml"
 # A platform Product's production outside the install (operator.externalZones, ADR 0067 D6).
 helm template infrared "$chart" -n infrared --set operator.externalZones=true >"$out/external-zones.yaml"
+# A poor environment preview becomes a card drawn from the Product's assets (operator #74).
+helm template infrared "$chart" -n infrared --set operator.previewFallback=true >"$out/preview-fallback.yaml"
 # Install telemetry (ADR 0069): the Installation's seed, the Product the install's
 # own Incidents open on, and a plane of the install's own, with a trailing slash.
 helm template infrared "$chart" -n infrared \
@@ -196,7 +198,7 @@ mirror_go='registry.example.com/golang:1.26.10@sha256:00000000000000000000000000
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -205,7 +207,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -449,6 +451,8 @@ check install.env "agent steps on the Anthropic API unless runner.bedrock.enable
 has bedrock.env "agent steps on Bedrock for the orgs that ask" 'INFRARED_BEDROCK="true"'
 check defaults.env "no external zones by default" '^INFRARED_EXTERNAL_ZONES=' 0
 has external-zones.env "a platform Product may have an external zone" 'INFRARED_EXTERNAL_ZONES="true"'
+check defaults.env "every screenshot kept as taken by default" '^INFRARED_PREVIEW_FALLBACK=' 0
+has preview-fallback.env "a poor preview becomes a card" 'INFRARED_PREVIEW_FALLBACK="true"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the
 # Product the install's own Incidents open on reaches the API only when set, and
 # the plane the API registers with is the home unless the install names another,

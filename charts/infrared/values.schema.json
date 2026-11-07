@@ -517,6 +517,10 @@
           "type": "boolean",
           "description": "Deliver a platform Product to an external zone, its production outside this install (INFRARED_EXTERNAL_ZONES, ADR 0067 D6)."
         },
+        "previewFallback": {
+          "type": "boolean",
+          "description": "Replace a zone snapshot of a sign-in or error page, or one mostly one colour, with a card drawn from the Product's assets (INFRARED_PREVIEW_FALLBACK)."
+        },
         "resources": {
           "$ref": "#/$defs/resources"
         },

@@ -948,6 +948,7 @@ only after the pin to a chart with `api.flags` is Synced.
 | `<c>.podAnnotations`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints` | empty | Scheduling |
 | `<c>.podSecurityContext` / `<c>.containerSecurityContext` | unset | Per-component override of the shared security contexts |
 | `operator.moveIssueToHydratedRepo` | `false` | Move a Change to the Product repo its hydration names (`INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO`, operator): an issue opened without a repo on a Product of several repos is transferred (GitHub) or copied with the original closed (Gitea) to the repo the work is in, before triage; off, hydration's repo is only recorded and a person moves the Change |
+| `operator.previewFallback` | `false` | Replace a poor environment preview (`INFRARED_PREVIEW_FALLBACK`, operator): a zone snapshot of a sign-in or error page, or one mostly one colour, is kept as a card drawn from the Product's logo and name, marked generated with the reason; off keeps every screenshot as taken |
 | `operator.rbac.extraRules` | `[]` | Rules appended to the generated operator ClusterRole |
 
 `values.schema.json` rejects unknown keys and malformed digests.

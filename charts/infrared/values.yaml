@@ -888,6 +888,12 @@ operator:
   # it, then for the zone's checks. Off, a Release of a Product with an external zone is refused.
   # Until the operator reads rollout flags (ADR 0061 decision 9).
   externalZones: false
+  # -- Replace a poor environment preview (INFRARED_PREVIEW_FALLBACK, operator; infrared-operator
+  # #74): a zone snapshot whose page title reads as a sign-in or an error ("Sign in", "Unauthorized",
+  # a 4xx or 5xx), or whose picture is mostly one colour, is kept as a card drawn from the Product's
+  # logo and name, marked generated with the reason. Off keeps every screenshot as it was taken.
+  # Until the operator reads rollout flags (ADR 0061 decision 9).
+  previewFallback: false
   # The manager's cache holds every org's namespaces, so its memory grows with the orgs: on the home
   # it rose from 350 MiB to 480 MiB in the week to 2026-10-28 and touched the old 512Mi limit
   # (workspace TODO 463). The request is what it uses there; the limit leaves it room to double.

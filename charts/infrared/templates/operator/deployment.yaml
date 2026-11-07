@@ -152,6 +152,12 @@ spec:
             - name: INFRARED_EXTERNAL_ZONES
               value: "true"
             {{- end }}
+            {{- if .Values.operator.previewFallback }}
+            # A zone snapshot of a sign-in or error page, or of a page that is
+            # mostly one colour, becomes a card drawn from the Product's assets.
+            - name: INFRARED_PREVIEW_FALLBACK
+              value: "true"
+            {{- end }}
             {{- if .Values.tenancy.networkPolicies.enabled }}
             # The network fence (tenancy.networkPolicies.enabled, ADR 0066 D1):
             # every org's namespaces fenced, and the template's side handed on.

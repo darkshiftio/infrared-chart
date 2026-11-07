@@ -2017,8 +2017,41 @@ if [[ "$(rules_on defaults kpack.io)" == *builds* ]] && [[ "$(rules_on defaults 
   ok "the operator may read kpack's Builds and the volumes"
 else bad "the operator's ClusterRole lacks the caps' rules: $(rules_on defaults kpack.io) $(rules_on defaults '')"; fi
 
+step "each tenant zone's limits (tenancy.routeLimits; infrared-docs-internal ADR 0068 D4)"
+# Off by default: nothing handed to the operator. On: one variable, the JSON
+# the operator reads, with the owner's figures (60s, 1024, 256, 100 a second
+# for each visitor on CF-Connecting-IP) or tuned ones, and no object of its
+# own: the operator writes each zone's BackendTrafficPolicy, and the gitops
+# template does not carry the setting.
+helm template infrared "$chart" -n infrared --include-crds --set tenancy.routeLimits.enabled=true >"$out/route-limits.yaml"
+helm template infrared "$chart" -n infrared --include-crds --set tenancy.routeLimits.enabled=true --set tenancy.routeLimits.requestTimeout=0s \
+  --set tenancy.routeLimits.requestsPerSecond=300 --set tenancy.routeLimits.visitorHeader=X-Real-IP >"$out/route-limits-tuned.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set tenancy.routeLimits.enabled=true >"$out/lint.log" 2>&1; then
+  ok "lint install with the route limits"
+else cat "$out/lint.log"; bad "lint install with the route limits"; fi
+check defaults.yaml "INFRARED_ROUTE_LIMITS handed to nobody by default" INFRARED_ROUTE_LIMITS 0
+if [[ "$(openv route-limits INFRARED_ROUTE_LIMITS)" == '{"maxConnections":1024,"maxParallelRequests":256,"requestTimeout":"60s","requestsPerSecond":100,"visitorHeader":"CF-Connecting-IP"}' ]] \
+  && [[ "$(openv route-limits-tuned INFRARED_ROUTE_LIMITS)" == '{"maxConnections":1024,"maxParallelRequests":256,"requestTimeout":"0s","requestsPerSecond":300,"visitorHeader":"X-Real-IP"}' ]]; then
+  ok "the route limits handed to the operator as the JSON it reads, the owner's figures by default"
+else bad "INFRARED_ROUTE_LIMITS is '$(openv route-limits INFRARED_ROUTE_LIMITS)', tuned '$(openv route-limits-tuned INFRARED_ROUTE_LIMITS)'"; fi
+if [[ "$(objects route-limits)" == "$(objects defaults)" ]]; then ok "the route limits render no object of their own"
+else bad "the route limits render objects of their own: $(diff <(objects defaults) <(objects route-limits) | tr '\n' ' ')"; fi
+# The operator refuses to start on figures it cannot hand to Envoy Gateway,
+# so the schema refuses them first: a key the operator does not read, a
+# figure below one or past a uint32, a timeout that is no Gateway API
+# duration, a header that is no header's name, a figure that is not whole.
+for keys in "tenancy.routeLimits.burst=200" "tenancy.routeLimits.maxConnections=0" "tenancy.routeLimits.maxParallelRequests=0" \
+  "tenancy.routeLimits.requestsPerSecond=4294967296" "tenancy.routeLimits.requestTimeout=60" "tenancy.routeLimits.requestTimeout=-1s" \
+  "tenancy.routeLimits.visitorHeader=:authority" "tenancy.routeLimits.maxParallelRequests=1.5"; do
+  if helm template infrared "$chart" -n infrared --set "$keys" >/dev/null 2>&1; then bad "the schema took $keys"
+  else ok "the schema refuses $keys"; fi
+done
+if [[ "$(rules_on defaults gateway.envoyproxy.io)" == *backendtrafficpolicies* ]]; then
+  ok "the operator may keep the zones' BackendTrafficPolicies"
+else bad "the operator's ClusterRole lacks the route limits' rule: $(rules_on defaults gateway.envoyproxy.io)"; fi
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes route-limits route-limits-tuned agent-reach; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

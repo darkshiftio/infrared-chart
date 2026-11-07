@@ -1628,6 +1628,44 @@
               "capGi"
             ]
           }
+        },
+        "routeLimits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Each tenant zone's limits at the edge (infrared-docs-internal ADR 0068 D4; INFRARED_ROUTE_LIMITS): on a Gateway edge every zone of an org but the platform org gets the BackendTrafficPolicy infrared-route-limits on every route in it, a request timeout, a circuit breaker and a rate limit for each visitor. Infrared's own routes keep no timeout and no limit."
+            },
+            "requestTimeout": {
+              "type": "string",
+              "pattern": "^([0-9]{1,5}(h|m|s|ms)){1,4}$",
+              "description": "How long a request may take, from its last byte to its answer's last: a Gateway API duration such as 60s or 1m30s; 0s sets none."
+            },
+            "maxConnections": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295,
+              "description": "Connections Envoy opens to one route's Service, at most."
+            },
+            "maxParallelRequests": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295,
+              "description": "Requests in flight to one route's Service, at most; more answer 503."
+            },
+            "requestsPerSecond": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295,
+              "description": "Requests a second one visitor may make to one route; more answer 429."
+            },
+            "visitorHeader": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,256}$",
+              "description": "The header that names a visitor: Cloudflare's CF-Connecting-IP. A request without it is not limited per visitor."
+            }
+          }
         }
       }
     },

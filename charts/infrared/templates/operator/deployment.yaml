@@ -164,6 +164,16 @@ spec:
             - name: INFRARED_NETWORK_POLICIES
               value: "true"
             {{- end }}
+            {{- with .Values.tenancy.networkPolicies.egressPorts }}
+            {{- if not $.Values.tenancy.networkPolicies.enabled }}
+            {{- fail "tenancy.networkPolicies.egressPorts needs tenancy.networkPolicies.enabled: the ports narrow the fence's internet rule, and without the fence tenants' pods reach every port" }}
+            {{- end }}
+            # The TCP ports a tenant org's pods reach the internet on
+            # (tenancy.networkPolicies.egressPorts, ADR 0068 D3), with the
+            # org's own spec.egress.ports.
+            - name: INFRARED_TENANT_EGRESS_PORTS
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- if .Values.tenancy.registryPulls.enabled }}
             # The registry by identity (tenancy.registryPulls.enabled, ADR 0066
             # D3): each zone pulls as its org, and the template's registry reads

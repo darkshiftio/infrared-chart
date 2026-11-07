@@ -1378,6 +1378,17 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "egressPorts": {
+              "type": "array",
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "description": "INFRARED_TENANT_EGRESS_PORTS (ADR 0068 D3): the TCP ports a tenant org's pods reach the internet on, e.g. [443, 80], with any port a platform admin opened to the org (spec.egress.ports); a zone snapshot's internet takes them too. Needs enabled. Empty: every port."
+            },
             "enabled": {
               "type": "boolean",
               "description": "The network fence (ADR 0066 D1): the operator fences every org's namespaces (INFRARED_NETWORK_POLICIES), the gitops template every platform namespace, and this chart its own. Needs a CNI that enforces NetworkPolicy."

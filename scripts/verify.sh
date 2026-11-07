@@ -826,6 +826,19 @@ else bad "the operator's generated rules do not cover cronjobs (run hack/sync-op
 if [[ "$(awk '/^  - agentworkflows$/ {f = 1; next} f && /^  verbs:/ {v = 1; next} v && /^  - / {printf "%s ", $2; next} v {exit}' <<<"$op_rules")" == "create get list update watch " ]]; then
   ok "the operator may update AgentWorkflows, for the catalog upgrades it makes"
 else bad "the operator's generated rules do not let it update AgentWorkflows (run hack/sync-operator.sh against an operator that has the right)"; fi
+# An org's suspension (infrared-docs-internal ADR 0068 D6): the operator scales
+# the org's workloads to zero and detaches its routes from the shared edge, so
+# its generated rules let it patch them, and the Organization CRD keeps the
+# suspension the API writes.
+suspend_rights=1
+for r in deployments statefulsets httproutes grpcroutes; do
+  verbs="$(awk -v r="  - $r" '$0 == r {f = 1; next} f && /^  verbs:/ {v = 1; next} v && /^  - / {printf "%s ", $2; next} v {exit}' <<<"$op_rules")"
+  [[ " $verbs" == *" patch "* ]] || suspend_rights=0
+done
+if (( suspend_rights )); then
+  ok "the operator may patch Deployments, StatefulSets, HTTPRoutes and GRPCRoutes, for an org's suspension"
+else bad "the operator's generated rules do not let it patch the workloads and routes a suspension holds (run hack/sync-operator.sh against an operator that has them)"; fi
+check defaults.yaml "Organization CRD has spec.suspension" '^              suspension:$' 1
 # The Installation keeps spec.backup and status.backup: without them in the CRD
 # the API server would drop what the operator seeds and reports.
 check defaults.yaml "Installation CRD has spec.backup and status.backup" '^              backup:$' 2

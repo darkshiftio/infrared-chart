@@ -304,6 +304,16 @@ tenancy:
     # no policy, as before. The gitops template's `infrared` Application
     # carries it, so adoption keeps it.
     enabled: false
+    # -- The TCP ports a tenant org's pods reach the internet on (ADR 0068 D3;
+    # INFRARED_TENANT_EGRESS_PORTS, operator), e.g. [443, 80] on a hosted
+    # plane. The fence's internet rule takes them in every org's namespaces but
+    # the platform org's, with any port a platform admin opened to the org
+    # (its spec.egress.ports); the admission policies hold a tenant's own
+    # NetworkPolicies to them; and a zone snapshot reaches the internet on them
+    # alone. Needs `enabled`: the render fails without it. Empty: every port,
+    # as before. The gitops template does not carry it: an install keeps it in
+    # its own values file.
+    egressPorts: []
   registryPulls:
     # -- The registry by identity (ADR 0066 D3; INFRARED_REGISTRY_PULLS,
     # operator). The install's own registry (`registry.address`) reads for no

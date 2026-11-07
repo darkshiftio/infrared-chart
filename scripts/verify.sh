@@ -1887,6 +1887,45 @@ for key in tenancy.registryPulls.enable tenancy.storesSecurity.on; do
   else ok "the schema refuses $key"; fi
 done
 
+step "tenants' internet ports (tenancy.networkPolicies.egressPorts, ADR 0068 D3)"
+# Off by default: no variable, and a zone snapshot reaches the internet on any
+# port. With the fence and the ports: the operator gets them comma-separated,
+# and the snapshot's internet rule names them on TCP and changes nothing else.
+# Ports without the fence render nothing: the render fails with the reason.
+helm template infrared "$chart" -n infrared --set tenancy.networkPolicies.enabled=true \
+  --set-json 'tenancy.networkPolicies.egressPorts=[443,80]' >"$out/egress-ports.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set tenancy.networkPolicies.enabled=true \
+  --set-json 'tenancy.networkPolicies.egressPorts=[443,80]' >"$out/lint.log" 2>&1; then
+  ok "lint install with the fence on TCP 443 and 80"
+else cat "$out/lint.log"; bad "lint install with the fence on TCP 443 and 80"; fi
+check defaults.yaml "the ports handed to nobody by default" 'INFRARED_TENANT_EGRESS_PORTS' 0
+check network-policies.yaml "the ports handed to nobody with the fence alone" 'INFRARED_TENANT_EGRESS_PORTS' 0
+if [[ "$(envv egress-ports INFRARED_TENANT_EGRESS_PORTS)" == "443,80" ]]; then ok "the ports handed to the operator (INFRARED_TENANT_EGRESS_PORTS)"
+else bad "INFRARED_TENANT_EGRESS_PORTS is '$(envv egress-ports INFRARED_TENANT_EGRESS_PORTS)', want 443,80"; fi
+internet='[.egress[] | select(.to[0].ipBlock.cidr == "0.0.0.0/0") | [(.ports // []) | .[] | .protocol + "/" + (.port | tostring)]]'
+snap_ports="$(yq -p json -o json -I0 "$internet" <<<"$(np egress-ports infrared-zone-snapshot)")"
+snap_open="$(yq -p json -o json -I0 "$internet" <<<"$(np network-policies infrared-zone-snapshot)")"
+if [[ "$snap_ports" == '[["TCP/443","TCP/80"]]' ]] && [[ "$snap_open" == '[[]]' ]]; then
+  ok "a zone snapshot reaches the internet on the tenants' ports alone, and on any port without them"
+else bad "the zone snapshot's internet is $snap_ports, and without the ports $snap_open"; fi
+if [[ "$(yq -p json -o json -I0 'del(.egress[2].ports)' <<<"$(np egress-ports infrared-zone-snapshot)")" == "$(np network-policies infrared-zone-snapshot)" ]]; then
+  ok "the ports change nothing else in the zone snapshot's policy"
+else bad "the ports change more than the zone snapshot's internet rule"; fi
+if helm template infrared "$chart" -n infrared --set-json 'tenancy.networkPolicies.egressPorts=[443]' >"$out/ports-no-fence.log" 2>&1; then
+  bad "the ports rendered without the fence"
+elif grep -q 'egressPorts needs tenancy.networkPolicies.enabled' "$out/ports-no-fence.log"; then ok "the ports refuse to render without the fence"
+else cat "$out/ports-no-fence.log"; bad "the ports failed for another reason without the fence"; fi
+many="$(printf '%s,' $(seq 1 33))"
+for ports in '[0]' '[65536]' '["443"]' '[443,443]' "[${many%,}]"; do
+  if helm template infrared "$chart" -n infrared --set tenancy.networkPolicies.enabled=true \
+    --set-json "tenancy.networkPolicies.egressPorts=$ports" >/dev/null 2>&1; then bad "the schema took egressPorts $ports"
+  else ok "the schema refuses egressPorts ${ports:0:20}"; fi
+done
+if [[ "$(yq '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.egress.properties.ports.items.maximum' \
+    "$chart/crds/infrared.darkshift.io_organizations.yaml")" == 65535 ]]; then
+  ok "the Organization CRD has spec.egress.ports, the ports a platform admin opens to an org"
+else bad "the Organization CRD lacks spec.egress.ports (run hack/sync-operator.sh against an operator that has it)"; fi
+
 step "agent steps' permissions, runners' egress by name and the management cluster's egress (runner.permissions, runner.networkPolicy.egressByName, managementCluster.egressAddresses; ADR 0066 D7, workspace TODO 52 and 461)"
 # Off by default: nothing handed to the operator. On: one variable each, exact,
 # and no object of their own: the operator writes the runners' FQDN network

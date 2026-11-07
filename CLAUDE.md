@@ -88,6 +88,14 @@ The Helm chart for Infrared (`charts/infrared`), published to
   (`managementCluster.egressAddresses`, comma-separated), each rendered only
   when set. The operator writes the runners' FQDN network policies; the chart
   renders none.
+- ADR 0068 D3, tenants' internet ports: env `INFRARED_TENANT_EGRESS_PORTS`
+  (`tenancy.networkPolicies.egressPorts`, comma-separated TCP ports) on the
+  operator, rendered only when set, and it needs
+  `tenancy.networkPolicies.enabled`: the render fails without it. The operator
+  puts them, with each org's `spec.egress.ports`, on the fence's internet rule
+  and holds tenants' own NetworkPolicies to them; the chart's
+  `infrared-zone-snapshot` reaches the internet on them alone. The gitops
+  template does not carry it: an install keeps it in its own values file.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

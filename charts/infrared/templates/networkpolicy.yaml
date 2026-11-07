@@ -20,7 +20,91 @@ release namespace's part:
                           Chrome here, reaches DNS, the zones and the internet
                           outside the private ranges alone; each zone admits
                           only its own org's snapshots
+  infrared-operator-egress, infrared-api-egress
+                          the operator and the API reach DNS, the Kubernetes
+                          API, the cloud's metadata server for their own
+                          identity, the in-cluster Services each one calls, and
+                          the internet outside the private ranges alone
+                          (infrared-docs-internal ADR 0068 D1): an address an
+                          org chose that their public dialer would let through
+                          still reaches no other platform port. A new call from
+                          either to a Service inside the cluster is a new rule
+                          here
 */ -}}
+{{- /*
+The rules both egress policies share: DNS (kube-dns, and NodeLocal DNSCache
+where it runs); the Kubernetes API by its ports alone, since its endpoint is
+each cluster's own (GKE's private endpoint, a k3s server's 6443); the cloud's
+metadata server for the pod's own identity (GKE's Workload Identity:
+169.254.169.254:80 under Dataplane V2, 169.254.169.252:988 before it), which
+the public dialer refuses for any address someone chose and which answers only
+with its Metadata-Flavor header; and the zones on any port.
+*/}}
+{{- define "infrared.egressBase" }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: node-local-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.252/32
+      ports:
+        - protocol: TCP
+          port: 988
+    - to:
+        - namespaceSelector:
+            matchExpressions:
+              - key: infrared.darkshift.io/zone
+                operator: Exists
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmsingle
+      ports:
+        - protocol: TCP
+          port: 8428
+{{- end }}
+{{- /* The internet outside the private ranges, on any port: the fence's own ranges. */}}
+{{- define "infrared.egressInternet" }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+{{- end }}
 {{- if .Values.tenancy.networkPolicies.enabled }}
 {{- $ns := .Release.Namespace }}
 apiVersion: networking.k8s.io/v1
@@ -204,4 +288,113 @@ spec:
               - 169.254.0.0/16
               - 100.64.0.0/10
               - 127.0.0.0/8
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: infrared-operator-egress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "operator") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "infrared.selectorLabels" (dict "root" . "component" "operator") | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS, the Kubernetes API, the metadata server (the backup survey of a
+    # Cloud Storage bucket, the registry copier), the zones (their smoke
+    # checks, which reach a zone's own Service alone) and VictoriaMetrics
+    # (observability.metricsURL: the release guard's error budget).
+    {{- include "infrared.egressBase" . }}
+    # This namespace's pods: Gitea (INFRARED_GITEA_URL), and the control plane
+    # zone's Services, which its smoke checks reach.
+    - to:
+        - podSelector: {}
+    # The registry inside the cluster (registry.address): Zot's users, rules
+    # and retention.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: registry
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: zot
+      ports:
+        - protocol: TCP
+          port: 5000
+    # The edge, which the address probe asks for each address's route and
+    # certificate: Envoy's pods of the Gateway edge on 10443 (its 443), or
+    # Traefik's on 8443 (its websecure).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: edge
+      ports:
+        - protocol: TCP
+          port: 10443
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8443
+    # GitHub, Google, Gemini, Cloudflare, the Socials, and the orgs' own
+    # clusters, whose kubeconfig may name any port.
+    {{- include "infrared.egressInternet" . }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: infrared-api-egress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "infrared.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "infrared.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS, the Kubernetes API, the metadata server (the backup store in Cloud
+    # Storage, the Workspace directory's impersonation), the zones (the logo
+    # suggestion reads a zone's page) and VictoriaMetrics (SLO reads and the
+    # telemetry write path).
+    {{- include "infrared.egressBase" . }}
+    {{- if .Values.gitea.enabled }}
+    # Gitea (INFRARED_GITEA_URL): the setup wizard, the forge, the managed
+    # connector's registration.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gitea
+      ports:
+        - protocol: TCP
+          port: 3000
+    {{- end }}
+    {{- if .Values.codeIndex.enabled }}
+    # The code index, http://code-index.code-index.svc:8080.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: code-index
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: code-index
+      ports:
+        - protocol: TCP
+          port: 8080
+    {{- end }}
+    # Google's sign-in, GitHub, Anthropic, Gemini, Slack and the Socials,
+    # Cloudflare, the forges, the telemetry plane and the backup bucket.
+    {{- include "infrared.egressInternet" . }}
 {{- end }}

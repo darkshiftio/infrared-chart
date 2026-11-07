@@ -51,10 +51,14 @@ The Helm chart for Infrared (`charts/infrared`), published to
 - ADR 0066 D1, the network fence: env `INFRARED_NETWORK_POLICIES`
   (`tenancy.networkPolicies.enabled`) on the operator, rendered only when set,
   and `templates/networkpolicy.yaml` (`infrared-fence`, `infrared-api`,
-  `infrared-zone-snapshot`) in the release namespace, rendered only then too.
+  `infrared-zone-snapshot`, and ADR 0068 D1's `infrared-operator-egress` and
+  `infrared-api-egress`) in the release namespace, rendered only then too.
   The API's policy names its callers by the chart's selector labels and the
   template's fixed names (`envoy-gateway-system`, `monitoring`); a new caller
-  of the API is a new rule there.
+  of the API is a new rule there. The two egress policies name what the
+  operator and the API call inside the cluster the same way (`registry`,
+  `monitoring`, `envoy-gateway-system`, `code-index`); a new call from either
+  to a Service inside the cluster is a new rule there.
 - ADR 0066 D3, the registry by identity and the stores' own security: env
   `INFRARED_REGISTRY_PULLS` (`tenancy.registryPulls.enabled`) and
   `INFRARED_STORES_SECURITY` (`tenancy.storesSecurity.enabled`) on the

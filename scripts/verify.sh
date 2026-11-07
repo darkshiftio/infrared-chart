@@ -1837,7 +1837,7 @@ if helm lint --strict "$chart" "${install[@]}" "${gitea[@]}" --set tenancy.netwo
 else cat "$out/lint.log"; bad "lint install with Gitea and the network fence"; fi
 check defaults.yaml "no NetworkPolicy by default" '^kind: NetworkPolicy$' 0
 check defaults.yaml "the network fence handed to nobody by default" 'INFRARED_NETWORK_POLICIES' 0
-check network-policies.yaml "three NetworkPolicies with the fence on" '^kind: NetworkPolicy$' 3
+check network-policies.yaml "five NetworkPolicies with the fence on" '^kind: NetworkPolicy$' 5
 if [[ "$(envv network-policies INFRARED_NETWORK_POLICIES)" == true ]]; then ok "the fence handed to the operator (INFRARED_NETWORK_POLICIES)"
 else bad "INFRARED_NETWORK_POLICIES is '$(envv network-policies INFRARED_NETWORK_POLICIES)', want true"; fi
 np() { yq -N -o json -I0 "select(.kind == \"NetworkPolicy\" and .metadata.name == \"$2\") | .spec" "$out/$1.yaml"; }
@@ -1862,7 +1862,41 @@ if [[ "$(yq -p json -o json -I0 '[.policyTypes[], (.egress | length | tostring),
     == '["Egress","3","infrared.darkshift.io/zone","0.0.0.0/0"]' ]]; then
   ok "a zone snapshot reaches DNS, the zones and the internet outside the private ranges alone"
 else bad "infrared-zone-snapshot is wrong: $snap"; fi
-check network-policies-gitea.yaml "Gitea's install keeps the three policies" '^kind: NetworkPolicy$' 3
+check network-policies-gitea.yaml "Gitea's install keeps the five policies" '^kind: NetworkPolicy$' 5
+# The operator's and the API's egress (infrared-docs-internal ADR 0068 D1;
+# workspace TODO 536): DNS, the Kubernetes API by its ports, the metadata
+# server for their own identity, the in-cluster Services each one calls, and
+# the internet outside the fence's six private ranges. Each rule as
+# <peers>@<ports>: a namespace by name (or a label's key) and the pods' labels'
+# values, "self" this namespace, an address block and the number of its
+# exceptions, "*" every destination.
+egress='[.egress[] | (((.to // [{"any": "*"}]) | map((select(.ipBlock) | .ipBlock.cidr + "-" + ((.ipBlock.except // []) | length | tostring)),
+  (select(.namespaceSelector or .podSelector) | ((.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] // .namespaceSelector.matchExpressions[0].key // "self")
+  + "/" + ((.podSelector.matchLabels // {}) | to_entries | map(.value) | join("+")))), (select(.any) | .any)) | join(","))
+  + "@" + ((.ports // [{"port": "any"}]) | map(.port | tostring) | join(",")))]'
+base='"kube-system/kube-dns,kube-system/node-local-dns@53,53","*@443,6443","169.254.169.254/32-0@80","169.254.169.252/32-0@988","infrared.darkshift.io/zone/@any","monitoring/vmsingle@8428"'
+internet='"0.0.0.0/0-6@any"'
+opegress="$(np network-policies infrared-operator-egress)"
+if [[ "$(yq -p json -o json -I0 "$egress" <<<"$opegress")" == "[$base,\"self/@any\",\"registry/zot@5000\",\"envoy-gateway-system/edge@10443\",\"kube-system/traefik@8443\",$internet]" ]] \
+  && [[ "$(yq -p json -o json -I0 '[.policyTypes[], .podSelector.matchLabels["app.kubernetes.io/component"]]' <<<"$opegress")" == '["Egress","operator"]' ]]; then
+  ok "the operator reaches DNS, the Kubernetes API, the metadata server, the zones, VictoriaMetrics, its own namespace, Zot, the edge and the internet alone"
+else bad "infrared-operator-egress is $(yq -p json -o json -I0 "$egress" <<<"$opegress")"; fi
+apiegress="$(np network-policies infrared-api-egress)"
+if [[ "$(yq -p json -o json -I0 "$egress" <<<"$apiegress")" == "[$base,$internet]" ]] \
+  && [[ "$(yq -p json -o json -I0 '[.policyTypes[], .podSelector.matchLabels["app.kubernetes.io/component"]]' <<<"$apiegress")" == '["Egress","api"]' ]] \
+  && [[ "$(yq -p json -o json -I0 "$egress" <<<"$(np network-policies-gitea infrared-api-egress)")" == "[$base,\"self/gitea@3000\",$internet]" ]]; then
+  ok "the API reaches DNS, the Kubernetes API, the metadata server, the zones, VictoriaMetrics, Gitea when it runs, and the internet alone"
+else bad "infrared-api-egress is $(yq -p json -o json -I0 "$egress" <<<"$apiegress"), with Gitea $(yq -p json -o json -I0 "$egress" <<<"$(np network-policies-gitea infrared-api-egress)")"; fi
+helm template infrared "$chart" -n infrared --set tenancy.networkPolicies.enabled=true --set codeIndex.enabled=true \
+  >"$out/network-policies-code-index.yaml"
+if [[ "$(yq -p json -o json -I0 "$egress" <<<"$(np network-policies-code-index infrared-api-egress)")" == "[$base,\"code-index/code-index@8080\",$internet]" ]]; then
+  ok "the API reaches the code index when it runs"
+else bad "infrared-api-egress with the code index is $(yq -p json -o json -I0 "$egress" <<<"$(np network-policies-code-index infrared-api-egress)")"; fi
+excepts='.egress[] | select(.to[0].ipBlock.cidr == "0.0.0.0/0") | .to[0].ipBlock.except'
+if [[ "$(yq -p json -o json -I0 "$excepts" <<<"$opegress")" == "$(yq -p json -o json -I0 "$excepts" <<<"$snap")" ]] \
+  && [[ "$(yq -p json -o json -I0 "$excepts" <<<"$apiegress")" == "$(yq -p json -o json -I0 "$excepts" <<<"$snap")" ]]; then
+  ok "the operator's and the API's internet is the zone snapshot's: outside the same six private ranges"
+else bad "the internet's exceptions differ: operator $(yq -p json -o json -I0 "$excepts" <<<"$opegress"), snapshot $(yq -p json -o json -I0 "$excepts" <<<"$snap")"; fi
 
 step "the registry by identity and the stores' own security (tenancy.registryPulls, tenancy.storesSecurity, ADR 0066 D3)"
 # Off by default: nothing handed to the operator. On: one variable each, and no

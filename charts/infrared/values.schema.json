@@ -1380,7 +1380,7 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "The network fence (ADR 0066 D1): the operator fences every org's namespaces (INFRARED_NETWORK_POLICIES), the gitops template every platform namespace, and this chart its own. Needs a CNI that enforces NetworkPolicy."
+              "description": "The network fence (ADR 0066 D1): the operator fences every org's namespaces (INFRARED_NETWORK_POLICIES), the gitops template every platform namespace, and this chart its own, the operator's and the API's egress among it (ADR 0068 D1). Needs a CNI that enforces NetworkPolicy."
             }
           }
         },

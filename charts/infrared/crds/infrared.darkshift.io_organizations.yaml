@@ -348,6 +348,24 @@ spec:
                 required:
                 - enabled
                 type: object
+              sessions:
+                description: |-
+                  Sessions says whether the org's people's own Claude Code sessions are
+                  recorded as Sessions and measured as series (infrared-docs-internal
+                  ADR 0071 D4). A field left unset takes the install's default
+                  (Installation.spec.observability.sessions); unset there too, it is on.
+                properties:
+                  record:
+                    description: |-
+                      Record keeps a Session per session, shown in the Changelog and counted
+                      in the week in review and the person's activity.
+                    type: boolean
+                  telemetry:
+                    description: |-
+                      Telemetry exports the sessions' figures as series, which the install's
+                      metrics stack carries to the telemetry plane.
+                    type: boolean
+                type: object
               slack:
                 description: |-
                   Slack is the org's Slack workspace connection: the workspace, and the

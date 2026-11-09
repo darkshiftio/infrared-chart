@@ -254,6 +254,7 @@ rules:
   - registries/status
   - releasecuts/status
   - releases/status
+  - sessions/status
   - socials/status
   - teams/status
   verbs:
@@ -306,6 +307,17 @@ rules:
   - registries
   - releasecuts
   verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrared.darkshift.io
+  resources:
+  - sessions
+  verbs:
+  - delete
   - get
   - list
   - patch

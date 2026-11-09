@@ -323,6 +323,17 @@ spec:
                   plane it is a platform of (infrared-docs-internal ADR 0044). The gitops
                   template reads it; nothing leaves the cluster while it is unset.
                 properties:
+                  sessions:
+                    description: |-
+                      Sessions is the install's default for every org's Claude Code sessions
+                      (ADR 0071 D4): whether they are recorded and measured where an org has
+                      not decided for itself. A field left unset is on.
+                    properties:
+                      record:
+                        type: boolean
+                      telemetry:
+                        type: boolean
+                    type: object
                   telemetry:
                     description: |-
                       Telemetry is the telemetry plane this install writes its metrics to

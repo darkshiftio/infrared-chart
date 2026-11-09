@@ -290,6 +290,7 @@ spec:
                     description: |-
                       Repo is the Product repo whose commits are released; empty means the
                       first repo. Releases tag this repo vX.Y.Z.
+                    maxLength: 100
                     type: string
                   scaffold:
                     description: |-
@@ -385,6 +386,113 @@ spec:
                             Cluster is the Cluster the zone runs on; empty means the gitops repo's
                             management cluster. The Cluster must be on the org's cluster allowlist.
                           type: string
+                        components:
+                          description: |-
+                            Components are the zone's settings for each of an umbrella Product's
+                            repos other than the delivery repo, which the zone's own fields set:
+                            its addresses, environment variables, secret ones and health path.
+                            Read for an umbrella Product's non-delivery repos that deploy only.
+                          items:
+                            description: |-
+                              DeliveryZoneComponent is one non-delivery repo of an umbrella Product in a zone:
+                              what the zone's own fields are to the delivery repo. Infrared writes it
+                              under the repo's key in the zone's values file, the subchart's values.
+                            properties:
+                              addresses:
+                                description: |-
+                                  Addresses are the component's own names. Only names under the
+                                  previews domain are served, behind the zone's sign-in unless the zone
+                                  is public; the first is the component's main address.
+                                items:
+                                  description: 'ZoneAddress is one more address of
+                                    a zone: name.domain, or domain itself.'
+                                  properties:
+                                    domain:
+                                      description: Domain, e.g. acme.com or acme.darkshift.io.
+                                      pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$
+                                      type: string
+                                    name:
+                                      description: |-
+                                        Name under the domain, e.g. www or shop; empty is the domain itself.
+                                        It may hold more than one label (docs.infrared under darkshift.io) only
+                                        under the platform org's managed root, which the API enforces.
+                                      pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*)?$
+                                      type: string
+                                    redirect:
+                                      description: |-
+                                        Redirect sends visitors to the zone's first address that doesn't
+                                        redirect (a permanent redirect that keeps the path), e.g. www to the
+                                        bare domain.
+                                      type: boolean
+                                  required:
+                                  - domain
+                                  type: object
+                                maxItems: 16
+                                type: array
+                              env:
+                                description: Env are the component's plain environment
+                                  variables.
+                                items:
+                                  description: ZoneEnvVar is one plain environment
+                                    variable of a zone.
+                                  properties:
+                                    name:
+                                      description: Name, a C identifier such as API_URL.
+                                      maxLength: 128
+                                      pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                                      type: string
+                                    value:
+                                      maxLength: 32768
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                maxItems: 100
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                              healthPath:
+                                description: |-
+                                  HealthPath is the path the component's probes ask; empty keeps the
+                                  chart's.
+                                pattern: ^/\S*$
+                                type: string
+                              repo:
+                                description: Repo is the Product's repo, one of spec.repos.
+                                minLength: 1
+                                type: string
+                              secretEnv:
+                                description: |-
+                                  SecretEnv names the component's secret environment variables. Their
+                                  values live in the Secret <product>-<zone>-<repo>-env in the org's
+                                  namespace, which Infrared copies into the zone's namespace as
+                                  <product>-<repo>-env, the component's own.
+                                items:
+                                  description: |-
+                                    ZoneSecretEnv names one secret environment variable of a zone; its value is
+                                    in the zone's env Secret, never in the spec.
+                                  properties:
+                                    name:
+                                      maxLength: 128
+                                      pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                maxItems: 100
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                            required:
+                            - repo
+                            type: object
+                          maxItems: 32
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - repo
+                          x-kubernetes-list-type: map
                         controlPlane:
                           description: ControlPlane are the upgrade's settings for
                             a control plane zone.
@@ -934,7 +1042,15 @@ spec:
                 items:
                   description: ProductRepo is one git repo that makes up a Product.
                   properties:
+                    deploy:
+                      description: |-
+                        Deploy says whether the repo is built, tagged and deployed. Omitted
+                        means true. False lists a repo in the Product (its issues, pull
+                        requests, Changes, agents and summaries) that is never built, tagged or
+                        deployed, such as a phone app or firmware. The delivery repo deploys.
+                      type: boolean
                     name:
+                      maxLength: 100
                       minLength: 1
                       type: string
                     owner:
@@ -944,6 +1060,7 @@ spec:
                   required:
                   - name
                   type: object
+                maxItems: 64
                 minItems: 1
                 type: array
                 x-kubernetes-list-map-keys:
@@ -1193,6 +1310,12 @@ spec:
                 && (!has(self.kind) || self.kind == ''app'') && !has(self.platform))
                 || (has(self.kind) && self.kind == ''platform'' && has(oldSelf.delivery)
                 && has(oldSelf.delivery.charts))'
+            - message: 'the delivery repo (spec.delivery.repo, else the first repo)
+                is built and deployed: take deploy false off it, or deliver another
+                repo'
+              rule: '!has(self.delivery) || self.repos.all(r, !has(r.deploy) || r.deploy
+                || r.name != (has(self.delivery.repo) && self.delivery.repo != ''''
+                ? self.delivery.repo : self.repos[0].name))'
             - message: 'providerRef cannot change: its kpack Image, Releases and runs
                 name the forge its repos live on; recreate the Product to move it'
               rule: has(oldSelf.providerRef) == has(self.providerRef) && (!has(self.providerRef)

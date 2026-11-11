@@ -23,6 +23,9 @@ spec:
     - jsonPath: .spec.platform
       name: Platform
       type: boolean
+    - jsonPath: .spec.suspension.suspendedAt
+      name: Suspended
+      type: date
     - jsonPath: .status.namespace
       name: Namespace
       type: string
@@ -559,6 +562,40 @@ spec:
                       of day the Change finished, e.g. "America/New_York" (the default).
                     type: string
                 type: object
+              suspension:
+                description: |-
+                  Suspension, while set, suspends the org: a platform admin's kill
+                  switch for an org that misbehaves on a shared install
+                  (infrared-docs-internal ADR 0068 D6). infrared-api refuses the org's
+                  changes, and infrared-operator detaches its zones' routes from the
+                  shared edge, scales their pods to zero, holds its builds and its agent
+                  steps and removes its runners' FQDN network policies. Taking it away
+                  lifts the suspension and puts back what it took; nothing is deleted.
+                  Set and lifted through infrared-api by a platform admin, elevated in
+                  the org where the install asks for it. Never on the platform org.
+                properties:
+                  reason:
+                    description: Reason says why, in words the org's people read.
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                  suspendedAt:
+                    description: SuspendedAt is when.
+                    format: date-time
+                    type: string
+                  suspendedBy:
+                    description: |-
+                      SuspendedBy is the platform admin who suspended the org, as
+                      infrared-api records a caller: a sign-in address, or a GitHub login.
+                      The org's own people see it as a handle.
+                    maxLength: 254
+                    minLength: 1
+                    type: string
+                required:
+                - reason
+                - suspendedAt
+                - suspendedBy
+                type: object
               teams:
                 description: |-
                   Teams is the deprecated name of AccessGroups, read only while
@@ -857,6 +894,9 @@ spec:
             not both (ADR 0049)'
           rule: '!has(self.spec.teams) || size(self.spec.teams) == 0 || !has(self.spec.accessGroups)
             || size(self.spec.accessGroups) == 0'
+        - message: the platform org runs the install and is never suspended (ADR 0068
+            D6)
+          rule: '!has(self.spec.suspension) || !has(self.spec.platform) || !self.spec.platform'
     served: true
     storage: true
     subresources:

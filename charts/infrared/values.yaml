@@ -299,10 +299,13 @@ tenancy:
     # a zone; the gitops template gives every platform namespace an ingress
     # policy that admits the platform alone; and this chart fences its own
     # namespace: the API admits its callers alone, Gitea and MCP the org's
-    # steps and builds, and a zone snapshot reaches its zone and the internet
-    # alone. Needs a CNI that enforces NetworkPolicy (GKE Dataplane V2). Off:
-    # no policy, as before. The gitops template's `infrared` Application
-    # carries it, so adoption keeps it.
+    # steps and builds, a zone snapshot reaches its zone and the internet
+    # alone, and the operator and the API reach DNS, the Kubernetes API, the
+    # metadata server for their own identity, the in-cluster Services each one
+    # calls and the internet outside the private ranges alone (ADR 0068 D1).
+    # Needs a CNI that enforces NetworkPolicy (GKE Dataplane V2). Off: no
+    # policy, as before. The gitops template's `infrared` Application carries
+    # it, so adoption keeps it.
     enabled: false
   registryPulls:
     # -- The registry by identity (ADR 0066 D3; INFRARED_REGISTRY_PULLS,

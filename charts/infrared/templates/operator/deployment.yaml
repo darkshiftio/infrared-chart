@@ -224,6 +224,15 @@ spec:
               value: {{ dict "capGi" (int .capGi) "minDiskGi" (int .minDiskGi) | toJson | quote }}
             {{- end }}
             {{- end }}
+            {{- with .Values.tenancy.routeLimits }}
+            {{- if .enabled }}
+            # Each tenant zone's limits at the edge (tenancy.routeLimits,
+            # infrared-docs-internal ADR 0068 D4): a request timeout, a circuit
+            # breaker and a rate limit for each visitor on every route of a zone.
+            - name: INFRARED_ROUTE_LIMITS
+              value: {{ dict "requestTimeout" (toString .requestTimeout) "maxConnections" (int64 .maxConnections) "maxParallelRequests" (int64 .maxParallelRequests) "requestsPerSecond" (int64 .requestsPerSecond) "visitorHeader" (toString .visitorHeader) | toJson | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.stores.enabled }}
             # The platform's stores, which the gitops template installs.
             - name: INFRARED_STORES

@@ -80,6 +80,16 @@ The Helm chart for Infrared (`charts/infrared`), published to
   operator refuses to start on a cap it cannot keep, so the schema refuses the
   same first: both build caps zero, or no `capGi`. The chart renders nothing
   else for them.
+- ADR 0068 D4, each tenant zone's limits at the edge: env
+  `INFRARED_ROUTE_LIMITS` (`tenancy.routeLimits`, JSON `{"requestTimeout",
+  "maxConnections", "maxParallelRequests", "requestsPerSecond",
+  "visitorHeader"}`) on the operator, rendered only when enabled. The
+  operator refuses figures Envoy Gateway would not take, so the schema
+  refuses the same first. The chart renders nothing else for it: the
+  operator writes each zone's BackendTrafficPolicy, and the ClusterRole's
+  rule for it comes from `make sync-operator`. The gitops template's
+  `infrared` Application does not carry it, so the install's own values
+  file keeps and tunes it.
 - ADR 0066 D7 and workspace TODO 461, the operator's side: env
   `INFRARED_RUNNER_PERMISSIONS` (`runner.permissions`, `strict`),
   `INFRARED_RUNNER_EGRESS` (`runner.networkPolicy.egressByName`, JSON

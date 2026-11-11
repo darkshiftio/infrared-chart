@@ -241,6 +241,30 @@ spec:
               displayName:
                 minLength: 1
                 type: string
+              egress:
+                description: |-
+                  Egress opens more of the internet to the org's pods than the install
+                  gives every tenant org (infrared-docs-internal ADR 0068 D3). Set by a
+                  platform admin, never by the org's own admins. Unset adds nothing.
+                properties:
+                  ports:
+                    description: |-
+                      Ports are the TCP ports, beyond the install's
+                      (tenancy.networkPolicies.egressPorts: 443 and 80 on a hosted plane),
+                      that the org's zones and builds reach the internet on, outside the
+                      private ranges, e.g. 5432 for a database outside the cluster. A
+                      platform admin sets them at the org's request. They count only where
+                      the install names its ports, and never for the platform org, whose
+                      pods keep every port.
+                    items:
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
+                    maxItems: 32
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
               limits:
                 description: |-
                   Limits bounds what the org may hold, beyond the licence's install-wide

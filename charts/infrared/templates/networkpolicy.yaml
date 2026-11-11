@@ -193,8 +193,20 @@ spec:
             matchExpressions:
               - key: infrared.darkshift.io/zone
                 operator: Exists
-    # A public page's own assets, and a zone's public address.
+    # A public page's own assets, and a zone's public address: on the TCP
+    # ports tenants' pods reach the internet on, where the install names them
+    # (tenancy.networkPolicies.egressPorts, ADR 0068 D3), since the page is a
+    # tenant's; else on any port.
+{{- with .Values.tenancy.networkPolicies.egressPorts }}
+    - ports:
+        {{- range . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+      to:
+{{- else }}
     - to:
+{{- end }}
         - ipBlock:
             cidr: 0.0.0.0/0
             except:

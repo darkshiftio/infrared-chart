@@ -894,6 +894,14 @@ operator:
   # logo and name, marked generated with the reason. Off keeps every screenshot as it was taken.
   # Until the operator reads rollout flags (ADR 0061 decision 9).
   previewFallback: false
+  # -- End a request the org's policy forbids as Declined (INFRARED_DECLINED_OUTCOMES, operator;
+  # infrared-docs-internal ADR 0076, item 8): a step whose agent answers DECLINE (hydration, the
+  # policy and security reviewers) ends itself and the run Failed, with a finish time and the
+  # run's status.outcome kind declined, never dead-lettered, and its issue is told why and what to
+  # ask instead, then closed as not planned. Off, DECLINE is handled as BLOCK is. On at a localred
+  # stack first, until the proof shows agents decline what they should and only that.
+  # Until the operator reads rollout flags (ADR 0061 decision 9).
+  declinedOutcomes: false
   # The manager's cache holds every org's namespaces, so its memory grows with the orgs: on the home
   # it rose from 350 MiB to 480 MiB in the week to 2026-10-28 and touched the old 512Mi limit
   # (workspace TODO 463). The request is what it uses there; the limit leaves it room to double.

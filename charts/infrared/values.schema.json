@@ -521,6 +521,10 @@
           "type": "boolean",
           "description": "Replace a zone snapshot of a sign-in or error page, or one mostly one colour, with a card drawn from the Product's assets (INFRARED_PREVIEW_FALLBACK)."
         },
+        "declinedOutcomes": {
+          "type": "boolean",
+          "description": "End a run whose step answers DECLINE, a request the org's policy forbids, as Failed with status.outcome.kind declined instead of dead-lettering it, and close its issue as not planned (INFRARED_DECLINED_OUTCOMES, ADR 0076)."
+        },
         "resources": {
           "$ref": "#/$defs/resources"
         },

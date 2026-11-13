@@ -88,7 +88,9 @@ spec:
               guidance:
                 description: |-
                   Guidance is what people told steps when they retried them, oldest
-                  first. Each agentRole step sees its own entries in its prompt.
+                  first. Each agentRole step sees its own entries in its prompt. What a
+                  person told a human step when they sent the run back (the send-back
+                  annotation) reaches the step it returns to.
                 items:
                   description: StepGuidance is a person's answer to a step that handed
                     work back to them.
@@ -120,6 +122,26 @@ spec:
                 required:
                 - name
                 type: object
+              requestedBy:
+                description: |-
+                  RequestedBy is who asked for the Change (infrared-docs-internal ADR
+                  0076, item 11): the API's byline of the person, a forge login or a
+                  Human's name, set when the API starts a Change for them, and the
+                  issue's author when the forge does. Never an address. Empty on a run
+                  nobody asked for, such as a schedule's.
+                maxLength: 254
+                pattern: ^[^@]*$
+                type: string
+              triage:
+                description: |-
+                  Triage agent says the person who asked has already said to build it
+                  (ADR 0076, item 11): a request asked in the simple view. The run's
+                  human triage step passes by itself when it is reached, as moving the
+                  issue to Todo (agent) passes it, decided by RequestedBy. Empty leaves
+                  triage to a person.
+                enum:
+                - agent
+                type: string
               trigger:
                 description: Trigger records what started the run, e.g. onChange,
                   cron, adhoc:bernie.
@@ -263,6 +285,72 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              outcome:
+                description: |-
+                  Outcome is how the run ended, or why it stopped, in plain words for
+                  the person who asked (infrared-docs-internal ADR 0076, item 9). Nil
+                  while the run goes on, and for a run that ended any other way (one
+                  that succeeded without reaching production, or was skipped).
+                properties:
+                  agentRole:
+                    description: AgentRole is that step's AgentRole, for an agentRole
+                      step.
+                    type: string
+                  at:
+                    description: At is when the run ended or stopped.
+                    format: date-time
+                    type: string
+                  changed:
+                    description: Changed is the deciding step's changed, for a declined
+                      run.
+                    maxLength: 200
+                    type: string
+                  headline:
+                    description: Headline is the deciding step's headline, for a declined
+                      run.
+                    maxLength: 120
+                    type: string
+                  instead:
+                    description: |-
+                      Instead is the deciding step's instead, for a declined run: requests
+                      the person could make instead.
+                    items:
+                      maxLength: 120
+                      type: string
+                    maxItems: 3
+                    type: array
+                  kind:
+                    description: Kind is live, declined, stopped or cancelled.
+                    enum:
+                    - live
+                    - declined
+                    - stopped
+                    - cancelled
+                    type: string
+                  owner:
+                    description: |-
+                      Owner is whose a stopped run is: infrared when it stopped on
+                      Infrared's side (verdict ERROR, a setup problem, or attempts used up);
+                      the handle the step's AgentRole escalates to (spec.escalation.to, e.g.
+                      @platform/security) for a BLOCK from a role that has one; empty for the
+                      org's engineers.
+                    type: string
+                  retryable:
+                    description: Retryable says a retry may get past where a stopped
+                      run stopped.
+                    type: boolean
+                  step:
+                    description: Step is the step that declined or stopped the run.
+                    type: string
+                  why:
+                    description: |-
+                      Why is the deciding step's why, for a declined run, and the reason a
+                      person gave, for a cancelled one.
+                    maxLength: 400
+                    type: string
+                required:
+                - kind
+                type: object
               phase:
                 description: RunPhase is the state of an AgentWorkflowRun or one of
                   its steps.
@@ -288,9 +376,10 @@ spec:
                 type: string
               returnRounds:
                 description: |-
-                  ReturnRounds counts how often a step (QA or a reviewer) sent the run
-                  back to the builder with CODE CHANGE NEEDED (ADR 0047, C10). Each step
-                  may do so its own maxReturns times.
+                  ReturnRounds counts how often a step sent the run back to the builder:
+                  QA or a reviewer with CODE CHANGE NEEDED (ADR 0047, C10), or a person
+                  at a human step with send-back (ADR 0076, item 10). Each step may do
+                  so its own maxReturns times.
                 format: int32
                 type: integer
               startedAt:
@@ -526,6 +615,46 @@ spec:
                       type: string
                     name:
                       type: string
+                    outcome:
+                      description: |-
+                        Outcome is the step's report in plain words, for the person who asked
+                        for the Change (infrared-docs-internal ADR 0076, item 7), as its
+                        runner reported it; Message stays the report for engineers. Nil when
+                        the agent wrote none.
+                      properties:
+                        changed:
+                          description: Changed is what was changed, or that nothing
+                            was.
+                          maxLength: 200
+                          type: string
+                        changes:
+                          description: Changes are what the Change does, for the person
+                            approving it.
+                          items:
+                            maxLength: 160
+                            type: string
+                          maxItems: 6
+                          type: array
+                        headline:
+                          description: Headline is one line, e.g. "This change will
+                            not be made".
+                          maxLength: 120
+                          type: string
+                        instead:
+                          description: |-
+                            Instead are requests the person could make instead, each one Infrared
+                            could build as written.
+                          items:
+                            maxLength: 120
+                            type: string
+                          maxItems: 3
+                          type: array
+                        why:
+                          description: Why is one or two sentences, in the asker's
+                            terms.
+                          maxLength: 400
+                          type: string
+                      type: object
                     phase:
                       description: RunPhase is the state of an AgentWorkflowRun or
                         one of its steps.
@@ -598,13 +727,14 @@ spec:
                     rounds:
                       description: |-
                         Rounds are the step's earlier rounds, oldest first: each time a later
-                        step (QA or a reviewer) sent the run back to the builder with CODE
-                        CHANGE NEEDED, the step's result until then was kept here before it ran
-                        again.
+                        step sent the run back to the builder (QA or a reviewer with CODE
+                        CHANGE NEEDED, a person with send-back), the step's result until then
+                        was kept here before it ran again.
                       items:
                         description: |-
                           StepRound is how a step ended in one round, before a QA or reviewer step
-                          sent the run back to the builder (ADR 0047, C10).
+                          sent the run back to the builder (ADR 0047, C10), or a person sent it back
+                          from a human step (ADR 0076, item 10).
                         properties:
                           attempts:
                             description: Attempts the step made in the round.

@@ -247,6 +247,7 @@ rules:
   - gitopsrepos/status
   - gitproviders/status
   - humans/status
+  - incidents/status
   - installations/status
   - knowledgesources/status
   - organizations/status

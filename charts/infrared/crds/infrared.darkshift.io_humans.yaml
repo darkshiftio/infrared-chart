@@ -247,6 +247,17 @@ spec:
                       is written, HH:MM.
                     pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
                     type: string
+                  view:
+                    description: |-
+                      View is the view of Infrared they see (infrared-docs-internal ADR
+                      0076, item 2): simple (Products, Changes and You, in plain words) or
+                      full. Empty means the install's default, the flag defaultView. A view
+                      is what a person is shown and grants or removes nothing; it is never
+                      derived from a role.
+                    enum:
+                    - simple
+                    - full
+                    type: string
                 type: object
               presenterImage:
                 description: |-

@@ -128,6 +128,130 @@ spec:
                 type: string
               acknowledgedBy:
                 type: string
+              investigation:
+                description: Investigation is the incident agent's (ADR 0074).
+                properties:
+                  cause:
+                    description: Cause is the likely cause, in one sentence.
+                    type: string
+                  confidence:
+                    description: 'Confidence in the cause: high, medium or low.'
+                    type: string
+                  costUSD:
+                    description: CostUSD is what the run spent, as a decimal string.
+                    type: string
+                  impact:
+                    items:
+                      description: IncidentImpact is how the Incident touches one
+                        Product, as the agent judged it.
+                      properties:
+                        effect:
+                          description: Effect is affected, at-risk or unaffected.
+                          type: string
+                        product:
+                          type: string
+                        why:
+                          type: string
+                      required:
+                      - effect
+                      - product
+                      - why
+                      type: object
+                    type: array
+                  message:
+                    description: Message says why the investigation Failed.
+                    type: string
+                  phase:
+                    description: InvestigationPhase is where an Incident's investigation
+                      is.
+                    enum:
+                    - Investigating
+                    - Ready
+                    - Failed
+                    type: string
+                  proposals:
+                    items:
+                      description: |-
+                        IncidentProposal is one thing a person can do about the Incident: start a
+                        Change (kind change) or run commands themselves (kind commands). Infrared
+                        never runs an operational step itself.
+                      properties:
+                        change:
+                          description: 'Change is set by the API once the proposal''s
+                            Change started: the run''s name.'
+                          type: string
+                        commands:
+                          description: Commands are, for kind commands, what a person
+                            runs, in order.
+                          items:
+                            description: IncidentCommand is one command a person may
+                              run, and what it does.
+                            properties:
+                              command:
+                                type: string
+                              explains:
+                                type: string
+                            required:
+                            - command
+                            - explains
+                            type: object
+                          type: array
+                        confidence:
+                          description: Confidence is high, medium or low.
+                          type: string
+                        id:
+                          description: ID is a short slug, unique in the list.
+                          type: string
+                        issueBody:
+                          description: IssueBody is Markdown.
+                          type: string
+                        issueTitle:
+                          type: string
+                        kind:
+                          description: Kind is change or commands.
+                          type: string
+                        product:
+                          description: Product is, for a change, the Product whose
+                            first repo gets the issue.
+                          type: string
+                        risk:
+                          description: Risk is low, medium or high.
+                          type: string
+                        title:
+                          type: string
+                        why:
+                          type: string
+                      required:
+                      - confidence
+                      - id
+                      - kind
+                      - risk
+                      - title
+                      - why
+                      type: object
+                    type: array
+                  run:
+                    description: Run is the AgentWorkflowRun investigating, or that
+                      investigated.
+                    type: string
+                  startedAt:
+                    format: date-time
+                    type: string
+                  summary:
+                    description: Summary is plain words for anyone, at most 1200 characters.
+                    type: string
+                  technical:
+                    description: Technical is Markdown for admins, at most 20000 characters.
+                    type: string
+                  updatedAt:
+                    format: date-time
+                    type: string
+                  verdict:
+                    description: 'Verdict is the agent''s: EXPLAINED, PARTIAL or UNEXPLAINED.'
+                    type: string
+                required:
+                - phase
+                type: object
               openedAt:
                 format: date-time
                 type: string
@@ -164,6 +288,32 @@ spec:
                   - message
                   type: object
                 type: array
+              video:
+                description: Video is the Incident's summary video.
+                properties:
+                  at:
+                    description: At is when the state last changed.
+                    format: date-time
+                    type: string
+                  costUSD:
+                    description: CostUSD is what the video cost, counted in the org's
+                      summary video cap.
+                    type: string
+                  message:
+                    type: string
+                  poster:
+                    type: string
+                  seconds:
+                    type: integer
+                  state:
+                    description: State is making, ready or failed.
+                    type: string
+                  url:
+                    description: URL is the video's API path, e.g. /v1/orgs/{org}/incidents/{name}/video/video.mp4.
+                    type: string
+                required:
+                - state
+                type: object
             type: object
         required:
         - spec

@@ -525,6 +525,11 @@
           "type": "boolean",
           "description": "End a run whose step answers DECLINE, a request the org's policy forbids, as Failed with status.outcome.kind declined instead of dead-lettering it, and close its issue as not planned (INFRARED_DECLINED_OUTCOMES, ADR 0076)."
         },
+        "metricsStorage": {
+          "type": "string",
+          "pattern": "^$|^[1-9][0-9]*(Mi|Gi|Ti)$",
+          "description": "The size of the install's own metrics store, a whole number above zero of Mi, Gi or Ti such as 40Gi: VMSingle's claim in the gitops template, or on k3s with the stores its emptyDir (INFRARED_METRICS_STORAGE, ADR 0075). Empty keeps the template's own, 10Gi."
+        },
         "resources": {
           "$ref": "#/$defs/resources"
         },

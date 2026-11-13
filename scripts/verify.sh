@@ -188,6 +188,9 @@ helm template infrared "$chart" -n infrared --set operator.externalZones=true >"
 helm template infrared "$chart" -n infrared --set operator.previewFallback=true >"$out/preview-fallback.yaml"
 # A request the org's policy forbids ends Declined (operator.declinedOutcomes, ADR 0076).
 helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=true >"$out/declined-outcomes.yaml"
+# The size of the install's own metrics store, which the operator hands the
+# gitops template (operator.metricsStorage, ADR 0075, lane H).
+helm template infrared "$chart" -n infrared --set operator.metricsStorage=40Gi >"$out/metrics-storage.yaml"
 # Install telemetry (ADR 0069): the Installation's seed, the Product the install's
 # own Incidents open on, and a plane of the install's own, with a trailing slash.
 helm template infrared "$chart" -n infrared \
@@ -200,7 +203,7 @@ mirror_go='registry.example.com/golang:1.26.10@sha256:00000000000000000000000000
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, declined-outcomes, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, declined-outcomes, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -209,7 +212,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback declined-outcomes \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback declined-outcomes metrics-storage \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -457,6 +460,8 @@ check defaults.env "every screenshot kept as taken by default" '^INFRARED_PREVIE
 has preview-fallback.env "a poor preview becomes a card" 'INFRARED_PREVIEW_FALLBACK="true"'
 check defaults.env "DECLINE handled as BLOCK by default" '^INFRARED_DECLINED_OUTCOMES=' 0
 has declined-outcomes.env "a request the policy forbids ends Declined" 'INFRARED_DECLINED_OUTCOMES="true"'
+check defaults.env "the metrics store keeps the template's own size by default" '^INFRARED_METRICS_STORAGE=' 0
+has metrics-storage.env "the metrics store's size reaches the operator" 'INFRARED_METRICS_STORAGE="40Gi"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the
 # Product the install's own Incidents open on reaches the API only when set, and
 # the plane the API registers with is the home unless the install names another,
@@ -1041,6 +1046,13 @@ refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
 refuse "a duplicate extension id fails" 'id "back-office" is listed more than once' \
   --set "$ext,ui.extensions[1].id=back-office,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
 refuse "an empty golangci-lint image fails" "at '/runner/golangciLintImage'" --set runner.golangciLintImage=
+# The metrics store's size, as the operator takes it: a whole number above zero
+# of Mi, Gi or Ti. No space would turn the claim off; a fraction or a decimal
+# unit is no size of a disk.
+refuse "a metrics store of no space fails" "at '/operator/metricsStorage'" --set-string operator.metricsStorage=0Gi
+refuse "a metrics store size with a fraction fails" "at '/operator/metricsStorage'" --set-string operator.metricsStorage=1.5Gi
+refuse "a metrics store size in a decimal unit fails" "at '/operator/metricsStorage'" --set-string operator.metricsStorage=40G
+refuse "a metrics store size without a unit fails" "at '/operator/metricsStorage'" --set-string operator.metricsStorage=40
 refuse "an edge other than traefik or gateway fails" "at '/installation/edge'" --set installation.edge=nginx
 refuse "previews without a signInURL fail" "missing property 'signInURL'" --set installation.previews.domain=preview.example.com
 refuse "a signInURL that is not https fails" "at '/installation/previews/signInURL'" \

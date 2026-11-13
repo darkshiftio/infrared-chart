@@ -164,6 +164,13 @@ spec:
             - name: INFRARED_DECLINED_OUTCOMES
               value: "true"
             {{- end }}
+            {{- with .Values.operator.metricsStorage }}
+            # The size of the install's own metrics store, which the operator
+            # hands the gitops template for VMSingle (ADR 0075, lane H); unset,
+            # the template's own.
+            - name: INFRARED_METRICS_STORAGE
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.tenancy.networkPolicies.enabled }}
             # The network fence (tenancy.networkPolicies.enabled, ADR 0066 D1):
             # every org's namespaces fenced, and the template's side handed on.

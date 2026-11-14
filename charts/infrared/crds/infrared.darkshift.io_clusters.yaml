@@ -357,6 +357,36 @@ spec:
                           OpenTofu state), so deleting it destroys the cloud resources; false
                           when it was only registered, so deleting it only disconnects it.
                         type: boolean
+                      capacity:
+                        description: |-
+                          Capacity is what the cluster's nodes can run and what its pods ask for,
+                          read with the rest; empty while the cluster can't be reached, and for
+                          the cluster Infrared runs on.
+                        properties:
+                          cpu:
+                            description: CPU is the nodes' allocatable CPU, e.g. 15800m.
+                            type: string
+                          memory:
+                            description: Memory is the nodes' allocatable memory,
+                              e.g. 58Gi.
+                            type: string
+                          nodes:
+                            description: Nodes is how many nodes the cluster has.
+                            format: int32
+                            type: integer
+                          requestedCPU:
+                            description: RequestedCPU is what the pods that are not
+                              finished request, e.g. 3200m.
+                            type: string
+                          requestedMemory:
+                            description: RequestedMemory is what the pods that are
+                              not finished request, e.g. 12Gi.
+                            type: string
+                        required:
+                        - cpu
+                        - memory
+                        - nodes
+                        type: object
                       hourlyCost:
                         description: |-
                           HourlyCost is an estimate of what the cluster costs an hour while it
@@ -577,6 +607,36 @@ spec:
                       OpenTofu state), so deleting it destroys the cloud resources; false
                       when it was only registered, so deleting it only disconnects it.
                     type: boolean
+                  capacity:
+                    description: |-
+                      Capacity is what the cluster's nodes can run and what its pods ask for,
+                      read with the rest; empty while the cluster can't be reached, and for
+                      the cluster Infrared runs on.
+                    properties:
+                      cpu:
+                        description: CPU is the nodes' allocatable CPU, e.g. 15800m.
+                        type: string
+                      memory:
+                        description: Memory is the nodes' allocatable memory, e.g.
+                          58Gi.
+                        type: string
+                      nodes:
+                        description: Nodes is how many nodes the cluster has.
+                        format: int32
+                        type: integer
+                      requestedCPU:
+                        description: RequestedCPU is what the pods that are not finished
+                          request, e.g. 3200m.
+                        type: string
+                      requestedMemory:
+                        description: RequestedMemory is what the pods that are not
+                          finished request, e.g. 12Gi.
+                        type: string
+                    required:
+                    - cpu
+                    - memory
+                    - nodes
+                    type: object
                   hourlyCost:
                     description: |-
                       HourlyCost is an estimate of what the cluster costs an hour while it

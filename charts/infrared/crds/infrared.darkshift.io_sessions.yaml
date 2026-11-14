@@ -20,6 +20,9 @@ spec:
     - jsonPath: .spec.productRef.name
       name: Product
       type: string
+    - jsonPath: .spec.repo
+      name: Repo
+      type: string
     - jsonPath: .spec.who
       name: Who
       type: string
@@ -39,9 +42,9 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          Session is one run of a person's own Claude Code in a Product repo, as its
-          hooks reported it: who, where, what it committed and what it cost, never
-          what was said.
+          Session is one run of a person's own Claude Code in a Product repo, or in
+          another repository of the org's forge account, as its hooks reported it:
+          who, where, what it committed and what it cost, never what was said.
         properties:
           apiVersion:
             description: |-
@@ -79,6 +82,13 @@ spec:
                 description: Client is the Claude Code version that ran the session.
                 maxLength: 64
                 type: string
+              host:
+                description: |-
+                  Host is the forge's host the repo is on, such as github.com, for the
+                  org's own session; empty for a Product's, whose GitProvider says it.
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                type: string
               issue:
                 description: |-
                   Issue is the issue the session works on, <repo>#<number>, when the
@@ -101,8 +111,10 @@ spec:
                 pattern: ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$
                 type: string
               productRef:
-                description: ProductRef is the Product whose repo the session worked
-                  in.
+                description: |-
+                  ProductRef is the Product whose repo the session worked in. None for the
+                  org's own session: one in a repository of the org's forge account that
+                  no Product names, which repo and host then say.
                 properties:
                   name:
                     minLength: 1
@@ -111,8 +123,10 @@ spec:
                 - name
                 type: object
               repo:
-                description: Repo is that repo, by name, for a Product with several.
-                maxLength: 100
+                description: |-
+                  Repo is the repo the session worked in: by name, for a Product with
+                  several; as owner/name for the org's own session.
+                maxLength: 141
                 type: string
               startedAt:
                 description: StartedAt is when the session started.
@@ -127,7 +141,6 @@ spec:
                 minLength: 1
                 type: string
             required:
-            - productRef
             - startedAt
             - who
             type: object

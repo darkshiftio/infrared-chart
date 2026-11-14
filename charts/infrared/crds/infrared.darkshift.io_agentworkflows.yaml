@@ -301,8 +301,9 @@ spec:
                         Change; runs started from an issue count as agent); agentRole.enabled
                         (the step's AgentRole is enabled; agentRole steps only); label:<name>
                         (the issue or pull request carries the label); input:<name> (the run
-                        was started with that input, e.g. an announcement's outlet). Empty
-                        means always.
+                        was started with that input, e.g. an announcement's outlet);
+                        promoted:<zone> (a promote step of the run to that zone, as the step
+                        names it, e.g. pre-release, succeeded). Empty means always.
                         Whatever when says, an agentRole step whose AgentRole is disabled is
                         Skipped.
                       maxLength: 512

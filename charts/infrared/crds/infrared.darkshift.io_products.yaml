@@ -817,6 +817,40 @@ spec:
               displayName:
                 minLength: 1
                 type: string
+              e2e:
+                description: |-
+                  E2E is how the Product's end-to-end tests run (infrared-docs-internal
+                  ADR 0080): the entry point an e2e-verify step runs, in a browser image,
+                  against the pre-release zone its run promoted to, and the Secret whose
+                  keys reach that step alone. Omit it and the step is Skipped.
+                properties:
+                  command:
+                    description: |-
+                      Command is the Product's end-to-end entry point, run from the root of
+                      its repo, e.g. "npm run e2e".
+                    maxLength: 1024
+                    minLength: 1
+                    type: string
+                  secretRef:
+                    description: |-
+                      SecretRef names a Secret in the org's namespace for the entry point,
+                      e.g. a test account's password. The Secret must carry the label
+                      infrared.darkshift.io/e2e-product=<the Product's name> and none of
+                      Infrared's own, or the step is Skipped: a Product cannot name another
+                      Product's or a step's Secret. Each key that is a name an environment
+                      variable may have (letters, digits and _, not starting with a digit)
+                      reaches the Product's e2e-verify step, and no other step, as
+                      INFRARED_E2E_ENV_<KEY>. Omit it for none.
+                    properties:
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - command
+                type: object
               humanApprovals:
                 description: |-
                   HumanApprovals says whether people approve the Product's Changes and

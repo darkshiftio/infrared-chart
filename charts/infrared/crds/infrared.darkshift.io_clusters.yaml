@@ -360,8 +360,8 @@ spec:
                       capacity:
                         description: |-
                           Capacity is what the cluster's nodes can run and what its pods ask for,
-                          read with the rest; empty while the cluster can't be reached, and for
-                          the cluster Infrared runs on.
+                          read with the rest, the cluster Infrared runs on included; empty while
+                          the cluster can't be reached.
                         properties:
                           cpu:
                             description: CPU is the nodes' allocatable CPU, e.g. 15800m.
@@ -610,8 +610,8 @@ spec:
                   capacity:
                     description: |-
                       Capacity is what the cluster's nodes can run and what its pods ask for,
-                      read with the rest; empty while the cluster can't be reached, and for
-                      the cluster Infrared runs on.
+                      read with the rest, the cluster Infrared runs on included; empty while
+                      the cluster can't be reached.
                     properties:
                       cpu:
                         description: CPU is the nodes' allocatable CPU, e.g. 15800m.

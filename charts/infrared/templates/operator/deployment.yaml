@@ -325,6 +325,10 @@ spec:
               value: {{ .Values.runner.helmImage | quote }}
             - name: INFRARED_GOLANGCI_LINT_IMAGE
               value: {{ .Values.runner.golangciLintImage | quote }}
+            {{- with .Values.runner.e2eImage }}
+            - name: INFRARED_E2E_IMAGE
+              value: {{ . | quote }}
+            {{- end }}
             - name: INFRARED_RUNNER_NETWORK_POLICY
               value: {{ .Values.runner.networkPolicy.enabled | quote }}
             - name: INFRARED_RUNNER_EGRESS_CIDRS

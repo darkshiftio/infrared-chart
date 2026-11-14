@@ -799,6 +799,12 @@ runner:
   # can lint Go repos: a v2 release built with a Go at least as new as goToolchainImage's.
   # Pinned by digest.
   golangciLintImage: "golangci/golangci-lint:v2.15.0-alpine@sha256:2ba875b990f1d8501ad4ec19be1ea0701e316ec3a4b764f7b129f62f01318bbf"
+  # -- Browser image a Product's end-to-end tests run in, in the e2e sidecar of its e2e-verify
+  # step (INFRARED_E2E_IMAGE, operator; infrared-docs-internal ADR 0079 and ADR 0080): Playwright's
+  # Ubuntu noble image, with Node and the browsers' system libraries, pinned by tag and digest. The
+  # runner's app runs in it as --e2e-host. Empty, or without @sha256:, every e2e-verify step is
+  # Skipped, saying so.
+  e2eImage: "mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f"
   networkPolicy:
     # -- Fence runner pods with a NetworkPolicy in each org namespace: DNS and
     # HTTP(S) to the internet only, nothing in the cluster, the VPC or cloud

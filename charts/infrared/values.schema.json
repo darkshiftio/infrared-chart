@@ -1748,6 +1748,11 @@
           "minLength": 1,
           "description": "INFRARED_GOLANGCI_LINT_IMAGE: the image an init container copies golangci-lint (/usr/bin/golangci-lint) from into every agent step's /tools/bin."
         },
+        "e2eImage": {
+          "type": "string",
+          "pattern": "^$|^[^@\\s]+@sha256:[0-9a-f]{64}$",
+          "description": "INFRARED_E2E_IMAGE: the browser image e2e-verify steps run a Product's end-to-end tests in (the e2e sidecar), pinned by digest; empty skips every e2e-verify step."
+        },
         "placement": {
           "type": "object",
           "additionalProperties": false,

@@ -203,7 +203,8 @@ mirror_go='registry.example.com/golang:1.26.10@sha256:00000000000000000000000000
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, declined-outcomes, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, telemetry, no-plane"
+helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, declined-outcomes, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -291,6 +292,11 @@ check defaults.env "agent steps' golangci-lint, a v2 release pinned by digest" \
 check ghcr-adopted.env "after adoption the operator still gets golangci-lint's image" '^INFRARED_GOLANGCI_LINT_IMAGE="golangci/golangci-lint:' 1
 has runner-tools.env "an install's own Go toolchain image handed to the operator" "INFRARED_GO_TOOLCHAIN_IMAGE=\"$mirror_go\""
 has runner-tools.env "an install's own golangci-lint image handed to the operator" "INFRARED_GOLANGCI_LINT_IMAGE=\"$mirror_lint\""
+# The browser image e2e-verify steps run a Product's end-to-end tests in (ADR 0080):
+# Playwright's noble image by tag and digest, on by default; empty renders none.
+check defaults.env "e2e-verify steps' browser image, Playwright noble pinned by digest" \
+  '^INFRARED_E2E_IMAGE="mcr\.microsoft\.com/playwright:v1\.[0-9]+\.[0-9]+-noble@sha256:[0-9a-f]{64}"$' 1
+check no-e2e-image.yaml "no browser image when runner.e2eImage is empty" 'INFRARED_E2E_IMAGE' 0
 check ghcr.yaml "no pull Secret without imageCredentials" '^type: kubernetes\.io/dockerconfigjson$' 0
 has ghcr-adopted.env "after adoption the operator still gets the registry" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
 has ghcr-adopted.env "after adoption the operator still gets every pin" "INFRARED_IMAGES=\"$ghcr_pins\""
@@ -1046,6 +1052,7 @@ refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
 refuse "a duplicate extension id fails" 'id "back-office" is listed more than once' \
   --set "$ext,ui.extensions[1].id=back-office,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
 refuse "an empty golangci-lint image fails" "at '/runner/golangciLintImage'" --set runner.golangciLintImage=
+refuse "a browser image without a digest fails" "at '/runner/e2eImage'" --set runner.e2eImage=mcr.microsoft.com/playwright:v1.64.0-noble
 # The metrics store's size, as the operator takes it: a whole number above zero
 # of Mi, Gi or Ti. No space would turn the claim off; a fraction or a decimal
 # unit is no size of a disk.

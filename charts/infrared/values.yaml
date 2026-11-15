@@ -1068,10 +1068,14 @@ ui:
   extensions: []
   # - id: back-office
   #   title: Back Office
-  #   icon: book            # puzzle (default), book, wallet, receipt, users, key, landmark, scroll
+  #   icon: book            # puzzle (default), book, wallet, receipt, users, key, landmark, scroll, life-buoy
   #   upstream: back-office.back-office.svc.cluster.local:8080
   #   paths: [v1, ui]       # optional, default [v1, ui]
   #   entry: ""             # optional, default /ext/<id>/ui/entry.js
+  #   badge:                # optional: a count on its rail item while the rollout flag extensionBadges is on
+  #     path: /ext/back-office/v1/summary   # a GET under one of its paths, sent as the person once a minute
+  #     field: due          # the answer's top-level field, a whole number; 0 or anything else shows no count
+  #     label: due          # optional: what the count means, read after it ("3 due"); default "waiting for you"
   extensionsProxySecret:
     # -- Name of an existing Secret whose value the UI sends to every extension upstream as
     # X-Infrared-Proxy-Secret (INFRARED_EXT_PROXY_SECRET; 32 or more of A-Z a-z 0-9 _ -).

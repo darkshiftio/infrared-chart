@@ -7,6 +7,10 @@ proxy secret from INFRARED_EXT_PROXY_SECRET, the cluster DNS server from
   extensions.json  served at /extensions.json: the rail's runtime config
   http.conf        included in nginx's http block: the resolver and upstreams
   server.conf      included in nginx's server block: the /ext/<id>/ locations
+An extension's badge (its path, field and label) goes into extensions.json as
+set, for the UI to ask through the extension's own location while the rollout
+flag extensionBadges is on (ADR 0020, its update of 2026-11-15). Its path must
+be under one of the extension's paths, so nginx's locations stay as they are.
 */}}
 {{- with .Values.ui.extensions }}
 {{- $exts := list }}
@@ -24,11 +28,32 @@ proxy secret from INFRARED_EXT_PROXY_SECRET, the cluster DNS server from
 {{- if not (has "ui" $paths) }}
 {{- fail (printf "ui.extensions: paths of %q must include ui, which serves its entry" .id) }}
 {{- end }}
-{{- $exts = append $exts (dict "id" .id "title" .title "icon" (.icon | default "puzzle") "entry" $entry "upstream" .upstream "paths" $paths "name" (printf "ext_%s" (.id | replace "-" "_"))) }}
+{{- $ext := dict "id" .id "title" .title "icon" (.icon | default "puzzle") "entry" $entry "upstream" .upstream "paths" $paths "name" (printf "ext_%s" (.id | replace "-" "_")) }}
+{{- with .badge }}
+{{- $badge := . }}
+{{- $under := false }}
+{{- $prefixes := list }}
+{{- range $paths }}
+{{- $prefix := printf "/ext/%s/%s/" $ext.id . }}
+{{- $prefixes = append $prefixes $prefix }}
+{{- if hasPrefix $prefix $badge.path }}
+{{- $under = true }}
+{{- end }}
+{{- end }}
+{{- if not $under }}
+{{- fail (printf "ui.extensions: badge path %q of %q is under none of its paths (%s): move it under one, or add its path to paths" $badge.path $ext.id (join ", " $prefixes)) }}
+{{- end }}
+{{- $shown := dict "path" $badge.path "field" $badge.field }}
+{{- with $badge.label }}
+{{- $_ := set $shown "label" (trim .) }}
+{{- end }}
+{{- $_ := set $ext "badge" $shown }}
+{{- end }}
+{{- $exts = append $exts $ext }}
 {{- end }}
 {{- $public := list }}
 {{- range $exts }}
-{{- $public = append $public (pick . "id" "title" "icon" "entry") }}
+{{- $public = append $public (pick . "id" "title" "icon" "entry" "badge") }}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap

@@ -1013,6 +1013,25 @@ check extensions.yaml "no add_header, so the server's security headers apply" '^
 check extensions.yaml "UI mounts the ConfigMap read-only" '^            - mountPath: /etc/infrared-ui/extensions$' 1
 check extensions.yaml "UI reads the proxy secret from the existing Secret" '^                  name: "infrared-ext-proxy"$' 1
 check extensions.yaml "UI rolls when the ConfigMap changes" '^        checksum/extensions: [0-9a-f]{64}$' 1
+# A badge (ADR 0020, its update of 2026-11-15): extensions.json carries it as
+# set, its label trimmed, for the UI to ask through the extension's own
+# location while the rollout flag extensionBadges is on. nginx's snippets are
+# the same with one as without it.
+support='ui.extensions[0].id=support,ui.extensions[0].title=Support,ui.extensions[0].icon=life-buoy,ui.extensions[0].upstream=support.support-prod.svc.cluster.local:80,ui.extensionsProxySecret.existingSecret=infrared-ext-proxy'
+helm template infrared "$chart" -n infrared --set "$support" >"$out/extension-plain.yaml"
+helm template infrared "$chart" -n infrared \
+  --set "$support,ui.extensions[0].badge.path=/ext/support/v1/summary,ui.extensions[0].badge.field=needsPerson" \
+  --set-string "ui.extensions[0].badge.label=  waiting for a person " >"$out/extension-badge.yaml"
+ext_data() { yq -o json -I0 'select(.kind == "ConfigMap" and .metadata.name == "infrared-ui-extensions") | .data' "$out/$1.yaml"; }
+check extensions.yaml "no badge in extensions.json unless one is set" '"badge"' 0
+if [[ "$(ext_data extension-badge | jq -S -c '.["extensions.json"] | fromjson')" == \
+  '[{"badge":{"field":"needsPerson","label":"waiting for a person","path":"/ext/support/v1/summary"},"entry":"/ext/support/ui/entry.js","icon":"life-buoy","id":"support","title":"Support"}]' ]]; then
+  ok "extensions.json carries the badge as set, its label trimmed, beside the life-buoy icon"
+else bad "extensions.json does not carry the badge as set"; fi
+if [[ -n "$(ext_data extension-plain)" &&
+  "$(ext_data extension-badge | jq -S -c 'del(.["extensions.json"])')" == "$(ext_data extension-plain | jq -S -c 'del(.["extensions.json"])')" ]]; then
+  ok "a badge leaves http.conf and server.conf as they are"
+else bad "a badge changed http.conf or server.conf"; fi
 # refuse <description> <expected error> <helm template args...>: the render must fail with that error.
 refuse() {
   local desc="$1" want="$2"; shift 2
@@ -1052,6 +1071,24 @@ refuse "an upstream that is not an FQDN fails" "/ui/extensions/0/upstream" \
   --set "$ext,ui.extensions[0].upstream=back-office:8080,ui.extensionsProxySecret.existingSecret=x"
 refuse "a duplicate extension id fails" 'id "back-office" is listed more than once' \
   --set "$ext,ui.extensions[1].id=back-office,ui.extensions[1].title=Again,ui.extensions[1].upstream=a.b.svc:80,ui.extensionsProxySecret.existingSecret=x"
+# A badge's path is the extension's own: under one of its paths, never another
+# extension's, and with no query or dot segment for the browser to resolve.
+badge="$ext,ui.extensionsProxySecret.existingSecret=x,ui.extensions[0].badge.field=due"
+refuse "a badge under none of the extension's paths fails" \
+  'badge path "/ext/back-office/admin/summary" of "back-office" is under none of its paths (/ext/back-office/v1/, /ext/back-office/ui/)' \
+  --set "$badge,ui.extensions[0].badge.path=/ext/back-office/admin/summary"
+refuse "a badge under another extension's id fails" 'badge path "/ext/field-notes/v1/summary" of "back-office" is under none of its paths' \
+  --set "$badge,ui.extensions[0].badge.path=/ext/field-notes/v1/summary"
+refuse "a badge path with a dot segment fails" "/ui/extensions/0/badge/path" \
+  --set "$badge,ui.extensions[0].badge.path=/ext/back-office/v1/../admin"
+refuse "a badge path with a query fails" "/ui/extensions/0/badge/path" \
+  --set "$badge,ui.extensions[0].badge.path=/ext/back-office/v1/summary?all=1"
+refuse "a badge without a field fails" "missing property 'field'" \
+  --set "$ext,ui.extensionsProxySecret.existingSecret=x,ui.extensions[0].badge.path=/ext/back-office/v1/summary"
+refuse "a badge's blank label fails" "/ui/extensions/0/badge/label" \
+  --set "$badge,ui.extensions[0].badge.path=/ext/back-office/v1/summary" --set-string "ui.extensions[0].badge.label=   "
+refuse "an icon outside the set fails" "/ui/extensions/0/icon" \
+  --set "$ext,ui.extensionsProxySecret.existingSecret=x,ui.extensions[0].icon=lifebuoy"
 refuse "an empty golangci-lint image fails" "at '/runner/golangciLintImage'" --set runner.golangciLintImage=
 refuse "a browser image without a digest fails" "at '/runner/e2eImage'" --set runner.e2eImage=mcr.microsoft.com/playwright:v1.64.0-noble
 # The metrics store's size, as the operator takes it: a whole number above zero

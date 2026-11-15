@@ -777,7 +777,7 @@ ui:
   extensions:
     - id: back-office         # ^[a-z][a-z0-9-]{1,30}$
       title: Back Office
-      icon: book              # puzzle (default), book, wallet, receipt, users, key, landmark, scroll
+      icon: book              # puzzle (default), book, wallet, receipt, users, key, landmark, scroll, life-buoy
       upstream: back-office.back-office.svc.cluster.local:8080   # FQDN:port
       paths: [v1, ui]         # the default
   extensionsProxySecret:
@@ -807,6 +807,32 @@ domains. The Secret's value is 32 or more of `A-Z a-z 0-9 _ -` (one trailing
 newline is ignored), and the UI refuses to start without one. The UI reads it
 only at start, so restart the UI Deployment after rotating it; the extension
 checks the same value.
+
+An extension may put a count on its rail item with `badge`, such as how many
+Support conversations need a person (infrared-docs-internal ADR 0020, its
+update of 2026-11-15):
+
+```yaml
+ui:
+  extensions:
+    - id: support
+      title: Support
+      icon: life-buoy
+      upstream: support.support-prod.svc.cluster.local:80
+      badge:
+        path: /ext/support/v1/summary   # a GET under one of its paths, no query
+        field: needsPerson              # the answer's top-level field
+        label: waiting for a person     # optional, read after the number; default "waiting for you"
+```
+
+The chart passes the badge on in `/extensions.json` as set, its label trimmed,
+and refuses a `path` under none of the extension's paths, so its locations are
+the same with a badge as without. While the rollout flag `extensionBadges` is
+on (declared in infrared-api, set with `api.flags`), the UI sends `GET <path>`
+through the extension's own location, signed in as the person like any other
+request there, once a minute while the page is visible, and shows `field` on
+the item when it is a whole number above 0. Any other answer, or none, shows
+no count. With the flag off the UI asks nothing.
 
 ## Upgrading
 
@@ -944,7 +970,7 @@ only after the pin to a chart with `api.flags` is Synced.
 | `<c>.serviceAccount.annotations` | `{}` | ServiceAccount annotations |
 | `<c>.service.port` | operator 8081, api/mcp 8080, ui 80 | Service port |
 | `ui.service.type` | `ClusterIP` | Type of the primary Service |
-| `ui.extensions` | `[]` | Extensions in the UI's rail, proxied at `/ext/<id>/<path>/` after sign-in: `id`, `title`, `icon`, `upstream` (FQDN:port), `paths` (default `[v1, ui]`), `entry` (default `/ext/<id>/ui/entry.js`). See "Extensions" |
+| `ui.extensions` | `[]` | Extensions in the UI's rail, proxied at `/ext/<id>/<path>/` after sign-in: `id`, `title`, `icon`, `upstream` (FQDN:port), `paths` (default `[v1, ui]`), `entry` (default `/ext/<id>/ui/entry.js`), `badge` (optional: `path`, `field`, `label`, a count on the rail item while the rollout flag `extensionBadges` is on). See "Extensions" |
 | `ui.extensionsProxySecret.existingSecret` / `.key` | `""` / `secret` | Secret whose value the UI sends to every extension upstream as `X-Infrared-Proxy-Secret` (`INFRARED_EXT_PROXY_SECRET`); required when `ui.extensions` is set |
 | `<c>.podAnnotations`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints` | empty | Scheduling |
 | `<c>.podSecurityContext` / `<c>.containerSecurityContext` | unset | Per-component override of the shared security contexts |

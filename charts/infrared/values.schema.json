@@ -523,7 +523,7 @@
         },
         "declinedOutcomes": {
           "type": "boolean",
-          "description": "End a run whose step answers DECLINE, a request the org's policy forbids, as Failed with status.outcome.kind declined instead of dead-lettering it, and close its issue as not planned (INFRARED_DECLINED_OUTCOMES, ADR 0076)."
+          "description": "End a run whose step answers DECLINE, a request the org's policy forbids, as Failed with status.outcome.kind declined instead of dead-lettering it, and close its issue as not planned (INFRARED_DECLINED_OUTCOMES, ADR 0076). On by default; false keeps DECLINE handled as BLOCK. Deprecated: the key goes in a later release."
         },
         "metricsStorage": {
           "type": "string",

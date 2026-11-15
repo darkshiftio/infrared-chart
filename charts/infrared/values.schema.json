@@ -936,7 +936,8 @@
                   "users",
                   "key",
                   "landmark",
-                  "scroll"
+                  "scroll",
+                  "life-buoy"
                 ],
                 "description": "Rail icon; default puzzle."
               },
@@ -959,6 +960,34 @@
                 "type": "string",
                 "pattern": "^(/ext/[a-z][a-z0-9-]{1,30}/ui(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)+)?$",
                 "description": "Absolute path of the remote module under /ext/<id>/ui/; empty means /ext/<id>/ui/entry.js."
+              },
+              "badge": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "A count on the extension's rail item, shown while the rollout flag extensionBadges is on: once a minute while the page is visible, the UI sends GET path through this slot as the signed-in person and shows the answer's top-level field when it is a whole number above 0. Any other answer shows no count.",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^/ext/[a-z][a-z0-9-]{1,30}/[a-z0-9][a-z0-9_-]{0,62}(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)+$",
+                    "description": "Absolute path of the GET, under /ext/<id>/<path>/ for one of the extension's paths, with no query, e.g. /ext/support/v1/summary."
+                  },
+                  "field": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+                    "description": "The answer's top-level field that holds the count, e.g. needsPerson."
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "pattern": "\\S",
+                    "description": "What the count means, read after its number, so words that fit any number, e.g. waiting for a person; default waiting for you."
+                  }
+                },
+                "required": [
+                  "path",
+                  "field"
+                ]
               }
             },
             "required": [

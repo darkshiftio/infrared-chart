@@ -186,8 +186,9 @@ helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"
 helm template infrared "$chart" -n infrared --set operator.externalZones=true >"$out/external-zones.yaml"
 # A poor environment preview becomes a card drawn from the Product's assets (operator #74).
 helm template infrared "$chart" -n infrared --set operator.previewFallback=true >"$out/preview-fallback.yaml"
-# A request the org's policy forbids ends Declined (operator.declinedOutcomes, ADR 0076).
-helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=true >"$out/declined-outcomes.yaml"
+# A request the org's policy forbids ends Declined by default; false keeps DECLINE handled as
+# BLOCK (operator.declinedOutcomes, ADR 0076).
+helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=false >"$out/declined-outcomes.yaml"
 # The size of the install's own metrics store, which the operator hands the
 # gitops template (operator.metricsStorage, ADR 0075, lane H).
 helm template infrared "$chart" -n infrared --set operator.metricsStorage=40Gi >"$out/metrics-storage.yaml"
@@ -464,8 +465,8 @@ check defaults.env "no external zones by default" '^INFRARED_EXTERNAL_ZONES=' 0
 has external-zones.env "a platform Product may have an external zone" 'INFRARED_EXTERNAL_ZONES="true"'
 check defaults.env "every screenshot kept as taken by default" '^INFRARED_PREVIEW_FALLBACK=' 0
 has preview-fallback.env "a poor preview becomes a card" 'INFRARED_PREVIEW_FALLBACK="true"'
-check defaults.env "DECLINE handled as BLOCK by default" '^INFRARED_DECLINED_OUTCOMES=' 0
-has declined-outcomes.env "a request the policy forbids ends Declined" 'INFRARED_DECLINED_OUTCOMES="true"'
+has defaults.env "a request the policy forbids ends Declined by default" 'INFRARED_DECLINED_OUTCOMES="true"'
+check declined-outcomes.env "DECLINE handled as BLOCK with declinedOutcomes false" '^INFRARED_DECLINED_OUTCOMES=' 0
 check defaults.env "the metrics store keeps the template's own size by default" '^INFRARED_METRICS_STORAGE=' 0
 has metrics-storage.env "the metrics store's size reaches the operator" 'INFRARED_METRICS_STORAGE="40Gi"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the

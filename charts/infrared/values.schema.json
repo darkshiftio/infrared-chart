@@ -525,6 +525,10 @@
           "type": "boolean",
           "description": "End a run whose step answers DECLINE, a request the org's policy forbids, as Failed with status.outcome.kind declined instead of dead-lettering it, and close its issue as not planned (INFRARED_DECLINED_OUTCOMES, ADR 0076). On by default; false keeps DECLINE handled as BLOCK. Deprecated: the key goes in a later release."
         },
+        "supportDesk": {
+          "type": "boolean",
+          "description": "Answer orgs' support desks: the operator answers a customer's message in an org's Chatwoot as its agent bot, from the run infrared-api starts for it, and sets the Installation's condition SupportDesk (INFRARED_SUPPORT_DESK, ADR 0082). Needs the API's rollout flag supportSignals. Off by default: a support run fails before its step and nothing is posted."
+        },
         "metricsStorage": {
           "type": "string",
           "pattern": "^$|^[1-9][0-9]*(Mi|Gi|Ti)$",

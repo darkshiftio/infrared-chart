@@ -907,6 +907,16 @@ operator:
   # handled as BLOCK for now. Deprecated: the key goes in a later release, once no install's values
   # file sets it.
   declinedOutcomes: true
+  # -- Answer orgs' support desks (INFRARED_SUPPORT_DESK, operator; infrared-docs-internal ADR 0082):
+  # a run infrared-api starts for a customer's message in an org's Chatwoot gets the conversation in
+  # its step's spec, waits for the conversation's earlier run, and runs with strict permissions;
+  # and the operator, never the run, answers in the desk as its agent bot, with the token in the
+  # org's Secret infrared-support-desk: typing, then the reply, or a private note, the label
+  # needs-person and the conversation open for a person. It sets the Installation's condition
+  # SupportDesk, without which the API refuses a desk's messages, and needs the API's rollout flag
+  # supportSignals to take any. Off, a support run fails before its step and nothing is posted.
+  # Until the operator reads rollout flags (ADR 0061 decision 9).
+  supportDesk: false
   # -- The size of the install's own metrics store (INFRARED_METRICS_STORAGE, operator;
   # infrared-docs-internal ADR 0075, lane H): the gitops template gives it to VMSingle's claim
   # (victoria-metrics-k8s-stack), or on k3s with the stores to the emptyDir VMSingle's data is on.

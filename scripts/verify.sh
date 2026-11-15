@@ -189,6 +189,8 @@ helm template infrared "$chart" -n infrared --set operator.previewFallback=true 
 # A request the org's policy forbids ends Declined by default; false keeps DECLINE handled as
 # BLOCK (operator.declinedOutcomes, ADR 0076).
 helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=false >"$out/declined-outcomes.yaml"
+# The operator answers orgs' support desks only when asked (operator.supportDesk, ADR 0082).
+helm template infrared "$chart" -n infrared --set operator.supportDesk=true >"$out/support-desk.yaml"
 # The size of the install's own metrics store, which the operator hands the
 # gitops template (operator.metricsStorage, ADR 0075, lane H).
 helm template infrared "$chart" -n infrared --set operator.metricsStorage=40Gi >"$out/metrics-storage.yaml"
@@ -205,7 +207,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, declined-outcomes, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -214,7 +216,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback declined-outcomes metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback declined-outcomes support-desk metrics-storage \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -467,6 +469,10 @@ check defaults.env "every screenshot kept as taken by default" '^INFRARED_PREVIE
 has preview-fallback.env "a poor preview becomes a card" 'INFRARED_PREVIEW_FALLBACK="true"'
 has defaults.env "a request the policy forbids ends Declined by default" 'INFRARED_DECLINED_OUTCOMES="true"'
 check declined-outcomes.env "DECLINE handled as BLOCK with declinedOutcomes false" '^INFRARED_DECLINED_OUTCOMES=' 0
+# Support desks only when asked for: off, the operator answers none, so a support run
+# fails before its step and the Installation's condition SupportDesk stays False.
+check defaults.env "the operator answers no support desk by default" '^INFRARED_SUPPORT_DESK=' 0
+has support-desk.env "the operator answers orgs' support desks when asked" 'INFRARED_SUPPORT_DESK="true"'
 check defaults.env "the metrics store keeps the template's own size by default" '^INFRARED_METRICS_STORAGE=' 0
 has metrics-storage.env "the metrics store's size reaches the operator" 'INFRARED_METRICS_STORAGE="40Gi"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the

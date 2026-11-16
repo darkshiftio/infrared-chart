@@ -19,9 +19,27 @@ volume beside it and takes requests before the old pod stops. */}}
 {{- end }}
 {{- end }}
 {{- $ctx := dict "root" . "c" $c "component" "api" }}
+{{- $volumes := list }}
+{{- $mounts := list }}
 {{- if .Values.summaryvideo.enabled }}
-{{- $_ := set $ctx "volumes" (list (dict "name" "media" "persistentVolumeClaim" (dict "claimName" (include "infrared.componentName" (dict "root" . "component" "media"))))) }}
-{{- $_ := set $ctx "volumeMounts" (list (dict "name" "media" "mountPath" "/var/lib/infrared/media")) }}
+{{- $volumes = append $volumes (dict "name" "media" "persistentVolumeClaim" (dict "claimName" (include "infrared.componentName" (dict "root" . "component" "media")))) }}
+{{- $mounts = append $mounts (dict "name" "media" "mountPath" "/var/lib/infrared/media") }}
+{{- end }}
+{{- with .Values.supportChat.hmacKeySecret.name }}
+{{- /* The support desk's inbox's key (supportChat.hmacKeySecret, workspace TODO
+668): optional, so an install without the Secret, or without its key, still
+starts, and the API answers 404 for the chat until it is there. The API reads
+the file at every call and the kubelet writes a changed Secret into its volume,
+so a key put in place or rotated later needs no restart; never a subPath, which
+the kubelet does not update. */}}
+{{- $volumes = append $volumes (dict "name" "support-chat" "secret" (dict "secretName" . "items" (list (dict "key" $.Values.supportChat.hmacKeySecret.key "path" "hmac-key")) "optional" true)) }}
+{{- $mounts = append $mounts (dict "name" "support-chat" "mountPath" "/var/run/infrared/support-chat" "readOnly" true) }}
+{{- end }}
+{{- with $volumes }}
+{{- $_ := set $ctx "volumes" . }}
+{{- end }}
+{{- with $mounts }}
+{{- $_ := set $ctx "volumeMounts" . }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -174,6 +192,35 @@ spec:
             # names another; empty, it registers nowhere.
             - name: INFRARED_TELEMETRY_PLANE
               value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
+            {{- /* The chat with the install's support desk (supportChat, workspace TODO
+            668), behind the API's rollout flag supportChat: each value only when set,
+            and the API answers 404 until every one is, the key is in its file and an
+            org is listed. */}}
+            {{- with .Values.supportChat.baseUrl }}
+            # The support desk's address in a browser (supportChat.baseUrl).
+            - name: INFRARED_SUPPORT_CHAT_BASE_URL
+              value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
+            {{- with .Values.supportChat.websiteToken }}
+            # Its website inbox's token, public by design (supportChat.websiteToken).
+            - name: INFRARED_SUPPORT_CHAT_WEBSITE_TOKEN
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.supportChat.install }}
+            # This install's name to the desk (supportChat.install).
+            - name: INFRARED_SUPPORT_CHAT_INSTALL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.supportChat.orgs }}
+            # The orgs that opted in to the chat (supportChat.orgs).
+            - name: INFRARED_SUPPORT_CHAT_ORGS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            {{- if .Values.supportChat.hmacKeySecret.name }}
+            # The desk's inbox's key, from the Secret supportChat.hmacKeySecret names.
+            - name: INFRARED_SUPPORT_CHAT_HMAC_KEY_FILE
+              value: "/var/run/infrared/support-chat/hmac-key"
             {{- end }}
             # The API's own Prometheus metrics, on a port of their own off the public listener (ADR 0044).
             - name: INFRARED_METRICS_ADDR

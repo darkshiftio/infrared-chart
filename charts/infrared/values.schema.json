@@ -1865,6 +1865,55 @@
         }
       }
     },
+    "supportChat": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The chat with the install's support desk (workspace TODO 668): what infrared-api's get-support-chat hands a signed-in person of an org that opted in so that the desk's website widget, Chatwoot's, signs them in, behind the API's rollout flag supportChat. Empty by default: nothing is rendered or mounted, and the API answers 404 until every value is set, the key's Secret holds the key and an org is listed.",
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "pattern": "^$|^(https://[^\\s/?#@]+|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?)(/[^\\s?#]*)?$",
+          "description": "INFRARED_SUPPORT_CHAT_BASE_URL (api): the desk's address in a browser, where the page loads the widget from, such as https://support.example.com, https (plain http only for localhost), a trailing slash trimmed. Empty renders nothing."
+        },
+        "websiteToken": {
+          "type": "string",
+          "pattern": "^$|^[A-Za-z0-9_-]+$",
+          "description": "INFRARED_SUPPORT_CHAT_WEBSITE_TOKEN (api): the desk's website inbox's token, public by design. Empty renders nothing."
+        },
+        "install": {
+          "type": "string",
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+          "description": "INFRARED_SUPPORT_CHAT_INSTALL (api): this install's name to the desk, a DNS label: hosted on Darkshift's hosted plane, internal on the home, a localred stack's name on one. Every identifier the API signs starts with it. Empty renders nothing."
+        },
+        "orgs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,54}[a-z0-9])?$"
+          },
+          "description": "INFRARED_SUPPORT_CHAT_ORGS (api, comma-separated): the orgs that opted in to the chat, by name. Only a person who belongs to one gets it: a team of the org lists them, or, for a platform admin, it is the platform org. Empty, as by default: nobody does, and nothing renders."
+        },
+        "hmacKeySecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The desk's inbox's key, which the API signs each person's identifier with: an existing Secret in the release namespace, mounted optional at /var/run/infrared/support-chat/hmac-key (INFRARED_SUPPORT_CHAT_HMAC_KEY_FILE, api), read at every call.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^$|^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+              "description": "The Secret's name. Empty mounts nothing."
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[-._a-zA-Z0-9]+$",
+              "description": "The key in that Secret that holds the inbox's key."
+            }
+          }
+        }
+      }
+    },
     "giteaAdmin": {
       "type": "object",
       "additionalProperties": false,

@@ -986,6 +986,36 @@
                     "maxLength": 60,
                     "pattern": "\\S",
                     "description": "What the count means, read after its number, so words that fit any number, e.g. waiting for a person; default waiting for you."
+                  },
+                  "alert": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "A banner across the UI's pages, shown while the rollout flags extensionBanners and extensionBadges are on: from the badge's own GET, the answer's top-level field, when it is a whole number above 0, with the words set here and a link to the extension's page. Only the people the rail lists the extension for see it, never on the extension's own pages; a person may dismiss it for the browser session, until the count rises above the number dismissed.",
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+                        "description": "The answer's top-level field that holds the banner's count, e.g. waiting."
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80,
+                        "pattern": "\\S",
+                        "description": "What the count means, read after its number, e.g. conversations waiting for a reply in Support."
+                      },
+                      "labelOne": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80,
+                        "pattern": "\\S",
+                        "description": "The label when the count is 1, e.g. conversation waiting for a reply in Support; default label."
+                      }
+                    },
+                    "required": [
+                      "field",
+                      "label"
+                    ]
                   }
                 },
                 "required": [

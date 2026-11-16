@@ -11,6 +11,9 @@ An extension's badge (its path, field and label) goes into extensions.json as
 set, for the UI to ask through the extension's own location while the rollout
 flag extensionBadges is on (ADR 0020, its update of 2026-11-15). Its path must
 be under one of the extension's paths, so nginx's locations stay as they are.
+A badge's alert (its field, label and labelOne, the labels trimmed) goes with
+it: the UI's banner reads it from the same answer while the rollout flag
+extensionBanners is on too (workspace TODO 676).
 */}}
 {{- with .Values.ui.extensions }}
 {{- $exts := list }}
@@ -46,6 +49,13 @@ be under one of the extension's paths, so nginx's locations stay as they are.
 {{- $shown := dict "path" $badge.path "field" $badge.field }}
 {{- with $badge.label }}
 {{- $_ := set $shown "label" (trim .) }}
+{{- end }}
+{{- with $badge.alert }}
+{{- $alert := dict "field" .field "label" (trim .label) }}
+{{- with .labelOne }}
+{{- $_ := set $alert "labelOne" (trim .) }}
+{{- end }}
+{{- $_ := set $shown "alert" $alert }}
 {{- end }}
 {{- $_ := set $ext "badge" $shown }}
 {{- end }}

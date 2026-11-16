@@ -823,6 +823,10 @@ ui:
         path: /ext/support/v1/summary   # a GET under one of its paths, no query
         field: needsPerson              # the answer's top-level field
         label: waiting for a person     # optional, read after the number; default "waiting for you"
+        alert:                          # optional: a banner from the same answer
+          field: waiting
+          label: conversations waiting for a reply in Support
+          labelOne: conversation waiting for a reply in Support   # optional, for a count of 1
 ```
 
 The chart passes the badge on in `/extensions.json` as set, its label trimmed,
@@ -833,6 +837,16 @@ through the extension's own location, signed in as the person like any other
 request there, once a minute while the page is visible, and shows `field` on
 the item when it is a whole number above 0. Any other answer, or none, shows
 no count. With the flag off the UI asks nothing.
+
+A badge may carry an `alert` (workspace TODO 676): a banner across the UI from
+the same answer, so it asks nothing more. While the rollout flag
+`extensionBanners` is on as well, the UI shows the answer's `field`, when it
+is a whole number above 0, as the number and `label` (`labelOne` when it is
+1), with a link that opens the extension. Only the people the rail lists the
+extension for see it, never on the extension's own pages. A person may
+dismiss it for the browser session; it shows again once the count rises above
+the number dismissed. The chart passes the alert on as set, its labels
+trimmed, and refuses a key it does not know.
 
 ## Upgrading
 
@@ -975,7 +989,7 @@ only after the pin to a chart with `api.flags` is Synced.
 | `<c>.serviceAccount.annotations` | `{}` | ServiceAccount annotations |
 | `<c>.service.port` | operator 8081, api/mcp 8080, ui 80 | Service port |
 | `ui.service.type` | `ClusterIP` | Type of the primary Service |
-| `ui.extensions` | `[]` | Extensions in the UI's rail, proxied at `/ext/<id>/<path>/` after sign-in: `id`, `title`, `icon`, `upstream` (FQDN:port), `paths` (default `[v1, ui]`), `entry` (default `/ext/<id>/ui/entry.js`), `badge` (optional: `path`, `field`, `label`, a count on the rail item while the rollout flag `extensionBadges` is on). See "Extensions" |
+| `ui.extensions` | `[]` | Extensions in the UI's rail, proxied at `/ext/<id>/<path>/` after sign-in: `id`, `title`, `icon`, `upstream` (FQDN:port), `paths` (default `[v1, ui]`), `entry` (default `/ext/<id>/ui/entry.js`), `badge` (optional: `path`, `field`, `label`, a count on the rail item while the rollout flag `extensionBadges` is on; and `alert`, optional: `field`, `label`, `labelOne`, a banner from the same answer while `extensionBanners` is on too). See "Extensions" |
 | `ui.extensionsProxySecret.existingSecret` / `.key` | `""` / `secret` | Secret whose value the UI sends to every extension upstream as `X-Infrared-Proxy-Secret` (`INFRARED_EXT_PROXY_SECRET`); required when `ui.extensions` is set |
 | `<c>.podAnnotations`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints` | empty | Scheduling |
 | `<c>.podSecurityContext` / `<c>.containerSecurityContext` | unset | Per-component override of the shared security contexts |

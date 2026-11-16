@@ -191,6 +191,8 @@ helm template infrared "$chart" -n infrared --set operator.previewFallback=true 
 helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=false >"$out/declined-outcomes.yaml"
 # The operator answers orgs' support desks only when asked (operator.supportDesk, ADR 0082).
 helm template infrared "$chart" -n infrared --set operator.supportDesk=true >"$out/support-desk.yaml"
+# The operator researches support conversations only when asked, beside its desks (operator.supportResearch, TODO 680).
+helm template infrared "$chart" -n infrared --set operator.supportDesk=true,operator.supportResearch=true >"$out/support-research.yaml"
 # The size of the install's own metrics store, which the operator hands the
 # gitops template (operator.metricsStorage, ADR 0075, lane H).
 helm template infrared "$chart" -n infrared --set operator.metricsStorage=40Gi >"$out/metrics-storage.yaml"
@@ -216,7 +218,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback declined-outcomes support-desk metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback declined-outcomes support-desk support-research metrics-storage \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -473,6 +475,12 @@ check declined-outcomes.env "DECLINE handled as BLOCK with declinedOutcomes fals
 # fails before its step and the Installation's condition SupportDesk stays False.
 check defaults.env "the operator answers no support desk by default" '^INFRARED_SUPPORT_DESK=' 0
 has support-desk.env "the operator answers orgs' support desks when asked" 'INFRARED_SUPPORT_DESK="true"'
+# Research only when asked: off, a research run fails before its step and the Installation's
+# condition SupportResearch stays False; on, beside the desks it needs.
+check defaults.env "the operator researches no support conversation by default" '^INFRARED_SUPPORT_RESEARCH=' 0
+check support-desk.env "the desks alone research nothing" '^INFRARED_SUPPORT_RESEARCH=' 0
+has support-research.env "the operator researches support conversations when asked" 'INFRARED_SUPPORT_RESEARCH="true"'
+has support-research.env "research keeps the desks it posts in" 'INFRARED_SUPPORT_DESK="true"'
 check defaults.env "the metrics store keeps the template's own size by default" '^INFRARED_METRICS_STORAGE=' 0
 has metrics-storage.env "the metrics store's size reaches the operator" 'INFRARED_METRICS_STORAGE="40Gi"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the
@@ -1087,6 +1095,8 @@ check license-existing.yaml "as the Secret's name" '^              value: "ci-li
 refuse "license.key with license.existingSecret fails" "license.key and license.existingSecret are two places for the licence" \
   --set-file "license.key=$out/ci-license" --set license.existingSecret=ci-license
 refuse "a license.key that is not a licence fails" "license.key is not an Infrared licence" --set license.key=not-a-licence
+refuse "operator.supportResearch without operator.supportDesk fails" "operator.supportResearch needs operator.supportDesk" \
+  --set operator.supportResearch=true
 
 ext='ui.extensions[0].id=back-office,ui.extensions[0].title=Back Office,ui.extensions[0].upstream=back-office.back-office.svc.cluster.local:8080'
 refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"

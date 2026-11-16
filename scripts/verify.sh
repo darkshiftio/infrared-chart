@@ -2084,8 +2084,67 @@ if [[ "$(rules_on defaults kpack.io)" == *builds* ]] && [[ "$(rules_on defaults 
   ok "the operator may read kpack's Builds and the volumes"
 else bad "the operator's ClusterRole lacks the caps' rules: $(rules_on defaults kpack.io) $(rules_on defaults '')"; fi
 
+step "the chat with the install's support desk (supportChat; workspace TODO 668)"
+# Empty by default: no variable, volume or mount, so an install that sets nothing
+# renders as before. Set: one variable each for the API alone, the address's
+# trailing slash trimmed and the orgs that opted in comma-separated; and the
+# inbox's key from the Secret it names, as a file, through a volume that is
+# optional, so an install without the Secret still starts, and never a subPath,
+# so the kubelet writes a rotated key in place, which the API reads at every
+# call. No object of its own: the Secret is the install's.
+chat=(--set supportChat.baseUrl=https://support.example.com/ --set supportChat.websiteToken=ciWebsiteToken0123
+  --set supportChat.install=hosted --set 'supportChat.orgs={zeta,acme}' --set supportChat.hmacKeySecret.name=ci-support-chat)
+helm template infrared "$chart" -n infrared --include-crds "${chat[@]}" >"$out/support-chat.yaml"
+helm template infrared "$chart" -n infrared --set supportChat.hmacKeySecret.name=ci-support-chat \
+  --set supportChat.hmacKeySecret.key=inbox-key --set summaryvideo.enabled=false >"$out/support-chat-key.yaml"
+if helm lint --strict "$chart" "${install[@]}" "${chat[@]}" >"$out/lint.log" 2>&1; then ok "lint install with the support chat"
+else cat "$out/lint.log"; bad "lint install with the support chat"; fi
+check defaults.yaml "the support chat handed to nobody by default" 'INFRARED_SUPPORT_CHAT_' 0
+check defaults.yaml "...and nothing mounted for it" 'support-chat' 0
+chat_vars() { yq -r 'select(.kind == "Deployment" and .metadata.name == "infrared-api") | .spec.template.spec.containers[0].env[]
+  | select(.name | test("^INFRARED_SUPPORT_CHAT_")) | .name + "=" + .value' "$out/$1.yaml"; }
+want_chat_vars='INFRARED_SUPPORT_CHAT_BASE_URL=https://support.example.com
+INFRARED_SUPPORT_CHAT_WEBSITE_TOKEN=ciWebsiteToken0123
+INFRARED_SUPPORT_CHAT_INSTALL=hosted
+INFRARED_SUPPORT_CHAT_ORGS=zeta,acme
+INFRARED_SUPPORT_CHAT_HMAC_KEY_FILE=/var/run/infrared/support-chat/hmac-key'
+if [[ "$(chat_vars support-chat)" == "$want_chat_vars" ]]; then
+  ok "each value handed to the API, the address's trailing slash trimmed, the orgs comma-separated, the key as a file"
+else bad "the API's support chat variables are: $(chat_vars support-chat | tr '\n' ' ')"; fi
+if [[ "$(chat_vars support-chat-key)" == "INFRARED_SUPPORT_CHAT_HMAC_KEY_FILE=/var/run/infrared/support-chat/hmac-key" ]]; then
+  ok "the key's Secret alone renders its file alone"
+else bad "the key's Secret alone renders: $(chat_vars support-chat-key | tr '\n' ' ')"; fi
+for d in infrared-operator infrared-mcp infrared; do
+  if [[ "$(objn support-chat Deployment "$d" 'INFRARED_SUPPORT_CHAT_|support-chat')" == 0 ]]; then ok "$d gets nothing of the chat"
+  else bad "$d gets the chat's variables or its key"; fi
+done
+# chat_obj <render> <volumes|volumeMounts>: the API's support-chat entry, as one line of JSON.
+chat_obj() {
+  local path=".spec.template.spec.volumes[]"
+  [[ "$2" == volumeMounts ]] && path=".spec.template.spec.containers[0].volumeMounts[]"
+  yq -o=json -I=0 "select(.kind == \"Deployment\" and .metadata.name == \"infrared-api\") | $path | select(.name == \"support-chat\")" "$out/$1.yaml"
+}
+if [[ "$(chat_obj support-chat volumes)" == '{"name":"support-chat","secret":{"items":[{"key":"hmac-key","path":"hmac-key"}],"optional":true,"secretName":"ci-support-chat"}}' ]] &&
+  [[ "$(chat_obj support-chat volumeMounts)" == '{"mountPath":"/var/run/infrared/support-chat","name":"support-chat","readOnly":true}' ]]; then
+  ok "the key's Secret mounted optional, its key alone as hmac-key, read-only and never through a subPath"
+else bad "the key's volume is $(chat_obj support-chat volumes), its mount $(chat_obj support-chat volumeMounts)"; fi
+if [[ "$(chat_obj support-chat-key volumes)" == '{"name":"support-chat","secret":{"items":[{"key":"inbox-key","path":"hmac-key"}],"optional":true,"secretName":"ci-support-chat"}}' ]]; then
+  ok "another key in the Secret, mounted at the same file, beside no media volume"
+else bad "with hmacKeySecret.key inbox-key the volume is $(chat_obj support-chat-key volumes)"; fi
+if [[ "$(objn support-chat Deployment infrared-api '^            - mountPath: /var/lib/infrared/media$')" == 1 ]]; then
+  ok "the media volume still mounted beside it"
+else bad "the media volume is no longer mounted beside the key's"; fi
+if [[ "$(objects support-chat)" == "$(objects defaults)" ]]; then ok "the chat renders no object of its own"
+else bad "the chat renders objects of its own: $(diff <(objects defaults) <(objects support-chat) | tr '\n' ' ')"; fi
+for set in supportChat.baseUrl=support.example.com supportChat.baseUrl=http://support.example.com supportChat.install=Hosted \
+  supportChat.install=hosted:plane 'supportChat.orgs={Acme}' 'supportChat.orgs={acme,acme}' 'supportChat.websiteToken=a b' \
+  supportChat.hmacKeySecret.key= supportChat.hmacKeySecret.name=CI_Secret supportChat.enabled=true supportChat.hmacKeySecret.namespace=x; do
+  if helm template infrared "$chart" -n infrared --set "$set" >/dev/null 2>&1; then bad "the schema took $set"
+  else ok "the schema refuses $set"; fi
+done
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

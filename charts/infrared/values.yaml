@@ -751,6 +751,42 @@ telemetry:
   # empty: the API registers nowhere.
   plane: "https://infrared.internal.darkshift.io"
 
+# The chat with the install's support desk (workspace TODO 668): infrared-api's
+# get-support-chat hands a signed-in person what the desk's website widget,
+# Chatwoot's, needs to sign them in, their identifier signed with the desk's
+# inbox's key, behind the API's rollout flag supportChat (api.flags.supportChat).
+# Support is opt-in: only the people of the orgs listed in orgs get it; a switch
+# an org's own admins turn comes later. Everything is empty by default, and an
+# empty value renders nothing: the API answers 404 until every value is set, the
+# key's Secret holds the key and an org is listed.
+supportChat:
+  # -- The desk's address in a browser, https (plain http only for localhost),
+  # where the page loads the widget from, such as https://support.example.com
+  # (INFRARED_SUPPORT_CHAT_BASE_URL, api; a trailing slash is trimmed).
+  baseUrl: ""
+  # -- The desk's website inbox's token (INFRARED_SUPPORT_CHAT_WEBSITE_TOKEN, api):
+  # public by design, every page that carries the widget holds it.
+  websiteToken: ""
+  # -- This install's name to the desk (INFRARED_SUPPORT_CHAT_INSTALL, api), a DNS
+  # label: hosted on Darkshift's hosted plane, internal on the home, a localred
+  # stack's name on one. Every identifier the API signs starts with it.
+  install: ""
+  # -- The orgs that opted in to the chat, by name (INFRARED_SUPPORT_CHAT_ORGS, api,
+  # comma-separated): only a person who belongs to one gets it, by a team of the
+  # org that lists them, or as a platform admin, of the platform org. Empty, as by
+  # default: nobody does.
+  orgs: []
+  # The desk's inbox's key, which the API signs each person's identifier with:
+  # an existing Secret in the release namespace, mounted optional, so an install
+  # without it still starts, at /var/run/infrared/support-chat/hmac-key
+  # (INFRARED_SUPPORT_CHAT_HMAC_KEY_FILE, api), which the API reads at every
+  # call: a key put in the Secret later, or rotated there, needs no restart.
+  hmacKeySecret:
+    # -- The Secret's name. Empty mounts nothing.
+    name: ""
+    # -- The key in that Secret that holds the inbox's key.
+    key: hmac-key
+
 runner:
   # -- How agent steps' tools are checked (INFRARED_RUNNER_PERMISSIONS, operator; the runner's
   # INFRARED_PERMISSIONS). Empty: Claude Code runs a step without permission checks, fenced by the

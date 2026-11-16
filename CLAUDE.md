@@ -48,6 +48,16 @@ The Helm chart for Infrared (`charts/infrared`), published to
   itself; no template renders them. Gitea's sign-in is the ConfigMap
   `infrared-gitea-sign-in`, `gitea.gitea.additionalConfigFromEnvs` and the
   post-init step `configure-infrared-sign-in`, which never fails Gitea's start.
+- Workspace TODO 668, the support chat (the API's rollout flag `supportChat`):
+  env `INFRARED_SUPPORT_CHAT_BASE_URL` (`supportChat.baseUrl`, a trailing
+  slash trimmed), `INFRARED_SUPPORT_CHAT_WEBSITE_TOKEN`,
+  `INFRARED_SUPPORT_CHAT_INSTALL`, `INFRARED_SUPPORT_CHAT_ORGS`
+  (`supportChat.orgs`, comma-separated) and
+  `INFRARED_SUPPORT_CHAT_HMAC_KEY_FILE`
+  (`/var/run/infrared/support-chat/hmac-key`, from the Secret
+  `supportChat.hmacKeySecret.name`, key `.key`, mounted optional and never
+  through a subPath) for the API alone, each rendered only when set. The
+  install makes that Secret; no template renders it.
 - ADR 0066 D1, the network fence: env `INFRARED_NETWORK_POLICIES`
   (`tenancy.networkPolicies.enabled`) on the operator, rendered only when set,
   and `templates/networkpolicy.yaml` (`infrared-fence`, `infrared-api`,

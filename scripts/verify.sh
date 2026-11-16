@@ -1038,6 +1038,27 @@ if [[ -n "$(ext_data extension-plain)" &&
   "$(ext_data extension-badge | jq -S -c 'del(.["extensions.json"])')" == "$(ext_data extension-plain | jq -S -c 'del(.["extensions.json"])')" ]]; then
   ok "a badge leaves http.conf and server.conf as they are"
 else bad "a badge changed http.conf or server.conf"; fi
+# A badge's alert (workspace TODO 676): extensions.json carries it inside the
+# badge, its labels trimmed, for the UI's banner while the rollout flag
+# extensionBanners is on; it asks nothing more, so nginx's snippets stay the same.
+helm template infrared "$chart" -n infrared \
+  --set "$support,ui.extensions[0].badge.path=/ext/support/v1/summary,ui.extensions[0].badge.field=needsPerson,ui.extensions[0].badge.alert.field=waiting" \
+  --set-string "ui.extensions[0].badge.alert.label= conversations waiting for a reply in Support " \
+  --set-string "ui.extensions[0].badge.alert.labelOne=conversation waiting for a reply in Support  " >"$out/extension-alert.yaml"
+helm template infrared "$chart" -n infrared \
+  --set "$support,ui.extensions[0].badge.path=/ext/support/v1/summary,ui.extensions[0].badge.field=needsPerson,ui.extensions[0].badge.alert.field=waiting" \
+  --set-string "ui.extensions[0].badge.alert.label=conversations waiting" >"$out/extension-alert-plain.yaml"
+check extension-badge.yaml "no alert in extensions.json unless one is set" '"alert"' 0
+if [[ "$(ext_data extension-alert | jq -S -c '.["extensions.json"] | fromjson | .[0].badge')" == \
+  '{"alert":{"field":"waiting","label":"conversations waiting for a reply in Support","labelOne":"conversation waiting for a reply in Support"},"field":"needsPerson","path":"/ext/support/v1/summary"}' ]]; then
+  ok "extensions.json carries a badge's alert as set, inside the badge, its labels trimmed"
+else bad "extensions.json does not carry the badge's alert as set"; fi
+if [[ "$(ext_data extension-alert-plain | jq -S -c '.["extensions.json"] | fromjson | .[0].badge.alert')" == '{"field":"waiting","label":"conversations waiting"}' ]]; then
+  ok "an alert without labelOne carries no labelOne"
+else bad "an alert without labelOne carries one anyway"; fi
+if [[ "$(ext_data extension-alert | jq -S -c 'del(.["extensions.json"])')" == "$(ext_data extension-plain | jq -S -c 'del(.["extensions.json"])')" ]]; then
+  ok "an alert leaves http.conf and server.conf as they are"
+else bad "an alert changed http.conf or server.conf"; fi
 # refuse <description> <expected error> <helm template args...>: the render must fail with that error.
 refuse() {
   local desc="$1" want="$2"; shift 2
@@ -1093,6 +1114,20 @@ refuse "a badge without a field fails" "missing property 'field'" \
   --set "$ext,ui.extensionsProxySecret.existingSecret=x,ui.extensions[0].badge.path=/ext/back-office/v1/summary"
 refuse "a badge's blank label fails" "/ui/extensions/0/badge/label" \
   --set "$badge,ui.extensions[0].badge.path=/ext/back-office/v1/summary" --set-string "ui.extensions[0].badge.label=   "
+# An alert takes its field and words and nothing else: the UI writes no words of
+# its own for an extension (ADR 0020).
+alert="$badge,ui.extensions[0].badge.path=/ext/back-office/v1/summary,ui.extensions[0].badge.alert.field=overdue"
+refuse "an alert's unknown key fails" "at '/ui/extensions/0/badge/alert': additional properties 'href' not allowed" \
+  --set "$alert,ui.extensions[0].badge.alert.label=overdue,ui.extensions[0].badge.alert.href=/x/back-office/"
+refuse "an alert without a label fails" "at '/ui/extensions/0/badge/alert': missing property 'label'" --set "$alert"
+refuse "an alert without a field fails" "at '/ui/extensions/0/badge/alert': missing property 'field'" \
+  --set "$badge,ui.extensions[0].badge.path=/ext/back-office/v1/summary,ui.extensions[0].badge.alert.label=overdue"
+refuse "an alert's blank label fails" "/ui/extensions/0/badge/alert/label" --set "$alert" --set-string "ui.extensions[0].badge.alert.label=   "
+refuse "an alert's blank labelOne fails" "/ui/extensions/0/badge/alert/labelOne" \
+  --set "$alert,ui.extensions[0].badge.alert.label=overdue" --set-string "ui.extensions[0].badge.alert.labelOne= "
+refuse "an alert's field that is not an identifier fails" "/ui/extensions/0/badge/alert/field" \
+  --set "$badge,ui.extensions[0].badge.path=/ext/back-office/v1/summary,ui.extensions[0].badge.alert.label=overdue" \
+  --set-string "ui.extensions[0].badge.alert.field=over.due"
 refuse "an icon outside the set fails" "/ui/extensions/0/icon" \
   --set "$ext,ui.extensionsProxySecret.existingSecret=x,ui.extensions[0].icon=lifebuoy"
 refuse "an empty golangci-lint image fails" "at '/runner/golangciLintImage'" --set runner.golangciLintImage=

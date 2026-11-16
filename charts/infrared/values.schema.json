@@ -1890,9 +1890,9 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "pattern": "^[a-z0-9]([-a-z0-9]{0,54}[a-z0-9])?$"
+            "pattern": "^(\\*|[a-z0-9]([-a-z0-9]{0,54}[a-z0-9])?)$"
           },
-          "description": "INFRARED_SUPPORT_CHAT_ORGS (api, comma-separated): the orgs that opted in to the chat, by name. Only a person who belongs to one gets it: a team of the org lists them, or, for a platform admin, it is the platform org. Empty, as by default: nobody does, and nothing renders."
+          "description": "INFRARED_SUPPORT_CHAT_ORGS (api, comma-separated): the orgs that opted in to the chat, by name, or * for every org on the install. Only a person who belongs to one gets it, for the orgs they belong to: a team of the org lists them, or, for a platform admin, it is the platform org. Empty, as by default: nobody does, and nothing renders."
         },
         "hmacKeySecret": {
           "type": "object",

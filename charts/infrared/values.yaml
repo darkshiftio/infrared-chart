@@ -771,10 +771,11 @@ supportChat:
   # label: hosted on Darkshift's hosted plane, internal on the home, a localred
   # stack's name on one. Every identifier the API signs starts with it.
   install: ""
-  # -- The orgs that opted in to the chat, by name (INFRARED_SUPPORT_CHAT_ORGS, api,
-  # comma-separated): only a person who belongs to one gets it, by a team of the
-  # org that lists them, or as a platform admin, of the platform org. Empty, as by
-  # default: nobody does.
+  # -- The orgs that opted in to the chat, by name, or "*" for every org on the
+  # install (INFRARED_SUPPORT_CHAT_ORGS, api, comma-separated): only a person who
+  # belongs to one gets it, for the orgs they belong to, by a team of the org that
+  # lists them, or as a platform admin, of the platform org. Empty, as by default:
+  # nobody does.
   orgs: []
   # The desk's inbox's key, which the API signs each person's identifier with:
   # an existing Secret in the release namespace, mounted optional, so an install

@@ -2136,8 +2136,13 @@ if [[ "$(objn support-chat Deployment infrared-api '^            - mountPath: /v
 else bad "the media volume is no longer mounted beside the key's"; fi
 if [[ "$(objects support-chat)" == "$(objects defaults)" ]]; then ok "the chat renders no object of its own"
 else bad "the chat renders objects of its own: $(diff <(objects defaults) <(objects support-chat) | tr '\n' ' ')"; fi
+# "*" opts every org in, as the hosted plane does for its tenants (the owner, 2026-11-16).
+helm template infrared "$chart" -n infrared --set supportChat.baseUrl=https://support.example.com --set supportChat.websiteToken=ciWebsiteToken0123 \
+  --set supportChat.install=hosted --set 'supportChat.orgs={*}' --set supportChat.hmacKeySecret.name=ci-support-chat >"$out/support-chat-every-org.yaml"
+if [[ "$(chat_vars support-chat-every-org | grep ORGS)" == "INFRARED_SUPPORT_CHAT_ORGS=*" ]]; then ok "the chat opts every org in with *"
+else bad "the chat with *: $(chat_vars support-chat-every-org | grep ORGS)"; fi
 for set in supportChat.baseUrl=support.example.com supportChat.baseUrl=http://support.example.com supportChat.install=Hosted \
-  supportChat.install=hosted:plane 'supportChat.orgs={Acme}' 'supportChat.orgs={acme,acme}' 'supportChat.websiteToken=a b' \
+  supportChat.install=hosted:plane 'supportChat.orgs={Acme}' 'supportChat.orgs={acme,acme}' 'supportChat.orgs={**}' 'supportChat.orgs={acme*}' 'supportChat.websiteToken=a b' \
   supportChat.hmacKeySecret.key= supportChat.hmacKeySecret.name=CI_Secret supportChat.enabled=true supportChat.hmacKeySecret.namespace=x; do
   if helm template infrared "$chart" -n infrared --set "$set" >/dev/null 2>&1; then bad "the schema took $set"
   else ok "the schema refuses $set"; fi

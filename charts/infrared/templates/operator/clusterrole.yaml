@@ -66,6 +66,12 @@ rules:
   - watch
 - apiGroups:
   - ""
+  resources:
+  - serviceaccounts/token
+  verbs:
+  - create
+- apiGroups:
+  - ""
   - events.k8s.io
   resources:
   - events
@@ -126,6 +132,12 @@ rules:
   - update
   - watch
 - apiGroups:
+  - authentication.k8s.io
+  resources:
+  - selfsubjectreviews
+  verbs:
+  - create
+- apiGroups:
   - batch
   resources:
   - cronjobs
@@ -160,6 +172,13 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - certificates.k8s.io
+  resources:
+  - clustertrustbundles
+  verbs:
+  - get
+  - list
 - apiGroups:
   - coordination.k8s.io
   resources:

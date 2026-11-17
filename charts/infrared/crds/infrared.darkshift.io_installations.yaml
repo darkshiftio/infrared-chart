@@ -920,15 +920,53 @@ spec:
                       or the last one.
                     properties:
                       finishedAt:
-                        description: FinishedAt is when it finished, or stopped for
-                          good.
+                        description: |-
+                          FinishedAt is when it finished, or when it stopped; its message says
+                          whether, and when, it goes on.
                         format: date-time
                         type: string
                       journal:
                         description: |-
                           Journal is the ConfigMap, <namespace>/<name>, that records each
-                          repository's copy, its verification and the old one's deletion, so a
-                          stopped migration resumes where it was.
+                          copy, its verification and the old one's deletion, so a stopped
+                          migration resumes where it was.
+                        maxLength: 253
+                        type: string
+                      message:
+                        description: Message says where it is, or why it stopped.
+                        type: string
+                      phase:
+                        description: |-
+                          Phase is the step of the migration the operator is on, in words a
+                          person reads, such as Copying or Done.
+                        maxLength: 64
+                        type: string
+                      startedAt:
+                        description: StartedAt is when the migration started.
+                        format: date-time
+                        type: string
+                    type: object
+                  snapshots:
+                    description: |-
+                      Snapshots is the move of Agent Substrate's test actors' snapshots into
+                      the org layout (ADR 0087 D3), in progress, or the last one: once the
+                      registry is in the layout, the snapshots of the templates counter-v1
+                      and sandbox-v1 are copied to s3://ate-snapshots/platform/snapshots/
+                      and verified there, and only then are those templates and their
+                      actors deleted through Substrate's API, which collects their old
+                      prefixes. Its journal is the migration's.
+                    properties:
+                      finishedAt:
+                        description: |-
+                          FinishedAt is when it finished, or when it stopped; its message says
+                          whether, and when, it goes on.
+                        format: date-time
+                        type: string
+                      journal:
+                        description: |-
+                          Journal is the ConfigMap, <namespace>/<name>, that records each
+                          copy, its verification and the old one's deletion, so a stopped
+                          migration resumes where it was.
                         maxLength: 253
                         type: string
                       message:

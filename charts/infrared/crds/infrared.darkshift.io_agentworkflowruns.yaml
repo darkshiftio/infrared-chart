@@ -288,6 +288,12 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              conflictRepo:
+                description: |-
+                  ConflictRepo is the repo of a Change of several whose pull request no
+                  longer merges cleanly: the conflict resolver works on it alone, as on a
+                  Change of one repo, and the merge goes on from there. Empty otherwise.
+                type: string
               conflictRounds:
                 description: |-
                   ConflictRounds counts how often the merge step sent the run back to a

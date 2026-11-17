@@ -144,9 +144,12 @@ gitops:
   # TooHighChurnRate24h off and a Spot node's kube-system cAdvisor series
   # dropped (#58, workspace TODO 558), zot's 15-minute HTTP timeouts (#57), and
   # v0.1.14 before them (the metrics store's size, #55; InfraredMetricsStoreDown
-  # on the install's own store, #56). New gitops repos take it; an existing one
-  # keeps its spec.template.version until that is patched.
-  templateVersion: 9fcfeaf105b2dd7857f97d825e20650c0d456d60
+  # on the install's own store, #56). New gitops repos take it. An existing one
+  # moves to it when the API starts while the rollout flag templateFollowsChart
+  # is on (workspace TODO 687), unless it is held or pinned to a later tag;
+  # otherwise it keeps its spec.template.version until that is patched. A tag,
+  # never a commit, so the API can tell a later pin from an older one.
+  templateVersion: v0.1.15
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

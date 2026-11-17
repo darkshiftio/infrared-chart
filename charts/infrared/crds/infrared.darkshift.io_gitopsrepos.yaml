@@ -310,6 +310,15 @@ spec:
                   renders no restore. A restore that finishes hydrates the repo again,
                   so the restore's pieces leave the cluster.
                 type: string
+              storesDigest:
+                description: |-
+                  StoresDigest is a digest of how the hydration commit renders the
+                  registry from the Installation's status.storage (infrared-docs-internal
+                  ADR 0087 D7): Zot at the org layout's root or the one before it, and
+                  stopped while a migration copies its files. Empty while it renders the
+                  registry as before the layout. A change of either, as a migration moves
+                  on, hydrates the repo again.
+                type: string
               telemetryDigest:
                 description: |-
                   TelemetryDigest is a digest of the telemetry plane the hydration commit

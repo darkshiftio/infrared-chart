@@ -546,6 +546,155 @@ spec:
                         type: object
                     type: object
                 type: object
+              storage:
+                description: |-
+                  Storage is the platform's storage settings (infrared-docs-internal ADR
+                  0087): Zot's install-wide settings and the platform's policy per kind,
+                  which platform admins write and which applies to every org that has no
+                  policy of its own for the kind. The operator enforces it only while the
+                  chart's stores.policies.enabled is on, and seeds it from the chart's
+                  registry.retention while it is empty; unset, the stores keep files as
+                  before.
+                properties:
+                  policies:
+                    description: Policies are the platform's policies, one per kind.
+                    items:
+                      description: |-
+                        StoragePolicy is what keeps or deletes one kind of file, how many copies of
+                        it there are, and whether new ones may be written. Each kind takes its own
+                        fields (ADR 0087 D8): images, charts and artifacts keepTags, keepNewest,
+                        deleteUntagged and copies; snapshots and other expireAfter and copies; the
+                        media kinds expireAfter, copies and writes. A field left unset keeps what
+                        the store does today.
+                      properties:
+                        copies:
+                          description: |-
+                            Copies is how many copies of each new file the stores keep, 1 to 3,
+                            and at most the number of volume servers. Unset keeps the bucket's
+                            own: two, or one on a single node.
+                          format: int32
+                          maximum: 3
+                          minimum: 1
+                          type: integer
+                        deleteUntagged:
+                          description: |-
+                            DeleteUntagged is whether Zot deletes an image no tag names, the
+                            install-wide untaggedAfter after it lost its last tag. Unset is true,
+                            as today. Registry kinds only.
+                          type: boolean
+                        expireAfter:
+                          description: |-
+                            ExpireAfter is how long a file of the kind is kept after it is written:
+                            never (unset), 7d, 30d, 90d or 1y. SeaweedFS writes it into the file's
+                            volume, so a file keeps the expiry it was written with: shortening one
+                            frees nothing until the files written after it age out, and no later
+                            change saves a file written under it. Not for a registry kind. A
+                            snapshots expiry spares golden snapshots and tags. Other's is the age
+                            past which the filer's own log is pruned.
+                          enum:
+                          - ""
+                          - 7d
+                          - 30d
+                          - 90d
+                          - 1y
+                          type: string
+                        keepNewest:
+                          description: |-
+                            KeepNewest is how many of each repository's most recently pushed tags
+                            are kept, whatever their names: 0 keeps none for being new. Registry
+                            kinds only.
+                          format: int32
+                          maximum: 1000
+                          minimum: 0
+                          type: integer
+                        keepTags:
+                          description: |-
+                            KeepTags are regular expressions (RE2, as Zot reads them): a tag that
+                            matches one is kept in every repository of the kind. A tag that
+                            matches none, and is not among its repository's keepNewest newest, is
+                            deleted at Zot's next garbage collection. With neither keepTags nor
+                            keepNewest, Zot keeps every tag. Registry kinds only.
+                          items:
+                            maxLength: 200
+                            minLength: 1
+                            pattern: ^[ -~]+$
+                            type: string
+                          maxItems: 20
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        kind:
+                          description: Kind is what the policy governs.
+                          enum:
+                          - images
+                          - charts
+                          - artifacts
+                          - snapshots
+                          - summary-videos
+                          - incident-videos
+                          - pictures
+                          - other
+                          type: string
+                        updatedAt:
+                          description: UpdatedAt is when they set it.
+                          format: date-time
+                          type: string
+                        updatedBy:
+                          description: UpdatedBy is the login of the person who last
+                            set the policy.
+                          maxLength: 254
+                          type: string
+                        writes:
+                          description: |-
+                            Writes false makes the kind's prefix take no new file; reads and
+                            deletes go on. Unset is true. Media kinds only.
+                          type: boolean
+                      required:
+                      - kind
+                      type: object
+                      x-kubernetes-validations:
+                      - message: 'keepTags, keepNewest and deleteUntagged are for
+                          a registry kind: images, charts or artifacts'
+                        rule: self.kind in ['images', 'charts', 'artifacts'] || (!has(self.keepTags)
+                          && !has(self.keepNewest) && !has(self.deleteUntagged))
+                      - message: 'images, charts and artifacts take no expireAfter:
+                          Zot''s retention keeps or deletes them by tag (ADR 0087
+                          D10)'
+                        rule: '!(self.kind in [''images'', ''charts'', ''artifacts''])
+                          || !has(self.expireAfter)'
+                      - message: 'writes is for a media kind: summary-videos, incident-videos
+                          or pictures'
+                        rule: self.kind in ['summary-videos', 'incident-videos', 'pictures']
+                          || !has(self.writes)
+                    maxItems: 8
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - kind
+                    x-kubernetes-list-type: map
+                  registry:
+                    description: Registry holds Zot's install-wide settings.
+                    properties:
+                      gcDelay:
+                        description: |-
+                          GCDelay is how long after a blob was last used Zot may delete it. The
+                          template's is 1h.
+                        maxLength: 32
+                        pattern: ^([0-9]+(h|m|s))+$
+                        type: string
+                      gcInterval:
+                        description: GCInterval is how often Zot collects garbage.
+                          The template's is 1h.
+                        maxLength: 32
+                        pattern: ^([0-9]+(h|m|s))+$
+                        type: string
+                      untaggedAfter:
+                        description: |-
+                          UntaggedAfter is how long after an image lost its last tag Zot deletes
+                          it, where its policy deletes untagged images. The template's is 24h.
+                        maxLength: 32
+                        pattern: ^([0-9]+(h|m|s))+$
+                        type: string
+                    type: object
+                type: object
               summaryVideos:
                 description: |-
                   SummaryVideos is whether this install makes summary videos and product
@@ -724,6 +873,79 @@ spec:
                   operator has chosen.
                 pattern: ^[a-z][A-Za-z0-9._-]{0,62}$
                 type: string
+              storage:
+                description: |-
+                  Storage is the stores' layout and what the operator applies of
+                  spec.storage (ADR 0087).
+                properties:
+                  applied:
+                    description: Applied is what the operator last applied of spec.storage.
+                    properties:
+                      at:
+                        description: At is when the stores last confirmed it.
+                        format: date-time
+                        type: string
+                      hash:
+                        description: |-
+                          Hash is the Hash of the spec.storage applied. While it differs from the
+                          spec's own, the spec's latest change is still being applied.
+                        maxLength: 64
+                        type: string
+                      message:
+                        description: Message says what was applied, or why the last
+                          attempt failed.
+                        type: string
+                    type: object
+                  enforcing:
+                    description: |-
+                      Enforcing is true while the operator applies storage policies: the
+                      chart's stores.policies.enabled is on and the stores are laid out by
+                      org and kind. infrared-api refuses a policy write while it is false.
+                    type: boolean
+                  layout:
+                    description: |-
+                      Layout is how the stores lay their files out now: empty for the layout
+                      before ADR 0087, org once a migration has copied every repository's
+                      files into it, verified them there and deleted the old copies; the
+                      migration's later steps (Zot started at its new root, the tags
+                      checked, the references rewritten) are in Migration. The gitops
+                      template follows it, never the chart's value, so Zot moves to its new
+                      root only after its files.
+                    enum:
+                    - ""
+                    - org
+                    type: string
+                  migration:
+                    description: Migration is the move between layouts in progress,
+                      or the last one.
+                    properties:
+                      finishedAt:
+                        description: FinishedAt is when it finished, or stopped for
+                          good.
+                        format: date-time
+                        type: string
+                      journal:
+                        description: |-
+                          Journal is the ConfigMap, <namespace>/<name>, that records each
+                          repository's copy, its verification and the old one's deletion, so a
+                          stopped migration resumes where it was.
+                        maxLength: 253
+                        type: string
+                      message:
+                        description: Message says where it is, or why it stopped.
+                        type: string
+                      phase:
+                        description: |-
+                          Phase is the step of the migration the operator is on, in words a
+                          person reads, such as Copying or Done.
+                        maxLength: 64
+                        type: string
+                      startedAt:
+                        description: StartedAt is when the migration started.
+                        format: date-time
+                        type: string
+                    type: object
+                type: object
               version:
                 description: Version of the Infrared control plane.
                 type: string

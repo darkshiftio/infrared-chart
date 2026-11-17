@@ -204,6 +204,7 @@ rules:
   - agentroles
   - agentvms
   - agentvms/status
+  - agentworkflows
   - clusters
   - gitopsrepos
   - gitproviders
@@ -273,17 +274,6 @@ rules:
   - get
   - list
   - patch
-  - update
-  - watch
-- apiGroups:
-  - infrared.darkshift.io
-  resources:
-  - agentworkflows
-  verbs:
-  - create
-  - delete
-  - get
-  - list
   - update
   - watch
 - apiGroups:

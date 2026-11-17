@@ -866,12 +866,14 @@ if grep -A12 -xF -- '- apiGroups:' <<<"$op_rules" | awk '/^- apiGroups:/ {g = ""
   ok "the operator may create, update and delete CronJobs, for the backup CronJob it writes"
 else bad "the operator's generated rules do not cover cronjobs (run hack/sync-operator.sh against an operator that has them)"; fi
 # The operator moves the AgentWorkflows an org never edited to the current catalog
-# with an update, and deletes an untouched copy of one the catalog retired.
-# Without either right the Organization is Degraded (SeedFailed) instead of
-# taking the new catalog.
-if [[ "$(awk '/^  - agentworkflows$/ {f = 1; next} f && /^  verbs:/ {v = 1; next} v && /^  - / {printf "%s ", $2; next} v {exit}' <<<"$op_rules")" == "create delete get list update watch " ]]; then
-  ok "the operator may update and delete AgentWorkflows, for the catalog upgrades and retirements it makes"
-else bad "the operator's generated rules do not let it update and delete AgentWorkflows (run hack/sync-operator.sh against an operator that has the right)"; fi
+# with an update, deletes an untouched copy of one the catalog retired, and
+# patches one's spec.enabled for a default turned off or a renamed entry
+# (infrared-docs-internal ADR 0084). Without each right the Organization is
+# Degraded (SeedFailed) instead of taking the new catalog.
+wf_verbs="$(awk '/^  - agentworkflows$/ {f = 1; next} f && /^  verbs:/ {v = 1; next} v && /^  - / {printf " %s ", $2; next} v {exit}' <<<"$op_rules")"
+if [[ "$wf_verbs" == *" update "* && "$wf_verbs" == *" delete "* && "$wf_verbs" == *" patch "* ]]; then
+  ok "the operator may update, patch and delete AgentWorkflows, for the catalog upgrades, renames and retirements it makes"
+else bad "the operator's generated rules do not let it update, patch and delete AgentWorkflows (run hack/sync-operator.sh against an operator that has the right)"; fi
 # The Installation keeps spec.backup and status.backup: without them in the CRD
 # the API server would drop what the operator seeds and reports.
 check defaults.yaml "Installation CRD has spec.backup and status.backup" '^              backup:$' 2

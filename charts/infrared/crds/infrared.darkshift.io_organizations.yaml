@@ -397,6 +397,35 @@ spec:
                 required:
                 - enabled
                 type: object
+              securityEvidence:
+                description: |-
+                  SecurityEvidence is the org's setting for the security evidence of its
+                  releases (infrared-operator#119): which builds get it, and how long it
+                  is kept. Unset, customer releases get it and it is kept
+                  DefaultEvidenceRetentionDays, so an org made before the setting needs
+                  no write.
+                properties:
+                  builds:
+                    description: |-
+                      Builds says which of the org's builds get security evidence:
+                      customer-releases, each customer release's images (the default when
+                      unset), or none. There is no value for main-line builds.
+                    enum:
+                    - customer-releases
+                    - none
+                    type: string
+                  retentionDays:
+                    description: |-
+                      RetentionDays is how long the evidence of each image is kept, in whole
+                      days counted from when it was made, from 7 to 3650. Unset means
+                      DefaultEvidenceRetentionDays, so an org that never chose keeps 90 days.
+                      A shorter retention lets go of what is already past it; a longer one
+                      keeps longer what is still there, and brings back nothing.
+                    format: int32
+                    maximum: 3650
+                    minimum: 7
+                    type: integer
+                type: object
               sessions:
                 description: |-
                   Sessions says whether the org's people's own Claude Code sessions are
@@ -821,6 +850,56 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              securityEvidence:
+                description: |-
+                  SecurityEvidence is the trust root of the org's security evidence: the
+                  public keys it is signed with (infrared-operator#119).
+                properties:
+                  keys:
+                    description: |-
+                      Keys are the public halves of the org's evidence signing keys, by their
+                      key ID. A signature made by any other key is not the org's. A restore
+                      drops an Organization's status; Infrared lists the keys again from the
+                      keys it keeps.
+                    items:
+                      description: EvidenceKey is the public half of one of an org's
+                        evidence signing keys.
+                      properties:
+                        createdAt:
+                          description: CreatedAt is when the key was made.
+                          format: date-time
+                          type: string
+                        id:
+                          description: |-
+                            ID is the key's ID, cosign's key hint, by which a bundle names the key
+                            that signed it: the standard base64, padded, of the SHA-256 of the
+                            key's PKIX DER form (securityevidence.KeyID).
+                          pattern: ^[A-Za-z0-9+/]{43}=$
+                          type: string
+                        publicKey:
+                          description: |-
+                            PublicKey is the key in PEM, one "PUBLIC KEY" block of its PKIX DER
+                            form. A reader trusts it only once the ID it computes from it
+                            (securityevidence.KeyIDFromPEM) is ID.
+                          maxLength: 4096
+                          pattern: ^-----BEGIN PUBLIC KEY-----
+                          type: string
+                        retiredAt:
+                          description: |-
+                            RetiredAt is when the key stopped signing; what it signed before then
+                            stays the org's. Unset, the key signs the org's evidence now.
+                          format: date-time
+                          type: string
+                      required:
+                      - id
+                      - publicKey
+                      type: object
+                    maxItems: 32
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - id
+                    x-kubernetes-list-type: map
+                type: object
               teams:
                 description: |-
                   Teams is the deprecated name of AccessGroups. infrared-operator no

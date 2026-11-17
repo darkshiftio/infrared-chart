@@ -548,6 +548,134 @@ spec:
                   back to, when the upgrade failed its checks; for an app Product, the
                   version a zone's release guard put back (zones[].rolledBackTo).
                 type: string
+              securityEvidence:
+                description: |-
+                  SecurityEvidence is the deployment's security evidence
+                  (infrared-operator#119): whether it had to produce any, and what each
+                  image it ships has. Absent until Infrared decides.
+                properties:
+                  reason:
+                    description: |-
+                      Reason says in a few words why evidence was not required or, when it
+                      was, why none could be produced at all; empty when there is nothing to
+                      explain.
+                    maxLength: 1024
+                    type: string
+                  required:
+                    description: |-
+                      Required is whether the deployment had to produce evidence: true for a
+                      customer release of an org whose setting is customer-releases. False,
+                      Reason says why not, so a release whose evidence failed reads apart from
+                      one that never needed any.
+                    type: boolean
+                  subjects:
+                    description: |-
+                      Subjects are the images the deployment ships, each with its evidence:
+                      one for isolated delivery, one per component for umbrella delivery.
+                    items:
+                      description: EvidenceSubject is the security evidence of one
+                        image a deployment ships.
+                      properties:
+                        artifact:
+                          description: |-
+                            Artifact is the digest of the image's evidence artifact, sha256:<hex>:
+                            the manifest tagged with the image's digest (securityevidence.Tag) in
+                            the org's evidence repository (securityevidence.Repository). Empty
+                            until it is published.
+                          pattern: ^sha256:[0-9a-f]{64}$
+                          type: string
+                        image:
+                          description: |-
+                            Image is the image by digest, <registry>/<repository>[:<tag>]@sha256:<hex>,
+                            as status.image or status.components[].image names it.
+                          maxLength: 1024
+                          pattern: ^[^\s@]+@sha256:[0-9a-f]{64}$
+                          type: string
+                        kinds:
+                          description: |-
+                            Kinds is what became of each of the four kinds of evidence
+                            (securityevidence.Kinds), one entry each.
+                          items:
+                            description: EvidenceKindResult is what became of one
+                              kind of a subject's evidence.
+                            properties:
+                              kind:
+                                description: Kind is sbom, provenance, scan or release
+                                  (securityevidence.Kinds).
+                                enum:
+                                - sbom
+                                - provenance
+                                - scan
+                                - release
+                                type: string
+                              message:
+                                description: |-
+                                  Message says why it was not produced, or what a person should know of
+                                  it; empty when there is nothing to say.
+                                maxLength: 1024
+                                type: string
+                              produced:
+                                description: |-
+                                  Produced is whether the kind's signed Statement was made and published
+                                  in the subject's artifact.
+                                type: boolean
+                            required:
+                            - kind
+                            - produced
+                            type: object
+                          maxItems: 4
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - kind
+                          x-kubernetes-list-type: map
+                        severities:
+                          description: |-
+                            Severities counts the vulnerabilities the scan found, by severity;
+                            absent when there is no scan.
+                          properties:
+                            critical:
+                              format: int32
+                              minimum: 0
+                              type: integer
+                            high:
+                              format: int32
+                              minimum: 0
+                              type: integer
+                            low:
+                              format: int32
+                              minimum: 0
+                              type: integer
+                            medium:
+                              format: int32
+                              minimum: 0
+                              type: integer
+                            negligible:
+                              format: int32
+                              minimum: 0
+                              type: integer
+                            unknown:
+                              format: int32
+                              minimum: 0
+                              type: integer
+                          required:
+                          - critical
+                          - high
+                          - low
+                          - medium
+                          - negligible
+                          - unknown
+                          type: object
+                      required:
+                      - image
+                      type: object
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - image
+                    x-kubernetes-list-type: map
+                required:
+                - required
+                type: object
               startedAt:
                 format: date-time
                 type: string

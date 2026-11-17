@@ -57,6 +57,13 @@ rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims", "events"]
     verbs: ["get", "list"]
+  # Storage policies (infrared-docs-internal ADR 0087 D9): each write a platform
+  # admin makes records an Event on the Installation or the Organization, a core
+  # Event in default, where Kubernetes keeps one for an object of no namespace.
+  # The API makes each Event whole; it never patches or deletes one.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
   # Product links: the API reads the Ingresses in each zone's namespace to list
   # where people can open the zone.
   - apiGroups: ["networking.k8s.io"]

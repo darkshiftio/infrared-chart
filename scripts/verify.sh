@@ -1507,6 +1507,13 @@ for rule in 'apps|"statefulsets"' 'batch|"cronjobs"' 'postgresql.cnpg.io|"cluste
     ok "the API may get and list ${resources//\"/} ($group), for the platform by layer"
   else bad "the API's ClusterRole has no rule to get and list ${resources//\"/} ($group)"; fi
 done
+# Storage policies (infrared-docs-internal ADR 0087 D9): each write records a
+# core Event in default. create alone: the API never patches or deletes one.
+if grep -A2 -xF '  - apiGroups: [""]' <<<"$api_rules" | grep -A1 -xF '    resources: ["events"]' |
+     grep -qxF '    verbs: ["create"]' \
+  && [[ "$(yq -r 'select(.kind == "ClusterRole" and .metadata.name == "infrared-api") | [.rules[] | select(.resources[] == "events") | .verbs[]] | sort | join(",")' "$out/defaults.yaml" | { grep -v '^$' || true; })" == "create,get,list" ]]; then
+  ok "the API may create Events, which each storage policy write records, and get and list them, nothing more"
+else bad "the API's ClusterRole cannot create Events, or may do more with them than create, get and list"; fi
 
 step "cloud identity (ADR 0033: CloudAccount)"
 # The install's identity for cloud accounts: the ServiceAccount infrared-cloud,

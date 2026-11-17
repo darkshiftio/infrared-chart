@@ -150,6 +150,26 @@ spec:
             - name: INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO
               value: "true"
             {{- end }}
+            {{- with .Values.security.evidence }}
+            {{- if .enabled }}
+            # Security evidence for customer releases: each org's signing key, its
+            # retention, and the producers' Jobs (infrared-docs-internal ADR 0088).
+            - name: INFRARED_SECURITY_EVIDENCE
+              value: "true"
+            {{- with .images.syft }}
+            - name: INFRARED_SYFT_IMAGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .images.grype }}
+            - name: INFRARED_GRYPE_IMAGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .images.cosign }}
+            - name: INFRARED_COSIGN_IMAGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.operator.externalZones }}
             # A platform Product's production outside the install (ADR 0067 D6).
             - name: INFRARED_EXTERNAL_ZONES

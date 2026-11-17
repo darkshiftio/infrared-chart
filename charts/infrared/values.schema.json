@@ -1258,6 +1258,45 @@
         }
       }
     },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Security evidence for customer releases (INFRARED_SECURITY_EVIDENCE, operator; infrared-docs-internal ADR 0088).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Make each org's signing key, keep its evidence for its retention, and run the producers on each customer release's images (INFRARED_SECURITY_EVIDENCE)."
+            },
+            "images": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The producers' images, each pinned by digest; empty keeps the operator's pin. Handed on only with enabled.",
+              "properties": {
+                "syft": {
+                  "type": "string",
+                  "pattern": "^(|[^\\s]+@sha256:[0-9a-f]{64})$",
+                  "description": "Syft's image, its -debug variant, by digest (INFRARED_SYFT_IMAGE)."
+                },
+                "grype": {
+                  "type": "string",
+                  "pattern": "^(|[^\\s]+@sha256:[0-9a-f]{64})$",
+                  "description": "Grype's image, its -debug variant, by digest (INFRARED_GRYPE_IMAGE)."
+                },
+                "cosign": {
+                  "type": "string",
+                  "pattern": "^(|[^\\s]+@sha256:[0-9a-f]{64})$",
+                  "description": "cosign's image, its -dev variant, by digest (INFRARED_COSIGN_IMAGE)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "stores": {
       "type": "object",
       "additionalProperties": false,

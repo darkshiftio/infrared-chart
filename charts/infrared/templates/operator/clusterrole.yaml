@@ -146,6 +146,7 @@ rules:
   - delete
   - get
   - list
+  - patch
   - watch
 - apiGroups:
   - cert-manager.io

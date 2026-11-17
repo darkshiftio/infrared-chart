@@ -1,0 +1,8 @@
+# Security evidence on, with every producer image overridden (infrared-docs-internal ADR 0088).
+security:
+  evidence:
+    enabled: true
+    images:
+      syft: registry.example.org/anchore/syft:v1.56.0-debug@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      grype: registry.example.org/anchore/grype:v0.121.1-debug@sha256:2222222222222222222222222222222222222222222222222222222222222222
+      cosign: registry.example.org/sigstore/cosign:v3.1.4-dev@sha256:3333333333333333333333333333333333333333333333333333333333333333

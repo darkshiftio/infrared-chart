@@ -1526,3 +1526,22 @@ gitea:
     enabled: false
   test:
     enabled: false
+
+security:
+  evidence:
+    # -- Security evidence for customer releases (INFRARED_SECURITY_EVIDENCE, operator;
+    # infrared-docs-internal ADR 0088, infrared-operator#123): the operator makes each org's cosign
+    # signing key, keeps each org's evidence in the registry for the org's retention, and runs Syft,
+    # Grype and cosign on each image a customer release ships, publishing signed evidence to
+    # <org>/evidence/releases. Turn it on with the rollout flag securityEvidence, and only on an
+    # install whose CRDs are this chart's 0.1.0-alpha.253 or later. Off, none of it runs. Until the
+    # operator reads rollout flags (ADR 0061 decision 9).
+    enabled: false
+    # -- The producers' images, each pinned by digest and each the tool's shell variant (busybox
+    # at /busybox/sh, as the operator's own pins: Syft's and Grype's -debug, cosign's -dev); empty
+    # keeps the operator's pin (INFRARED_SYFT_IMAGE, INFRARED_GRYPE_IMAGE, INFRARED_COSIGN_IMAGE).
+    # Handed on only with enabled.
+    images:
+      syft: ""
+      grype: ""
+      cosign: ""

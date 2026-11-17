@@ -58,7 +58,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml ci/storage-layout-values.yaml ci/media-object-store-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml ci/storage-layout-values.yaml ci/media-object-store-values.yaml ci/security-evidence-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -180,6 +180,9 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "
 helm template infrared "$chart" -n infrared --set stores.singleNode=true >"$out/single-node-no-stores.yaml"
 # A Change that follows the repo its hydration names.
 helm template infrared "$chart" -n infrared --set operator.moveIssueToHydratedRepo=true >"$out/move-issues.yaml"
+# Security evidence: the switch and the producers' images, handed on only with enabled.
+helm template infrared "$chart" -n infrared -f "$chart/ci/security-evidence-values.yaml" >"$out/security-evidence.yaml"
+helm template infrared "$chart" -n infrared --set security.evidence.images.syft=registry.example.org/anchore/syft:v1.56.0-debug@sha256:1111111111111111111111111111111111111111111111111111111111111111 >"$out/security-evidence-off.yaml"
 # Agent steps on Amazon Bedrock for the orgs that ask (runner.bedrock.enabled).
 helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"$out/bedrock.yaml"
 # A platform Product's production outside the install (operator.externalZones, ADR 0067 D6).
@@ -220,7 +223,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -229,7 +232,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
     storage-layout storage-layout-no-stores media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -481,6 +484,14 @@ check single-node-no-stores.env "stores.singleNode without the stores hands on n
 # gets nothing and leaves the Change where it opened.
 check defaults.env "a Change stays on the repo it opened on by default" '^INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO=' 0
 has move-issues.env "a Change follows the repo its hydration names" 'INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO="true"'
+# Security evidence: nothing by default; on, the switch and each image given; the images
+# alone hand on nothing.
+check defaults.env "no security evidence by default" '^INFRARED_(SECURITY_EVIDENCE|SYFT_IMAGE|GRYPE_IMAGE|COSIGN_IMAGE)=' 0
+has security-evidence.env "security evidence on" 'INFRARED_SECURITY_EVIDENCE="true"'
+has security-evidence.env "Syft's image as given" 'INFRARED_SYFT_IMAGE="registry.example.org/anchore/syft:v1.56.0-debug@sha256:1111111111111111111111111111111111111111111111111111111111111111"'
+has security-evidence.env "Grype's image as given" 'INFRARED_GRYPE_IMAGE="registry.example.org/anchore/grype:v0.121.1-debug@sha256:2222222222222222222222222222222222222222222222222222222222222222"'
+has security-evidence.env "cosign's image as given" 'INFRARED_COSIGN_IMAGE="registry.example.org/sigstore/cosign:v3.1.4-dev@sha256:3333333333333333333333333333333333333333333333333333333333333333"'
+check security-evidence-off.env "the producers' images without enabled hand on nothing" '^INFRARED_(SECURITY_EVIDENCE|SYFT_IMAGE|GRYPE_IMAGE|COSIGN_IMAGE)=' 0
 # Bedrock only when asked for: off, the operator gets nothing and every org stays on the
 # Anthropic API whatever its spec.modelProvider says.
 check defaults.env "agent steps on the Anthropic API by default" '^INFRARED_BEDROCK=' 0
@@ -1300,6 +1311,8 @@ refuse "summaryvideo.store both without the stores fails" "summaryvideo.store bo
 refuse "summaryvideo.store objectStore without summary videos fails" "summaryvideo.enabled is false" \
   --set stores.enabled=true,summaryvideo.store=objectStore,summaryvideo.enabled=false
 refuse "operator.moveIssueToHydratedRepo as a string fails" "at '/operator/moveIssueToHydratedRepo'" --set-string operator.moveIssueToHydratedRepo=true
+refuse "security.evidence.enabled as a string fails" "at '/security/evidence/enabled'" --set-string security.evidence.enabled=true
+refuse "a producer image not pinned by digest fails" "at '/security/evidence/images/syft'" --set security.evidence.images.syft=anchore/syft:latest
 refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
 refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
 refuse "gitea.enabled as a string fails" "at '/gitea/enabled'" --set-string gitea.enabled=true

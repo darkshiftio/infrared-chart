@@ -1,4 +1,7 @@
 {{- include "infrared.codeIndexCheck" . }}
+{{- if and .Values.stores.policies.enabled (not .Values.stores.orgLayout.enabled) }}
+{{- fail "stores.policies.enabled needs stores.orgLayout.enabled: a storage policy applies to one org's files of one kind, under <store>/<org>/<kind>/ (infrared-docs-internal ADR 0087)" }}
+{{- end }}
 {{- $c := .Values.operator }}
 {{- $ctx := dict "root" . "c" $c "component" "operator" }}
 apiVersion: apps/v1
@@ -260,6 +263,26 @@ spec:
             # On the cluster's one node: one object store server of each kind.
             - name: INFRARED_STORES_SINGLE_NODE
               value: "true"
+            {{- end }}
+            {{- if .Values.stores.orgLayout.enabled }}
+            # One path per org and kind in every store (stores.orgLayout,
+            # infrared-docs-internal ADR 0087): the registry's repositories
+            # moved to <org>/<kind>/<name>, each copy verified first.
+            - name: INFRARED_STORES_ORG_LAYOUT
+              value: "true"
+            {{- end }}
+            {{- if .Values.stores.policies.enabled }}
+            # The storage policies, applied by Zot and SeaweedFS's path rules,
+            # and an org's files deleted with it (stores.policies, ADR 0087).
+            - name: INFRARED_STORES_POLICIES
+              value: "true"
+            {{- end }}
+            {{- if ne (.Values.summaryvideo.store | default "volume") "volume" }}
+            # Where the API keeps the videos and pictures (summaryvideo.store,
+            # ADR 0087 D4): the gitops template makes the bucket media, its
+            # identities and the API's way to it.
+            - name: INFRARED_MEDIA_STORE
+              value: {{ .Values.summaryvideo.store | quote }}
             {{- end }}
             {{- end }}
             {{- with include "infrared.backup" . }}

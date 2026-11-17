@@ -1,0 +1,8 @@
+# CI: the API's videos and pictures in the stores' bucket media alone
+# (summaryvideo.store objectStore, infrared-docs-internal ADR 0087 D7): the API
+# reads the bucket with the keys the gitops template copies into the release
+# namespace, and its media volume stays mounted, read-only, its claim kept.
+stores:
+  enabled: true
+summaryvideo:
+  store: objectStore

@@ -98,6 +98,18 @@ The Helm chart for Infrared (`charts/infrared`), published to
   (`managementCluster.egressAddresses`, comma-separated), each rendered only
   when set. The operator writes the runners' FQDN network policies; the chart
   renders none.
+- infrared-docs-internal ADR 0087, the stores' layout and the media store:
+  env `INFRARED_STORES_ORG_LAYOUT` (`stores.orgLayout.enabled`) and
+  `INFRARED_STORES_POLICIES` (`stores.policies.enabled`, which needs the
+  layout: the render fails without it) on the operator, each rendered only
+  when set and with `stores.enabled`; `INFRARED_MEDIA_STORE`
+  (`summaryvideo.store`, rendered only when not `volume`, which needs
+  `stores.enabled` and `summaryvideo.enabled`) on the operator and the API,
+  and on the API `INFRARED_MEDIA_S3_ENDPOINT`, `INFRARED_MEDIA_S3_BUCKET` and
+  the keys of the Secrets `infrared-media-s3` and `infrared-storage-reader-s3`
+  (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `optional`), which the gitops
+  template copies into the release namespace; no template renders them. Under
+  `objectStore` the media volume stays mounted, read-only, and its claim kept.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

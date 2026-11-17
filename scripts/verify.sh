@@ -58,7 +58,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml ci/storage-layout-values.yaml ci/media-object-store-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -189,6 +189,14 @@ helm template infrared "$chart" -n infrared --set operator.previewFallback=true 
 # A summary's closing scene follows its deployment (summaryvideo.liveScene, ADR 0084 D7).
 helm template infrared "$chart" -n infrared --set summaryvideo.liveScene=true >"$out/live-scene.yaml"
 helm template infrared "$chart" -n infrared --set summaryvideo.liveScene=true,summaryvideo.enabled=false >"$out/live-scene-no-videos.yaml"
+# One path per org and kind in every store, and the storage policies
+# (infrared-docs-internal ADR 0087): as an install turns them on, and without
+# the stores. And where the API keeps its videos and pictures
+# (summaryvideo.store, ADR 0087 D4 and D7): both, and objectStore.
+helm template infrared "$chart" -n infrared -f "$chart/ci/storage-layout-values.yaml" >"$out/storage-layout.yaml"
+helm template infrared "$chart" -n infrared --set stores.orgLayout.enabled=true,stores.policies.enabled=true >"$out/storage-layout-no-stores.yaml"
+helm template infrared "$chart" -n infrared --set stores.enabled=true,summaryvideo.store=both >"$out/media-both.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/media-object-store-values.yaml" >"$out/media-object-store.yaml"
 # A request the org's policy forbids ends Declined by default; false keeps DECLINE handled as
 # BLOCK (operator.declinedOutcomes, ADR 0076).
 helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=false >"$out/declined-outcomes.yaml"
@@ -212,7 +220,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, live-scene, live-scene-no-videos, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -222,6 +230,7 @@ envs() {
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
     test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
+    storage-layout storage-layout-no-stores media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -484,6 +493,58 @@ has preview-fallback.env "a poor preview becomes a card" 'INFRARED_PREVIEW_FALLB
 check defaults.env "a summary keeps the closing scene it was made with by default" '^INFRARED_SUMMARY_VIDEO_LIVE_SCENE=' 0
 has live-scene.env "a summary's closing scene follows its deployment" 'INFRARED_SUMMARY_VIDEO_LIVE_SCENE="true"'
 check live-scene-no-videos.env "no closing scene without summary videos" '^INFRARED_SUMMARY_VIDEO_LIVE_SCENE=' 0
+# One path per org and kind, and the storage policies (ADR 0087): handed on only
+# when asked for and only with the stores; every other render hands on
+# nothing, so a cluster that never sets them renders as before.
+for f in defaults install single-node; do
+  check "$f.env" "$f: the stores keep today's paths and no storage policy" '^INFRARED_STORES_(ORG_LAYOUT|POLICIES)=' 0
+done
+has storage-layout.env "storage-layout: one path per org and kind in every store" 'INFRARED_STORES_ORG_LAYOUT="true"'
+has storage-layout.env "storage-layout: the storage policies, applied by the stores" 'INFRARED_STORES_POLICIES="true"'
+check storage-layout-no-stores.env "the layout and the policies without the stores hand on nothing" '^INFRARED_STORES(_ORG_LAYOUT|_POLICIES)?=' 0
+# Where the API keeps its videos and pictures (summaryvideo.store, ADR 0087 D4
+# and D7): volume by default, as before, the volume read-write; both hands the
+# API the store, the bucket and the two identities' keys, each optional, and
+# the operator the store, for the gitops template; objectStore the same, with
+# the volume mounted read-only and its claim kept, and the API on its node.
+check defaults.yaml "the API keeps its media on its own volume by default: no media store, bucket or key" 'INFRARED_(MEDIA_STORE|MEDIA_S3_|STORAGE_READER_S3_)' 0
+media_obj() { # media_obj <render> <volumes|volumeMounts>: the API's media volume or its mount, as JSON
+  local path=".spec.template.spec.volumes[]"
+  [[ "$2" == volumeMounts ]] && path=".spec.template.spec.containers[0].volumeMounts[]"
+  yq -o=json -I=0 "select(.kind == \"Deployment\" and .metadata.name == \"infrared-api\") | $path | select(.name == \"media\")" "$out/$1.yaml"
+}
+media_env() { # media_env <render> <component>: the media store's settings that Deployment gets, one a line
+  yq -r "select(.kind == \"Deployment\" and .metadata.name == \"infrared-$2\") | .spec.template.spec.containers[0].env[]
+    | select(.name | test(\"^INFRARED_(MEDIA_STORE|MEDIA_S3_|STORAGE_READER_S3_)\"))
+    | .name + \"=\" + (.value // (.valueFrom.secretKeyRef | .name + \"/\" + .key + \" optional=\" + ((.optional // false) | tostring)))" "$out/$1.yaml"
+}
+want_media_env="INFRARED_MEDIA_STORE=both
+INFRARED_MEDIA_S3_ENDPOINT=http://seaweedfs-s3.stores.svc:8333
+INFRARED_MEDIA_S3_BUCKET=media
+INFRARED_MEDIA_S3_ACCESS_KEY_ID=infrared-media-s3/AWS_ACCESS_KEY_ID optional=true
+INFRARED_MEDIA_S3_SECRET_ACCESS_KEY=infrared-media-s3/AWS_SECRET_ACCESS_KEY optional=true
+INFRARED_STORAGE_READER_S3_ACCESS_KEY_ID=infrared-storage-reader-s3/AWS_ACCESS_KEY_ID optional=true
+INFRARED_STORAGE_READER_S3_SECRET_ACCESS_KEY=infrared-storage-reader-s3/AWS_SECRET_ACCESS_KEY optional=true"
+if [[ "$(media_env media-both api)" == "$want_media_env" ]] \
+  && [[ "$(media_env media-object-store api)" == "${want_media_env/STORE=both/STORE=objectStore}" ]] \
+  && [[ "$(media_env media-both operator)" == "INFRARED_MEDIA_STORE=both" ]] \
+  && [[ "$(media_env media-object-store operator)" == "INFRARED_MEDIA_STORE=objectStore" ]] \
+  && [[ -z "$(media_env defaults api)$(media_env defaults operator)" ]]; then
+  ok "both and objectStore hand the API the store, the bucket and the identities' keys, each optional, and the operator the store"
+else bad "the media store's settings: both's API $(media_env media-both api | tr '\n' ' '), its operator $(media_env media-both operator)"; fi
+media_rw='{"mountPath":"/var/lib/infrared/media","name":"media"}'
+if [[ "$(media_obj defaults volumeMounts)" == "$media_rw" ]] && [[ "$(media_obj media-both volumeMounts)" == "$media_rw" ]] \
+  && [[ "$(media_obj media-object-store volumeMounts)" == '{"mountPath":"/var/lib/infrared/media","name":"media","readOnly":true}' ]] \
+  && [[ "$(media_obj media-object-store volumes)" == "$(media_obj defaults volumes)" ]]; then
+  ok "the media volume read-write under volume and both, and under objectStore still mounted, read-only"
+else bad "the media volume's mounts: volume $(media_obj defaults volumeMounts), both $(media_obj media-both volumeMounts), objectStore $(media_obj media-object-store volumeMounts)"; fi
+for f in media-both media-object-store; do
+  check "$f.yaml" "$f: the media volume's claim stays" '^  name: infrared-media$' 1
+  check "$f.yaml" "$f: the API stays on the volume's node, the claim being ReadWriteOnce" '^            topologyKey: kubernetes\.io/hostname$' 1
+done
+if [[ "$(yq -r 'select(.kind == "PersistentVolumeClaim" and .metadata.name == "infrared-media") | .metadata.annotations["helm.sh/resource-policy"]' "$out/media-object-store.yaml")" == keep ]]; then
+  ok "objectStore: the volume's claim is kept until a person deletes it"
+else bad "objectStore: the volume's claim is not kept"; fi
 has defaults.env "a request the policy forbids ends Declined by default" 'INFRARED_DECLINED_OUTCOMES="true"'
 check declined-outcomes.env "DECLINE handled as BLOCK with declinedOutcomes false" '^INFRARED_DECLINED_OUTCOMES=' 0
 # Support desks only when asked for: off, the operator answers none, so a support run
@@ -1230,6 +1291,14 @@ refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
   --set backup.bucket=CI-Backup,backup.endpoint=https://backup.example.com,backup.region=us-east-1
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
 refuse "stores.singleNode as a string fails" "at '/stores/singleNode'" --set-string stores.singleNode=true
+refuse "stores.orgLayout.enabled as a string fails" "at '/stores/orgLayout/enabled'" --set-string stores.orgLayout.enabled=true
+refuse "the storage policies without the layout fail" "stores.policies.enabled needs stores.orgLayout.enabled" \
+  --set stores.enabled=true,stores.policies.enabled=true
+refuse "a media store the chart does not name fails" "at '/summaryvideo/store'" --set summaryvideo.store=bucket
+refuse "summaryvideo.store both without the stores fails" "summaryvideo.store both keeps the videos and pictures in the stores' bucket media, which needs stores.enabled" \
+  --set summaryvideo.store=both
+refuse "summaryvideo.store objectStore without summary videos fails" "summaryvideo.enabled is false" \
+  --set stores.enabled=true,summaryvideo.store=objectStore,summaryvideo.enabled=false
 refuse "operator.moveIssueToHydratedRepo as a string fails" "at '/operator/moveIssueToHydratedRepo'" --set-string operator.moveIssueToHydratedRepo=true
 refuse "a component left out twice fails" "at '/components/disabled'" --set 'components.disabled={infisical,infisical}'
 refuse "a component name in capitals fails" "at '/components/disabled/0'" --set 'components.disabled={Infisical}'
@@ -2212,7 +2281,7 @@ for set in supportChat.baseUrl=support.example.com supportChat.baseUrl=http://su
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

@@ -1,0 +1,10 @@
+# CI: the stores with one path per org and kind and their storage policies
+# (infrared-docs-internal ADR 0087), as an install's values file turns them on
+# in 0.2: the operator gets INFRARED_STORES_ORG_LAYOUT and
+# INFRARED_STORES_POLICIES, and nothing else of the chart changes.
+stores:
+  enabled: true
+  orgLayout:
+    enabled: true
+  policies:
+    enabled: true

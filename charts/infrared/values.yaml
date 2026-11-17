@@ -209,6 +209,21 @@ stores:
   # every file on two of them. It is the install's to say, never derived from
   # the nodes the cluster has at a moment.
   singleNode: false
+  orgLayout:
+    # -- With enabled, every store keeps an org's files under one path per org
+    # and kind, <store>/<org>/<kind>/<name> (INFRARED_STORES_ORG_LAYOUT,
+    # operator; infrared-docs-internal ADR 0087): the registry's repositories
+    # become <org>/images/..., <org>/charts/... and <org>/artifacts/..., moved
+    # in a window with Zot stopped, each copy verified before its original goes,
+    # and off again moves them back the same way. Off in every 0.1 release.
+    enabled: false
+  policies:
+    # -- With enabled, the storage policies platform admins set per kind, for
+    # every org or one, are applied by the stores themselves, Zot's retention
+    # and SeaweedFS's path rules, and an org's files go with it
+    # (INFRARED_STORES_POLICIES, operator; ADR 0087). Needs orgLayout.enabled.
+    # Off in every 0.1 release.
+    enabled: false
 
 # The install's backups, written straight to a bucket outside the cluster, one
 # encrypted artifact per backup (Installation.spec.backup). The operator seeds
@@ -906,6 +921,19 @@ summaryvideo:
   # D7): one card and one spoken line, about a tenth of a cent each. Off, the video
   # keeps the scene it was made with.
   liveScene: false
+  # -- Where the API keeps the videos and pictures (INFRARED_MEDIA_STORE;
+  # infrared-docs-internal ADR 0087 D4 and D7): volume, on its own volume below,
+  # as before; both, on the volume and in the stores' bucket media, every write
+  # to both, while the API copies each file between them and counts it only
+  # once its copy reads back the same size and sha256 (Usage, Storage shows
+  # how far it is); objectStore, new files in the bucket alone, the volume
+  # mounted read-only and still read for any file not yet verified in the
+  # bucket. Both and objectStore need stores.enabled. Move volume, then both
+  # until the copy is complete, then objectStore; from objectStore, back
+  # through both, which copies what the bucket gained to the volume. Nothing
+  # deletes the volume's files: its claim stays until a person deletes it.
+  # Volume in every 0.1 release.
+  store: volume
   storage:
     # -- The API keeps the videos on this volume.
     size: 5Gi

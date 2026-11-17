@@ -1269,6 +1269,26 @@
         "singleNode": {
           "type": "boolean",
           "description": "With enabled, the object store runs on the cluster's one node, every file written once (INFRARED_STORES_SINGLE_NODE)."
+        },
+        "orgLayout": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "One path per org and kind in every store, <store>/<org>/<kind>/<name> (INFRARED_STORES_ORG_LAYOUT, operator; infrared-docs-internal ADR 0087).",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "policies": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Storage policies per kind and org, applied by Zot and SeaweedFS's path rules, an org's files deleted with it (INFRARED_STORES_POLICIES, operator; ADR 0087). Needs orgLayout.enabled.",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
@@ -2066,6 +2086,15 @@
         "liveScene": {
           "type": "boolean",
           "description": "Replace a shipped Change's closing scene, Where it's live, as its deployment reaches each new zone (INFRARED_SUMMARY_VIDEO_LIVE_SCENE, operator)."
+        },
+        "store": {
+          "type": "string",
+          "enum": [
+            "volume",
+            "both",
+            "objectStore"
+          ],
+          "description": "Where the API keeps the videos and pictures (INFRARED_MEDIA_STORE; ADR 0087 D4 and D7): volume, its own volume; both, the volume and the stores' bucket media, copied and verified between them; objectStore, the bucket, the volume mounted read-only. Both and objectStore need stores.enabled."
         },
         "geminiSecret": {
           "type": "string"

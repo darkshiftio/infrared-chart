@@ -4,6 +4,13 @@
 {{- if and (include "infrared.edgeProofOn" .) (not .Values.api.clientAddressHeader) }}
 {{- fail "api.clientAddressProof.enabled needs api.clientAddressHeader: the edge's proof says when the API may believe that header, such as CF-Connecting-IP behind Cloudflare, and none is named" }}
 {{- end }}
+{{- $store := .Values.summaryvideo.store | default "volume" }}
+{{- if and (ne $store "volume") (not .Values.stores.enabled) }}
+{{- fail (printf "summaryvideo.store %s keeps the videos and pictures in the stores' bucket media, which needs stores.enabled (infrared-docs-internal ADR 0087 D4); volume keeps them on the API's own volume" $store) }}
+{{- end }}
+{{- if and (ne $store "volume") (not .Values.summaryvideo.enabled) }}
+{{- fail (printf "summaryvideo.store %s copies the API's media volume into the bucket media, and summaryvideo.enabled is false: there is no volume and no video; set summaryvideo.store back to volume" $store) }}
+{{- end }}
 {{- $c := .Values.api }}
 {{- if .Values.summaryvideo.enabled }}
 {{- /* The media volume is the disk's own (root's on GKE's persistent disks): an
@@ -23,7 +30,16 @@ volume beside it and takes requests before the old pod stops. */}}
 {{- $mounts := list }}
 {{- if .Values.summaryvideo.enabled }}
 {{- $volumes = append $volumes (dict "name" "media" "persistentVolumeClaim" (dict "claimName" (include "infrared.componentName" (dict "root" . "component" "media")))) }}
+{{- if eq $store "objectStore" }}
+{{- /* objectStore (infrared-docs-internal ADR 0087 D7): new files go to the
+bucket media alone, and the volume stays mounted, read-only, so the API still
+reads any file whose copy it has not verified in the bucket, and nothing
+writes or deletes there; its claim stays until a person deletes it, after a
+release that stops mounting it. */}}
+{{- $mounts = append $mounts (dict "name" "media" "mountPath" "/var/lib/infrared/media" "readOnly" true) }}
+{{- else }}
 {{- $mounts = append $mounts (dict "name" "media" "mountPath" "/var/lib/infrared/media") }}
+{{- end }}
 {{- end }}
 {{- with .Values.supportChat.hmacKeySecret.name }}
 {{- /* The support desk's inbox's key (supportChat.hmacKeySecret, workspace TODO
@@ -173,6 +189,46 @@ spec:
             # Settings, Install features, says whether this Secret has the Gemini key.
             - name: INFRARED_SUMMARY_VIDEO_GEMINI_SECRET
               value: {{ .Values.summaryvideo.geminiSecret | quote }}
+            {{- if ne $store "volume" }}
+            # Where the videos and pictures are kept (summaryvideo.store, ADR
+            # 0087 D4 and D7): both copies the volume into the stores' bucket
+            # media and verifies each copy; objectStore keeps new files there.
+            # The API serves every file itself, never at a presigned URL.
+            - name: INFRARED_MEDIA_STORE
+              value: {{ $store | quote }}
+            - name: INFRARED_MEDIA_S3_ENDPOINT
+              value: "http://seaweedfs-s3.stores.svc:8333"
+            - name: INFRARED_MEDIA_S3_BUCKET
+              value: "media"
+            # The S3 identity media's key, which the gitops template copies
+            # here; optional, so the API starts without it and says why.
+            - name: INFRARED_MEDIA_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-media-s3
+                  key: AWS_ACCESS_KEY_ID
+                  optional: true
+            - name: INFRARED_MEDIA_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-media-s3
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: true
+            # The identity storage-reader's: List on each bucket, for the
+            # storage views' figures by org (ADR 0087).
+            - name: INFRARED_STORAGE_READER_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-storage-reader-s3
+                  key: AWS_ACCESS_KEY_ID
+                  optional: true
+            - name: INFRARED_STORAGE_READER_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: infrared-storage-reader-s3
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: true
+            {{- end }}
             {{- end }}
             {{- with .Values.observability.metricsURL }}
             - name: INFRARED_METRICS_URL

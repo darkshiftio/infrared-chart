@@ -325,6 +325,15 @@ has install.env "the edge the operator writes to spec.edge" 'INFRARED_EDGE="gate
 has install.env "the previews the operator writes to spec.previews, as JSON" \
   'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"managedRoots\":[],\"signInURL\":\"https://infrared.example.com\"}"'
 has install.env "the gitops template at a commit" 'INFRARED_GITOPS_TEMPLATE_VERSION="0123456789abcdef0123456789abcdef01234567"'
+# The template the chart was released with reaches the API from Chart.yaml,
+# whatever a values file sets gitops.templateVersion to (workspace TODO 687),
+# and is the same version as values.yaml's default.
+release_template="$(yq '.annotations["infrared.darkshift.io/gitops-template"]' "$chart/Chart.yaml")"
+has install.env "the API follows the chart's own template, not the values file's" \
+  "INFRARED_GITOPS_TEMPLATE_RELEASE=\"$release_template\""
+if [[ "$release_template" == "$(yq '.gitops.templateVersion' "$chart/values.yaml")" ]]; then
+  ok "the Chart.yaml template annotation equals gitops.templateVersion"
+else bad "the Chart.yaml annotation infrared.darkshift.io/gitops-template differs from values.yaml's gitops.templateVersion: set both"; fi
 has install.env "a trailing slash on the registry is trimmed" 'INFRARED_IMAGE_REGISTRY="ghcr.io/darkshiftio"'
 check install.yaml "images name the registry without a double slash" 'ghcr\.io/darkshiftio//' 0
 check install.yaml "pull Secret named by imagePullSecrets[0], a dockerconfigjson" '^type: kubernetes\.io/dockerconfigjson$' 1

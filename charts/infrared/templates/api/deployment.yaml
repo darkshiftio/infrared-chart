@@ -95,6 +95,10 @@ spec:
             {{- end }}
             - name: INFRARED_GITOPS_TEMPLATE_VERSION
               value: {{ .Values.gitops.templateVersion | quote }}
+            # The template this chart was released with, from its Chart.yaml
+            # annotation, which no values file overrides (templateFollowsChart).
+            - name: INFRARED_GITOPS_TEMPLATE_RELEASE
+              value: {{ index .Chart.Annotations "infrared.darkshift.io/gitops-template" | quote }}
             {{- with include "infrared.cloudIdentity" . }}
             # The install's identity for cloud accounts: what an admin grants
             # (GET /v1/cloud-identity).

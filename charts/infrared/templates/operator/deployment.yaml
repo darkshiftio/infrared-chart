@@ -170,6 +170,15 @@ spec:
             - name: INFRARED_SUPPORT_DESK
               value: "true"
             {{- end }}
+            {{- if .Values.operator.supportResearch }}
+            {{- if not .Values.operator.supportDesk }}
+            {{- fail "operator.supportResearch needs operator.supportDesk: the operator researches only the conversations of the desks it answers, and posts its findings there" }}
+            {{- end }}
+            # The operator researches support conversations for the people
+            # who answer them, and says so on the Installation (TODO 680).
+            - name: INFRARED_SUPPORT_RESEARCH
+              value: "true"
+            {{- end }}
             {{- with .Values.operator.metricsStorage }}
             # The size of the install's own metrics store, which the operator
             # hands the gitops template for VMSingle (ADR 0075, lane H); unset,

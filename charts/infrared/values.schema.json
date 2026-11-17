@@ -529,6 +529,10 @@
           "type": "boolean",
           "description": "Answer orgs' support desks: the operator answers a customer's message in an org's Chatwoot as its agent bot, from the run infrared-api starts for it, and sets the Installation's condition SupportDesk (INFRARED_SUPPORT_DESK, ADR 0082). Needs the API's rollout flag supportSignals. Off by default: a support run fails before its step and nothing is posted."
         },
+        "supportResearch": {
+          "type": "boolean",
+          "description": "Research support conversations for the people who answer them: a hand-off starts a run of the support-research workflow, and the operator posts its findings and a suggested reply in the desk as a private note, and sets the Installation's condition SupportResearch (INFRARED_SUPPORT_RESEARCH, workspace TODO 680). Needs operator.supportDesk, and the API's rollout flag supportResearch for a customer's later messages. Off by default: a research run fails before its step and nothing is posted."
+        },
         "metricsStorage": {
           "type": "string",
           "pattern": "^$|^[1-9][0-9]*(Mi|Gi|Ti)$",

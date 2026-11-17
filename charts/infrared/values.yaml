@@ -954,6 +954,17 @@ operator:
   # supportSignals to take any. Off, a support run fails before its step and nothing is posted.
   # Until the operator reads rollout flags (ADR 0061 decision 9).
   supportDesk: false
+  # -- Research support conversations for the people who answer them (INFRARED_SUPPORT_RESEARCH,
+  # operator; workspace TODO 680): a hand-off the operator posts starts a run of the org's
+  # support-research workflow, and the API starts one for a customer's later message while a
+  # person has the conversation. Each waits for a minute of quiet, runs one at a time, three a
+  # conversation and ten an org a day, with strict permissions; and the operator, never the run,
+  # posts its findings and a suggested reply in the desk as a private note a person reads before
+  # replying, with the labels researching and researched. It sets the Installation's condition
+  # SupportResearch, which the API reads, and needs operator.supportDesk: the render fails without
+  # it. Off, a research run fails before its step and nothing is posted. Until the operator reads
+  # rollout flags (ADR 0061 decision 9).
+  supportResearch: false
   # -- The size of the install's own metrics store (INFRARED_METRICS_STORAGE, operator;
   # infrared-docs-internal ADR 0075, lane H): the gitops template gives it to VMSingle's claim
   # (victoria-metrics-k8s-stack), or on k3s with the stores to the emptyDir VMSingle's data is on.

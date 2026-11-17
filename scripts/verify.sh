@@ -186,6 +186,9 @@ helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"
 helm template infrared "$chart" -n infrared --set operator.externalZones=true >"$out/external-zones.yaml"
 # A poor environment preview becomes a card drawn from the Product's assets (operator #74).
 helm template infrared "$chart" -n infrared --set operator.previewFallback=true >"$out/preview-fallback.yaml"
+# A summary's closing scene follows its deployment (summaryvideo.liveScene, ADR 0084 D7).
+helm template infrared "$chart" -n infrared --set summaryvideo.liveScene=true >"$out/live-scene.yaml"
+helm template infrared "$chart" -n infrared --set summaryvideo.liveScene=true,summaryvideo.enabled=false >"$out/live-scene-no-videos.yaml"
 # A request the org's policy forbids ends Declined by default; false keeps DECLINE handled as
 # BLOCK (operator.declinedOutcomes, ADR 0076).
 helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=false >"$out/declined-outcomes.yaml"
@@ -209,7 +212,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, bedrock, external-zones, preview-fallback, live-scene, live-scene-no-videos, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -218,7 +221,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback declined-outcomes support-desk support-research metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues bedrock external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -478,6 +481,9 @@ check defaults.env "no external zones by default" '^INFRARED_EXTERNAL_ZONES=' 0
 has external-zones.env "a platform Product may have an external zone" 'INFRARED_EXTERNAL_ZONES="true"'
 check defaults.env "every screenshot kept as taken by default" '^INFRARED_PREVIEW_FALLBACK=' 0
 has preview-fallback.env "a poor preview becomes a card" 'INFRARED_PREVIEW_FALLBACK="true"'
+check defaults.env "a summary keeps the closing scene it was made with by default" '^INFRARED_SUMMARY_VIDEO_LIVE_SCENE=' 0
+has live-scene.env "a summary's closing scene follows its deployment" 'INFRARED_SUMMARY_VIDEO_LIVE_SCENE="true"'
+check live-scene-no-videos.env "no closing scene without summary videos" '^INFRARED_SUMMARY_VIDEO_LIVE_SCENE=' 0
 has defaults.env "a request the policy forbids ends Declined by default" 'INFRARED_DECLINED_OUTCOMES="true"'
 check declined-outcomes.env "DECLINE handled as BLOCK with declinedOutcomes false" '^INFRARED_DECLINED_OUTCOMES=' 0
 # Support desks only when asked for: off, the operator answers none, so a support run

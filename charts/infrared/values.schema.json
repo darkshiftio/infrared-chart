@@ -2063,6 +2063,10 @@
         "ffmpegImage": {
           "type": "string"
         },
+        "liveScene": {
+          "type": "boolean",
+          "description": "Replace a shipped Change's closing scene, Where it's live, as its deployment reaches each new zone (INFRARED_SUMMARY_VIDEO_LIVE_SCENE, operator)."
+        },
         "geminiSecret": {
           "type": "string"
         },

@@ -900,6 +900,12 @@ summaryvideo:
   # -- Secret in the release namespace with the platform Gemini key (key api-key)
   # that voices the narration. Not created by the chart.
   geminiSecret: gemini-api
+  # -- Replace a shipped Change's closing scene, "Where it's live", each time the
+  # deployment carrying it runs Healthy in a new zone, without remaking the video
+  # (INFRARED_SUMMARY_VIDEO_LIVE_SCENE, operator; infrared-docs-internal ADR 0084
+  # D7): one card and one spoken line, about a tenth of a cent each. Off, the video
+  # keeps the scene it was made with.
+  liveScene: false
   storage:
     # -- The API keeps the videos on this volume.
     size: 5Gi

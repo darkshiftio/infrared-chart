@@ -329,6 +329,12 @@ spec:
               value: {{ .Values.summaryvideo.ffmpegImage | quote }}
             - name: INFRARED_SUMMARY_VIDEO_GEMINI_SECRET
               value: {{ .Values.summaryvideo.geminiSecret | quote }}
+            {{- if .Values.summaryvideo.liveScene }}
+            # A shipped Change's closing scene, Where it's live, replaced as
+            # its deployment reaches each new zone (ADR 0084 D7).
+            - name: INFRARED_SUMMARY_VIDEO_LIVE_SCENE
+              value: "true"
+            {{- end }}
             - name: INFRARED_UI_URL
               value: {{ printf "http://%s.%s.svc:%d" (include "infrared.fullname" .) .Release.Namespace (int .Values.ui.service.port) | quote }}
             {{- end }}

@@ -214,8 +214,14 @@ spec:
                   name: infrared-media-s3
                   key: AWS_SECRET_ACCESS_KEY
                   optional: true
-            # The identity storage-reader's: List on each bucket, for the
-            # storage views' figures by org (ADR 0087).
+            {{- end }}
+            {{- end }}
+            {{- if .Values.stores.enabled }}
+            # The S3 identity storage-reader's key, which the gitops template
+            # copies here: List on each bucket, for the storage views' figures
+            # by org and their listings where the filer refuses the API (ADR
+            # 0087), wherever the API keeps its videos and pictures. Optional,
+            # so the API starts without it and says why.
             - name: INFRARED_STORAGE_READER_S3_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -228,7 +234,6 @@ spec:
                   name: infrared-storage-reader-s3
                   key: AWS_SECRET_ACCESS_KEY
                   optional: true
-            {{- end }}
             {{- end }}
             {{- with .Values.observability.metricsURL }}
             - name: INFRARED_METRICS_URL

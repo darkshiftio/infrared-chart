@@ -106,10 +106,12 @@ The Helm chart for Infrared (`charts/infrared`), published to
   (`summaryvideo.store`, rendered only when not `volume`, which needs
   `stores.enabled` and `summaryvideo.enabled`) on the operator and the API,
   and on the API `INFRARED_MEDIA_S3_ENDPOINT`, `INFRARED_MEDIA_S3_BUCKET` and
-  the keys of the Secrets `infrared-media-s3` and `infrared-storage-reader-s3`
-  (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `optional`), which the gitops
-  template copies into the release namespace; no template renders them. Under
-  `objectStore` the media volume stays mounted, read-only, and its claim kept.
+  the keys of the Secret `infrared-media-s3` with it, and the keys of
+  `infrared-storage-reader-s3` whenever `stores.enabled`, wherever the media
+  are (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, each `optional`), which
+  the gitops template copies into the release namespace; no template renders
+  them. Under `objectStore` the media volume stays mounted, read-only, and its
+  claim kept.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

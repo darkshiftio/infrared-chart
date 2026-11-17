@@ -543,6 +543,16 @@ if [[ "$(media_env media-both api)" == "$want_media_env" ]] \
   && [[ -z "$(media_env defaults api)$(media_env defaults operator)" ]]; then
   ok "both and objectStore hand the API the store, the bucket and the identities' keys, each optional, and the operator the store"
 else bad "the media store's settings: both's API $(media_env media-both api | tr '\n' ' '), its operator $(media_env media-both operator)"; fi
+# storage-reader's key, for the storage views' figures by org and their
+# listings where the filer refuses the API: whenever the stores are on, with
+# the media on the API's volume too, optional; never without the stores.
+want_reader_env="INFRARED_STORAGE_READER_S3_ACCESS_KEY_ID=infrared-storage-reader-s3/AWS_ACCESS_KEY_ID optional=true
+INFRARED_STORAGE_READER_S3_SECRET_ACCESS_KEY=infrared-storage-reader-s3/AWS_SECRET_ACCESS_KEY optional=true"
+if [[ "$(media_env install api)" == "$want_reader_env" ]] && [[ "$(media_env storage-layout api)" == "$want_reader_env" ]] \
+  && [[ "$(media_env single-node api)" == "$want_reader_env" ]] \
+  && [[ -z "$(media_env storage-layout-no-stores api)$(media_env single-node-no-stores api)$(media_env install operator)" ]]; then
+  ok "with the stores on, the API gets storage-reader's key, optional, wherever its media are; without them, none"
+else bad "storage-reader's key: install's API $(media_env install api | tr '\n' ' '), storage-layout's $(media_env storage-layout api | tr '\n' ' ')"; fi
 media_rw='{"mountPath":"/var/lib/infrared/media","name":"media"}'
 if [[ "$(media_obj defaults volumeMounts)" == "$media_rw" ]] && [[ "$(media_obj media-both volumeMounts)" == "$media_rw" ]] \
   && [[ "$(media_obj media-object-store volumeMounts)" == '{"mountPath":"/var/lib/infrared/media","name":"media","readOnly":true}' ]] \

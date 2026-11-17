@@ -216,6 +216,55 @@ spec:
                     maxLength: 254
                     type: string
                 type: object
+              budgets:
+                description: |-
+                  Budgets are the org's own weekly limits for its AgentWorkflows' budget
+                  groups (workspace TODO 700): a group named here takes the limit set
+                  here, and an override in force, rather than its workflows'
+                  spec.budget.weeklyUSD, so raising a limit never edits a workflow.
+                items:
+                  description: OrgBudget is an org's limit for one budget group of
+                    its AgentWorkflows.
+                  properties:
+                    group:
+                      description: Group is the budget group, as the workflows' spec.budget.group
+                        names it.
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    override:
+                      description: |-
+                        Override is a limit for a while: it applies until Until, then the group
+                        goes back to WeeklyUSD, or its workflows' limit, by itself.
+                      properties:
+                        by:
+                          description: By is who set it, as the API names them.
+                          type: string
+                        until:
+                          description: Until is when the override ends.
+                          format: date-time
+                          type: string
+                        weeklyUSD:
+                          description: WeeklyUSD is the group's limit while the override
+                            lasts.
+                          pattern: ^[0-9]+(\.[0-9]{1,2})?$
+                          type: string
+                      required:
+                      - until
+                      - weeklyUSD
+                      type: object
+                    weeklyUSD:
+                      description: |-
+                        WeeklyUSD replaces the workflows' own limit for the group, as a decimal
+                        string; empty keeps theirs.
+                      pattern: ^[0-9]+(\.[0-9]{1,2})?$
+                      type: string
+                  required:
+                  - group
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - group
+                x-kubernetes-list-type: map
               buildRegistry:
                 description: |-
                   BuildRegistry is the Registry, in the org's namespace, its Products

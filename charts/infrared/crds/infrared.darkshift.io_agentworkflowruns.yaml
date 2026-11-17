@@ -84,6 +84,18 @@ spec:
                       several repos also means the Change names none: an issue-mode step
                       (hydration) is given every Product repo and their open issues.
                     type: string
+                  repos:
+                    description: |-
+                      Repos are every Product repo the Change is built in, in the order its
+                      pull requests merge (infrared-docs-internal ADR 0085): a module before
+                      the repo that pins it, an API before the UI that reads it. The branch
+                      has the same name in each. Empty, or one entry, is a Change of one repo:
+                      Repo, else the repo its issue names. Its issue stays where Issue says,
+                      in one of these repos or not.
+                    items:
+                      type: string
+                    maxItems: 16
+                    type: array
                 type: object
               deployment:
                 description: |-
@@ -286,8 +298,10 @@ spec:
                 format: date-time
                 type: string
               mergeCommit:
-                description: MergeCommit is the commit the merge step created on the
-                  default branch.
+                description: |-
+                  MergeCommit is the commit the merge step created on the default branch.
+                  For a Change of several repos it is set once every repo merged: the
+                  last repo's merge commit.
                 type: string
               message:
                 description: |-
@@ -388,6 +402,37 @@ spec:
                   its promote steps created, the one a Change's merge joined or started
                   (ADR 0084, D1), or the one a Delivery run follows.
                 type: string
+              repos:
+                description: |-
+                  Repos are a Change's repos when it is built in more than one (ADR
+                  0085), in the order they merge, each with its pull request and merge
+                  commit. Empty for a Change of one repo, whose pull request and merge
+                  commit are PullRequest and MergeCommit.
+                items:
+                  description: |-
+                    ChangeRepoStatus is one repo of a Change built in several (ADR 0085): its
+                    pull request, and its merge commit once merged.
+                  properties:
+                    mergeCommit:
+                      description: MergeCommit is the commit the merge step made on
+                        its default branch.
+                      type: string
+                    pullRequest:
+                      description: PullRequest is the number of the pull request the
+                        build opened there.
+                      format: int32
+                      type: integer
+                    repo:
+                      description: Repo is the Product repo, by name.
+                      type: string
+                  required:
+                  - repo
+                  type: object
+                maxItems: 16
+                type: array
+                x-kubernetes-list-map-keys:
+                - repo
+                x-kubernetes-list-type: map
               returnRounds:
                 description: |-
                   ReturnRounds counts how often a step sent the run back to the builder:

@@ -85,6 +85,18 @@ spec:
                       (hydration) is given every Product repo and their open issues.
                     type: string
                 type: object
+              deployment:
+                description: |-
+                  Deployment is the deployment (Release) a Delivery run follows (ADR 0084,
+                  D1): its promote steps carry that deployment through the Product's
+                  zones rather than start one.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
               guidance:
                 description: |-
                   Guidance is what people told steps when they retried them, oldest
@@ -371,8 +383,10 @@ spec:
                 format: int32
                 type: integer
               release:
-                description: Release is the Release the run's promote steps created
-                  for the merge.
+                description: |-
+                  Release is the deployment (Release) that carries the run's merge: the one
+                  its promote steps created, the one a Change's merge joined or started
+                  (ADR 0084, D1), or the one a Delivery run follows.
                 type: string
               returnRounds:
                 description: |-

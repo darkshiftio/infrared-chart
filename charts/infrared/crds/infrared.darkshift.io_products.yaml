@@ -851,6 +851,29 @@ spec:
                 required:
                 - command
                 type: object
+              gates:
+                description: |-
+                  Gates says which of the three human gates the Product's work stops at
+                  (infrared-docs-internal ADR 0084, D3): the plan after hydration, the
+                  work before the merge, and production. Each one omitted follows
+                  humanApprovals, so omitted everywhere means all three on. A dead-lettered
+                  step, a reviewer's BLOCK and a failed step stop for a person whatever the
+                  gates say.
+                properties:
+                  plan:
+                    description: 'Plan stops a Change after hydration, before any
+                      work: the triage step.'
+                    type: boolean
+                  production:
+                    description: |-
+                      Production stops a deployment after pre-release, before the zones of
+                      the release environment.
+                    type: boolean
+                  work:
+                    description: Work stops a Change after building and review, before
+                      the merge.
+                    type: boolean
+                type: object
               humanApprovals:
                 description: |-
                   HumanApprovals says whether people approve the Product's Changes and
@@ -1130,8 +1153,10 @@ spec:
                         kinds:
                           description: |-
                             Kinds are what is posted there: summary (summary videos), announcement
-                            (product owner announcements), drafts (announcement and GTM drafts).
-                            Empty means all of them.
+                            (product owner announcements), drafts (announcement and GTM drafts),
+                            support (the org's support desk conversations, a thread each). Empty
+                            means summary, announcement and drafts: support goes only where it is
+                            named.
                           items:
                             type: string
                           type: array

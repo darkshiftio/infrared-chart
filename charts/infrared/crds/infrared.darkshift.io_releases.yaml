@@ -152,6 +152,11 @@ spec:
                     repo:
                       description: Repo is the repo's name, one of the Product's spec.repos.
                       type: string
+                    run:
+                      description: |-
+                        Run is the Change (AgentWorkflowRun) whose merge the push is, when a
+                        Change merged it (ADR 0084, D1); empty for a person's push.
+                      type: string
                   required:
                   - commit
                   - repo
@@ -463,6 +468,18 @@ spec:
                   CutRuns are the AgentWorkflowRuns started when the tag was cut (the
                   org's enabled AgentWorkflows with a release.cut event trigger), on a
                   Release from before release cuts; a ReleaseCut starts them since.
+                items:
+                  type: string
+                type: array
+              deliveryDispatched:
+                description: DeliveryDispatched is true once deployment.started has
+                  been sent.
+                type: boolean
+              deliveryRuns:
+                description: |-
+                  DeliveryRuns are the AgentWorkflowRuns the deployment started (the org's
+                  enabled AgentWorkflows with a deployment.started event trigger: Delivery,
+                  infrared-docs-internal ADR 0084), each following this deployment.
                 items:
                   type: string
                 type: array

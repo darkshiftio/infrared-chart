@@ -4,6 +4,18 @@
 {{- end }}
 {{- $c := .Values.operator }}
 {{- $ctx := dict "root" . "c" $c "component" "operator" }}
+{{- if .Values.runner.actors.enabled }}
+{{- /* The operator's way to its steps' actors (runner.actors, infrared-docs-internal
+ADR 0089): Agent Substrate's router admits only Infrared's operator, by the
+SPIFFE ID of its pod certificate from the pod identity signer, and serves a
+certificate of the servicedns signer (the gitops template's substrate
+component). The operator reads both at /run/substrate-router; the kubelet
+renews the certificate before it expires. */}}
+{{- $podCertificate := dict "signerName" "podidentity.podcert.ate.dev/identity" "keyType" "ECDSAP256" "credentialBundlePath" "credential-bundle.pem" }}
+{{- $routerCA := dict "signerName" "servicedns.podcert.ate.dev/identity" "labelSelector" (dict "matchLabels" (dict "podcert.ate.dev/canarying" "live")) "path" "router-ca.pem" }}
+{{- $_ := set $ctx "volumes" (list (dict "name" "substrate-router" "projected" (dict "sources" (list (dict "podCertificate" $podCertificate) (dict "clusterTrustBundle" $routerCA))))) }}
+{{- $_ := set $ctx "volumeMounts" (list (dict "name" "substrate-router" "mountPath" "/run/substrate-router" "readOnly" true)) }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -410,13 +422,17 @@ spec:
               value: "true"
             {{- end }}
             {{- if .Values.runner.actors.enabled }}
-            {{- if not .Values.runner.actors.agentImage }}
-            {{- fail "runner.actors.enabled needs runner.actors.agentImage: the runner image with the agent's own user, pinned by digest" }}
-            {{- end }}
             # Agent steps as Agent Substrate actors for each org placed on them
-            # (runner.actors, infrared-docs-internal ADR 0089).
+            # (runner.actors, infrared-docs-internal ADR 0089). An actor reaches
+            # only its hosts: runner.actors.hosts, or else the module proxies of
+            # runner.networkPolicy.egressByName.hosts. Without agentImage the
+            # operator writes the agent's image beside the runner's itself.
+            {{- $actors := deepCopy .Values.runner.actors }}
+            {{- if not $actors.hosts }}
+            {{- $_ := set $actors "hosts" (.Values.runner.networkPolicy.egressByName.hosts | default list) }}
+            {{- end }}
             - name: INFRARED_AGENT_ACTORS
-              value: {{ .Values.runner.actors | toJson | quote }}
+              value: {{ $actors | toJson | quote }}
             {{- end }}
             {{- if .Values.runner.networkPolicy.egressByName.enabled }}
             {{- if not .Values.runner.networkPolicy.enabled }}

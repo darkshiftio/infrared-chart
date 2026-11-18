@@ -140,17 +140,19 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.15 (9fcfeaf):
-  # TooHighChurnRate24h off and a Spot node's kube-system cAdvisor series
-  # dropped (#58, workspace TODO 558), zot's 15-minute HTTP timeouts (#57), and
-  # v0.1.14 before them (the metrics store's size, #55; InfraredMetricsStoreDown
-  # on the install's own store, #56). New gitops repos take it. An existing one
+  # to install from a branch of the template. Here v0.1.18: the WorkerPool
+  # agents, where an org's agent steps run as Agent Substrate actors with
+  # runner.actors on (#60, infrared-docs-internal ADR 0089); v0.1.17 before it,
+  # Agent Substrate v1.0.0 reinstalled on new stores (#59, a new database
+  # substrate_v1 and snapshot location, the old ones left unused); and v0.1.16
+  # (the stores' org layout, the registry's pause, the stores' applier of path
+  # rules and moves, the bucket media). New gitops repos take it. An existing one
   # moves to the Chart.yaml annotation infrared.darkshift.io/gitops-template,
   # which must equal this, while the rollout flag templateFollowsChart is on
   # (workspace TODO 687), unless it is held or pinned to a later tag; otherwise
   # it keeps its spec.template.version until that is patched. A tag, never a
   # commit, so the API can tell a later pin from an older one.
-  templateVersion: v0.1.15
+  templateVersion: v0.1.18
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
@@ -838,9 +840,14 @@ runner:
     # -- Each step actor's limits; empty: 2 CPUs and 8Gi, a Job's runner and agent containers' together.
     cpu: ""
     memory: ""
-    # -- The runner image with the agent's own user (1003:1001), pinned by digest: the platform release writes it
-    # beside the runner's, since Agent Substrate 1.0 has no runAsUser. Required when enabled.
+    # -- The runner image with the agent's own user (1003:1001), pinned by digest, since Agent Substrate 1.0 has no
+    # runAsUser. Empty: the operator writes it beside the runner's image at first need, with only the config's user
+    # changed, and records an Event AgentImageWritten on the Installation; set it where the operator cannot write
+    # to the runner's registry.
     agentImage: ""
+    # -- The hosts outside the cluster every actor step may reach besides the model API: an actor's egress is denied
+    # but for its list. Empty: runner.networkPolicy.egressByName.hosts, the module proxies.
+    hosts: []
     # -- Starts every actor step's runner with --dry-run: a proof that spends no tokens and writes to no forge.
     dryRun: false
   # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a

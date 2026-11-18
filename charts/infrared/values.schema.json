@@ -1951,7 +1951,14 @@
             },
             "agentImage": {
               "type": "string",
-              "description": "The runner image with the agent's own user, pinned by digest; required when enabled."
+              "description": "The runner image with the agent's own user, pinned by digest; empty, the operator writes it beside the runner's image."
+            },
+            "hosts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The hosts outside the cluster every actor step may reach besides the model API; empty, runner.networkPolicy.egressByName.hosts."
             },
             "dryRun": {
               "type": "boolean",

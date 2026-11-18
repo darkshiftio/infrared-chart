@@ -185,6 +185,12 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/security-evidence-valu
 helm template infrared "$chart" -n infrared --set security.evidence.images.syft=registry.example.org/anchore/syft:v1.56.0-debug@sha256:1111111111111111111111111111111111111111111111111111111111111111 >"$out/security-evidence-off.yaml"
 # Agent steps on Amazon Bedrock for the orgs that ask (runner.bedrock.enabled).
 helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"$out/bedrock.yaml"
+# An org's agent steps as Agent Substrate actors (runner.actors, infrared-docs-internal
+# ADR 0089): its hosts the runners' egress hosts, or its own, and an agent image given.
+helm template infrared "$chart" -n infrared --set runner.actors.enabled=true >"$out/actors.yaml"
+helm template infrared "$chart" -n infrared --set runner.actors.enabled=true --set 'runner.actors.hosts={proxy.golang.org}' \
+  --set "runner.actors.agentImage=registry.example.com/infrared-runner:v1-agent@sha256:0000000000000000000000000000000000000000000000000000000000000041" \
+  >"$out/actors-hosts.yaml"
 # A platform Product's production outside the install (operator.externalZones, ADR 0067 D6).
 helm template infrared "$chart" -n infrared --set operator.externalZones=true >"$out/external-zones.yaml"
 # A poor environment preview becomes a card drawn from the Product's assets (operator #74).
@@ -223,7 +229,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -232,7 +238,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
     storage-layout storage-layout-no-stores media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -492,6 +498,18 @@ has security-evidence.env "Syft's image as given" 'INFRARED_SYFT_IMAGE="registry
 has security-evidence.env "Grype's image as given" 'INFRARED_GRYPE_IMAGE="registry.example.org/anchore/grype:v0.121.1-debug@sha256:2222222222222222222222222222222222222222222222222222222222222222"'
 has security-evidence.env "cosign's image as given" 'INFRARED_COSIGN_IMAGE="registry.example.org/sigstore/cosign:v3.1.4-dev@sha256:3333333333333333333333333333333333333333333333333333333333333333"'
 check security-evidence-off.env "the producers' images without enabled hand on nothing" '^INFRARED_(SECURITY_EVIDENCE|SYFT_IMAGE|GRYPE_IMAGE|COSIGN_IMAGE)=' 0
+# Agent steps as Agent Substrate actors (runner.actors, ADR 0089): the operator's
+# value, whose hosts are the runners' egress hosts unless named, and the router's
+# pod certificate and trust bundle, mounted only then.
+has actors.env "runner.actors on: INFRARED_AGENT_ACTORS, its hosts the runners' egress hosts" \
+  'INFRARED_AGENT_ACTORS="{\"agentImage\":\"\",\"cpu\":\"\",\"dryRun\":false,\"enabled\":true,\"hosts\":[\"proxy.golang.org\",\"sum.golang.org\",\"registry.npmjs.org\",\"pypi.org\",\"files.pythonhosted.org\"],\"memory\":\"\",\"workers\":4}"'
+has actors-hosts.env "runner.actors with its own hosts and an agent image: both as given" \
+  'INFRARED_AGENT_ACTORS="{\"agentImage\":\"registry.example.com/infrared-runner:v1-agent@sha256:0000000000000000000000000000000000000000000000000000000000000041\",\"cpu\":\"\",\"dryRun\":false,\"enabled\":true,\"hosts\":[\"proxy.golang.org\"],\"memory\":\"\",\"workers\":4}"'
+check actors.yaml "runner.actors on: the operator's pod certificate from the pod identity signer" 'signerName: podidentity\.podcert\.ate\.dev/identity$' 1
+check actors.yaml "runner.actors on: the router's trust bundle from the servicedns signer" 'signerName: servicedns\.podcert\.ate\.dev/identity$' 1
+check actors.yaml "runner.actors on: both mounted at /run/substrate-router" 'mountPath: /run/substrate-router$' 1
+check defaults.env "runner.actors off: no INFRARED_AGENT_ACTORS" '^INFRARED_AGENT_ACTORS=' 0
+check defaults.yaml "runner.actors off: no pod certificate and no router volume" 'podcert\.ate\.dev|substrate-router' 0
 # Bedrock only when asked for: off, the operator gets nothing and every org stays on the
 # Anthropic API whatever its spec.modelProvider says.
 check defaults.env "agent steps on the Anthropic API by default" '^INFRARED_BEDROCK=' 0
@@ -2311,7 +2329,7 @@ for set in supportChat.baseUrl=support.example.com supportChat.baseUrl=http://su
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

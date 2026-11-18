@@ -409,6 +409,15 @@ spec:
             - name: INFRARED_BEDROCK
               value: "true"
             {{- end }}
+            {{- if .Values.runner.actors.enabled }}
+            {{- if not .Values.runner.actors.agentImage }}
+            {{- fail "runner.actors.enabled needs runner.actors.agentImage: the runner image with the agent's own user, pinned by digest" }}
+            {{- end }}
+            # Agent steps as Agent Substrate actors for each org placed on them
+            # (runner.actors, infrared-docs-internal ADR 0089).
+            - name: INFRARED_AGENT_ACTORS
+              value: {{ .Values.runner.actors | toJson | quote }}
+            {{- end }}
             {{- if .Values.runner.networkPolicy.egressByName.enabled }}
             {{- if not .Values.runner.networkPolicy.enabled }}
             {{- fail "runner.networkPolicy.egressByName needs runner.networkPolicy.enabled: without the runner NetworkPolicy runners lose Gitea, the registry and infrared-mcp" }}

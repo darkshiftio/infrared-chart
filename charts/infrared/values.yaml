@@ -825,6 +825,24 @@ runner:
     # org's `modelProvider` is ignored. Until the operator reads rollout flags (ADR 0061 decision 9);
     # retired once Bedrock is generally available.
     enabled: false
+  actors:
+    # -- Agent steps as Agent Substrate actors (INFRARED_AGENT_ACTORS, operator, as JSON; infrared-docs-internal
+    # ADR 0089, Proposed): each step of an org placed on actors (spec.agentSteps.placement, for the Products it
+    # lists) runs as one actor of a template made for its AgentRole, in the org's own atespace, where the install
+    # runs Agent Substrate. Every credential reaches the runner in the step's start request alone. Off: every step
+    # runs as before, and an org placed on actors runs its steps as Jobs. The API's rollout flag agentActors lets
+    # an org admin choose the placement.
+    enabled: false
+    # -- The WorkerPool agents' warm workers, each sized for one step's actor (the gitops template).
+    workers: 4
+    # -- Each step actor's limits; empty: 2 CPUs and 8Gi, a Job's runner and agent containers' together.
+    cpu: ""
+    memory: ""
+    # -- The runner image with the agent's own user (1003:1001), pinned by digest: the platform release writes it
+    # beside the runner's, since Agent Substrate 1.0 has no runAsUser. Required when enabled.
+    agentImage: ""
+    # -- Starts every actor step's runner with --dry-run: a proof that spends no tokens and writes to no forge.
+    dryRun: false
   # -- Where agent steps' runner pods run (INFRARED_AGENT_STEP_PLACEMENT, operator, as JSON): a
   # node selector and tolerations, e.g. a node pool of their own away from the nodes Infrared runs
   # on. Empty: the scheduler places steps anywhere. It also takes `runtimeClassName`, e.g.

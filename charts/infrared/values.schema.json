@@ -1925,6 +1925,39 @@
               "description": "INFRARED_BEDROCK on the operator, rendered only when true: an org whose spec.modelProvider.bedrock names a Verified AWS CloudAccount and a region runs its agent steps on Bedrock, its runner assuming the account role with the pod's projected token. Off: every org on the Anthropic API, as before."
             }
           }
+        },
+        "actors": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Agent steps as Agent Substrate actors for each org placed on them (INFRARED_AGENT_ACTORS on the operator, rendered only when enabled; infrared-docs-internal ADR 0089).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Runs each step of an org placed on actors as an Agent Substrate actor; off, every step runs as before."
+            },
+            "workers": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64,
+              "description": "The WorkerPool agents' warm workers, each sized for one step's actor."
+            },
+            "cpu": {
+              "type": "string",
+              "description": "Each step actor's CPU limit; empty: 2."
+            },
+            "memory": {
+              "type": "string",
+              "description": "Each step actor's memory limit; empty: 8Gi."
+            },
+            "agentImage": {
+              "type": "string",
+              "description": "The runner image with the agent's own user, pinned by digest; required when enabled."
+            },
+            "dryRun": {
+              "type": "boolean",
+              "description": "Starts every actor step's runner with --dry-run."
+            }
+          }
         }
       }
     },

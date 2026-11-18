@@ -479,6 +479,13 @@ spec:
                               records a Job's usage once, however often it reads the Job's result.
                               Empty for usage an operator recorded before it kept each attempt's.
                             type: string
+                          keySource:
+                            description: |-
+                              KeySource is "included" for an attempt that ran on the install's
+                              included key (ADR 0059), and empty for the org's own.
+                            enum:
+                            - included
+                            type: string
                           modelCalls:
                             description: |-
                               ModelCalls is what the runner's model proxy saw of the attempt's calls,

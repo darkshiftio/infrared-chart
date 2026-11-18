@@ -973,6 +973,25 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              includedRuns:
+                description: |-
+                  IncludedRuns is what a self-service org spent of the install's included
+                  runs (infrared-docs-internal ADR 0059).
+                properties:
+                  jobs:
+                    description: |-
+                      Jobs are the UIDs of the latest attempts counted, so an attempt read
+                      twice is counted once; the oldest drop off past MaxIncludedJobs.
+                    items:
+                      type: string
+                    maxItems: 200
+                    type: array
+                  spentUSD:
+                    description: |-
+                      SpentUSD is the org's spend on the included key, a decimal in US
+                      dollars, each attempt's cost added once.
+                    type: string
+                type: object
               namespace:
                 description: Namespace that holds the org's resources, ir-org-<name>.
                 type: string

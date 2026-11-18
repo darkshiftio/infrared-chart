@@ -282,6 +282,20 @@ spec:
                   Models maps model tiers to model IDs and holds the price table cost
                   estimates use.
                 properties:
+                  includedRuns:
+                    description: |-
+                      IncludedRuns gives each self-service org agent runs on a key the
+                      install holds, up to an allowance, until the org sets its own key
+                      (infrared-docs-internal ADR 0059). Absent, or an allowance of 0, is off.
+                    properties:
+                      perOrgUSD:
+                        description: |-
+                          PerOrgUSD is each self-service org's allowance of model spend on the
+                          install's key, in US dollars as a decimal ("5.00"), once per org. Empty
+                          or 0 is off.
+                        pattern: ^([0-9]{1,6}(\.[0-9]{1,2})?)?$
+                        type: string
+                    type: object
                   prices:
                     description: |-
                       Prices replace DefaultModelPrices for cost estimates when set. Spend

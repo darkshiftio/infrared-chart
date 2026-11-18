@@ -260,6 +260,15 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              configDigest:
+                description: |-
+                  ConfigDigest is a digest of the template's inputs the hydration commit
+                  renders from the operator's own settings, the chart's values (Zot's
+                  retention, the metrics store's size, sign-in to Grafana, the stores and
+                  tenancy switches and the rest), beside those BackupDigest, EdgeDigest
+                  and the chart's version hold. Empty while every one is at its default.
+                  A change of any of them hydrates the repo again.
+                type: string
               edgeDigest:
                 description: |-
                   EdgeDigest is a digest of what the hydration commit renders from the

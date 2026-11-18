@@ -920,11 +920,11 @@ spec:
                     description: |-
                       Layout is how the stores lay their files out now: empty for the layout
                       before ADR 0087, org once a migration has copied every repository's
-                      files into it, verified them there and deleted the old copies; the
+                      files into it and verified them there, with Zot stopped; the
                       migration's later steps (Zot started at its new root, the tags
-                      checked, the references rewritten) are in Migration. The gitops
-                      template follows it, never the chart's value, so Zot moves to its new
-                      root only after its files.
+                      checked, the references rewritten, the old copies deleted) are in
+                      Migration. The gitops template follows it, never the chart's value, so
+                      Zot moves to its new root only after its files.
                     enum:
                     - ""
                     - org
@@ -952,7 +952,7 @@ spec:
                       phase:
                         description: |-
                           Phase is the step of the migration the operator is on, in words a
-                          person reads, such as Copying or Done.
+                          person reads, such as Precopying, Copying or Done.
                         maxLength: 64
                         type: string
                       startedAt:
@@ -989,7 +989,7 @@ spec:
                       phase:
                         description: |-
                           Phase is the step of the migration the operator is on, in words a
-                          person reads, such as Copying or Done.
+                          person reads, such as Precopying, Copying or Done.
                         maxLength: 64
                         type: string
                       startedAt:

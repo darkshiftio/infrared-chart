@@ -140,8 +140,11 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.18: the WorkerPool
-  # agents, where an org's agent steps run as Agent Substrate actors with
+  # to install from a branch of the template. Here v0.1.19: the stores' applier
+  # copies the registry while Zot serves (#61, inert until
+  # stores.orgLayout.enabled), and the router checks take curl's exit 55 as a
+  # refusal (#62, scripts only); v0.1.18 before it, the WorkerPool agents,
+  # where an org's agent steps run as Agent Substrate actors with
   # runner.actors on (#60, infrared-docs-internal ADR 0089); v0.1.17 before it,
   # Agent Substrate v1.0.0 reinstalled on new stores (#59, a new database
   # substrate_v1 and snapshot location, the old ones left unused); and v0.1.16
@@ -152,7 +155,7 @@ gitops:
   # (workspace TODO 687), unless it is held or pinned to a later tag; otherwise
   # it keeps its spec.template.version until that is patched. A tag, never a
   # commit, so the API can tell a later pin from an older one.
-  templateVersion: v0.1.18
+  templateVersion: v0.1.19
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

@@ -467,6 +467,11 @@ spec:
                         description: AttemptUsage is what one attempt of a step spent,
                           as its runner reported it.
                         properties:
+                          actor:
+                            description: Actor is the actor an attempt that ran as
+                              one was, <atespace>/<name>.
+                            maxLength: 127
+                            type: string
                           attempt:
                             description: |-
                               Attempt is the step's attempt number. A person's retry of the step
@@ -554,6 +559,17 @@ spec:
                             - anthropic
                             - bedrock
                             - claude-code
+                            type: string
+                          ranAs:
+                            description: |-
+                              RanAs is where the attempt ran: job (a runner Job in the cluster), pool
+                              (an AgentVM a runner pool leased) or actor (an Agent Substrate actor;
+                              infrared-docs-internal ADR 0089). Empty for an attempt recorded before
+                              it was kept.
+                            enum:
+                            - job
+                            - pool
+                            - actor
                             type: string
                           region:
                             description: Region is the AWS region a bedrock attempt's

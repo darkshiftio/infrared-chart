@@ -130,13 +130,15 @@ spec:
               agentSteps:
                 description: |-
                   AgentSteps says where the org's agentRole steps run: as runner Jobs in
-                  the cluster (the default), or leased to RunnerPools on people's Macs
-                  (localred plan, phase 2).
+                  the cluster (the default), leased to RunnerPools on people's Macs
+                  (localred plan, phase 2), or as Agent Substrate actors in the cluster
+                  (infrared-docs-internal ADR 0089).
                 properties:
                   fallback:
                     description: |-
-                      Fallback is what a step placed on the pools does when no pool that
-                      takes it is alive: jobs (run it as a Job, the default) or wait.
+                      Fallback is what a step placed on the pools or on actors does when no
+                      pool that takes it is alive, or no actor's worker has room: jobs (run
+                      it as a Job, the default) or wait.
                     enum:
                     - jobs
                     - wait
@@ -144,13 +146,29 @@ spec:
                   placement:
                     default: jobs
                     description: |-
-                      Placement is jobs (runner Jobs in the cluster) or pools (AgentVMs the
-                      org's RunnerPools lease). A step that publishes, delivers to Slack or
-                      names an MCP server runs as a Job either way.
+                      Placement is jobs (runner Jobs in the cluster), pools (AgentVMs the
+                      org's RunnerPools lease) or actors (Agent Substrate actors in the
+                      cluster). A step that publishes, delivers to Slack or names an MCP
+                      server runs as a Job on pools.
                     enum:
                     - jobs
                     - pools
+                    - actors
                     type: string
+                  products:
+                    description: |-
+                      Products, when set, are the org's Products whose steps follow the
+                      placement; a step of another Product, or of no Product (an org's or a
+                      Team's scheduled run), runs as a Job. Empty: every step of the org
+                      follows it. An org moves one Product to a placement first, then the
+                      others (workspace TODO 721).
+                    items:
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    maxItems: 100
+                    type: array
+                    x-kubernetes-list-type: set
                 type: object
               announcements:
                 description: |-
@@ -914,6 +932,22 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              actors:
+                description: |-
+                  Actors is the org's place in Agent Substrate, where its steps placed on
+                  actors run (infrared-docs-internal ADR 0089).
+                properties:
+                  atespace:
+                    description: |-
+                      Atespace is the org's atespace, <org>-<the first 8 hex digits of the
+                      Organization's uid> (OrgAtespace): Substrate asks that an atespace's
+                      name is never used again, and an org made again under a deleted org's
+                      name has another uid.
+                    maxLength: 63
+                    type: string
+                required:
+                - atespace
+                type: object
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current

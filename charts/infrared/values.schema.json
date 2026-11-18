@@ -1316,6 +1316,11 @@
           "properties": {
             "enabled": {
               "type": "boolean"
+            },
+            "window": {
+              "type": "string",
+              "pattern": "^$|^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$",
+              "description": "When the registry's move may stop Zot for its window, RFC 3339 (INFRARED_STORES_ORG_LAYOUT_WINDOW, operator): from then, for two hours. Empty: as soon as its copy is current."
             }
           }
         },

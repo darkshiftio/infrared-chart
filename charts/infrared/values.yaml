@@ -215,10 +215,19 @@ stores:
     # -- With enabled, every store keeps an org's files under one path per org
     # and kind, <store>/<org>/<kind>/<name> (INFRARED_STORES_ORG_LAYOUT,
     # operator; infrared-docs-internal ADR 0087): the registry's repositories
-    # become <org>/images/..., <org>/charts/... and <org>/artifacts/..., moved
-    # in a window with Zot stopped, each copy verified before its original goes,
-    # and off again moves them back the same way. Off in every 0.1 release.
+    # become <org>/images/..., <org>/charts/... and <org>/artifacts/..., copied
+    # while Zot serves, then, with Zot stopped for a window of minutes, what
+    # changed since copied and every file verified, and only once Zot serves
+    # the new names each original deleted; off again moves them back the same
+    # way. Off in every 0.1 release.
     enabled: false
+    # -- When the move may stop Zot for its window, a time in RFC 3339 such as
+    # 2026-11-20T03:00:00Z (INFRARED_STORES_ORG_LAYOUT_WINDOW, operator; ADR
+    # 0087, Updates, 2026-11-18): the copy runs before it with Zot serving, and
+    # the window begins once the copy is current, from that time and for two
+    # hours; past them it waits for a new time. Empty: as soon as the copy is
+    # current.
+    window: ""
   policies:
     # -- With enabled, the storage policies platform admins set per kind, for
     # every org or one, are applied by the stores themselves, Zot's retention

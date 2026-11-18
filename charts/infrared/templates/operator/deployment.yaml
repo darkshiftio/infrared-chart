@@ -299,9 +299,17 @@ spec:
             {{- if .Values.stores.orgLayout.enabled }}
             # One path per org and kind in every store (stores.orgLayout,
             # infrared-docs-internal ADR 0087): the registry's repositories
-            # moved to <org>/<kind>/<name>, each copy verified first.
+            # copied to <org>/<kind>/<name> while Zot serves, each copy
+            # verified before its original goes.
             - name: INFRARED_STORES_ORG_LAYOUT
               value: "true"
+            {{- with .Values.stores.orgLayout.window }}
+            # When the move may stop Zot for its window of minutes: from this
+            # time, for two hours, once its copy, made while Zot serves, is
+            # current.
+            - name: INFRARED_STORES_ORG_LAYOUT_WINDOW
+              value: {{ . | quote }}
+            {{- end }}
             {{- end }}
             {{- if .Values.stores.policies.enabled }}
             # The storage policies, applied by Zot and SeaweedFS's path rules,

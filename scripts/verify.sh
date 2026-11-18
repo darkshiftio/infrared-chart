@@ -204,6 +204,11 @@ helm template infrared "$chart" -n infrared --set summaryvideo.liveScene=true,su
 # (summaryvideo.store, ADR 0087 D4 and D7): both, and objectStore.
 helm template infrared "$chart" -n infrared -f "$chart/ci/storage-layout-values.yaml" >"$out/storage-layout.yaml"
 helm template infrared "$chart" -n infrared --set stores.orgLayout.enabled=true,stores.policies.enabled=true >"$out/storage-layout-no-stores.yaml"
+# The window the move may stop Zot in (stores.orgLayout.window, ADR 0087,
+# Updates, 2026-11-18): handed on with the layout, never without.
+helm template infrared "$chart" -n infrared -f "$chart/ci/storage-layout-values.yaml" \
+  --set stores.orgLayout.window=2026-11-20T03:00:00Z >"$out/storage-layout-window.yaml"
+helm template infrared "$chart" -n infrared --set stores.enabled=true,stores.orgLayout.window=2026-11-20T03:00:00Z >"$out/storage-layout-window-off.yaml"
 helm template infrared "$chart" -n infrared --set stores.enabled=true,summaryvideo.store=both >"$out/media-both.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/media-object-store-values.yaml" >"$out/media-object-store.yaml"
 # A request the org's policy forbids ends Declined by default; false keeps DECLINE handled as
@@ -229,7 +234,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -239,7 +244,7 @@ envs() {
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
     test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
-    storage-layout storage-layout-no-stores media-both media-object-store \
+    storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
@@ -530,6 +535,9 @@ for f in defaults install single-node; do
 done
 has storage-layout.env "storage-layout: one path per org and kind in every store" 'INFRARED_STORES_ORG_LAYOUT="true"'
 has storage-layout.env "storage-layout: the storage policies, applied by the stores" 'INFRARED_STORES_POLICIES="true"'
+check storage-layout.env "storage-layout: no window named, the move's window as soon as its copy is current" '^INFRARED_STORES_ORG_LAYOUT_WINDOW=' 0
+has storage-layout-window.env "storage-layout: the window the install names, handed on as it is" 'INFRARED_STORES_ORG_LAYOUT_WINDOW="2026-11-20T03:00:00Z"'
+check storage-layout-window-off.env "a window without the layout hands on nothing" '^INFRARED_STORES_ORG_LAYOUT(_WINDOW)?=' 0
 check storage-layout-no-stores.env "the layout and the policies without the stores hand on nothing" '^INFRARED_STORES(_ORG_LAYOUT|_POLICIES)?=' 0
 # Where the API keeps its videos and pictures (summaryvideo.store, ADR 0087 D4
 # and D7): volume by default, as before, the volume read-write; both hands the
@@ -1331,6 +1339,8 @@ refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
 refuse "stores.singleNode as a string fails" "at '/stores/singleNode'" --set-string stores.singleNode=true
 refuse "stores.orgLayout.enabled as a string fails" "at '/stores/orgLayout/enabled'" --set-string stores.orgLayout.enabled=true
+refuse "a window that is not a time in RFC 3339 fails" "at '/stores/orgLayout/window'" --set stores.orgLayout.window=tonight
+refuse "a window without its offset fails" "at '/stores/orgLayout/window'" --set stores.orgLayout.window=2026-11-20T03:00:00
 refuse "the storage policies without the layout fail" "stores.policies.enabled needs stores.orgLayout.enabled" \
   --set stores.enabled=true,stores.policies.enabled=true
 refuse "a media store the chart does not name fails" "at '/summaryvideo/store'" --set summaryvideo.store=bucket

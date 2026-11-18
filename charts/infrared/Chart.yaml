@@ -2,7 +2,7 @@ apiVersion: v2
 name: infrared-core
 description: Infrared's core chart, an operator/CRD-driven gitops control plane for agentic change management. Install the umbrella chart infrared, which wraps it and pins every image (ADR 0038).
 type: application
-version: 0.1.0-alpha.259
+version: 0.1.0-alpha.260
 appVersion: v0.1.0-alpha.235
 kubeVersion: ">=1.30.0-0"
 annotations:
@@ -12,7 +12,7 @@ annotations:
   # pin, no values file overrides it, so the API renders it as
   # INFRARED_GITOPS_TEMPLATE_RELEASE and moves the install's gitops repo to it
   # while the rollout flag templateFollowsChart is on (workspace TODO 687).
-  infrared.darkshift.io/gitops-template: v0.1.15
+  infrared.darkshift.io/gitops-template: v0.1.18
 home: https://github.com/darkshiftio/infrared-chart
 sources:
   - https://github.com/darkshiftio/infrared-chart

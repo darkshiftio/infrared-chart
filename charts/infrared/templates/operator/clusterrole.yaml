@@ -365,6 +365,7 @@ rules:
   resources:
   - images
   verbs:
+  - delete
   - get
   - list
   - watch

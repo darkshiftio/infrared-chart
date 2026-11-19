@@ -140,22 +140,25 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.19: the stores' applier
-  # copies the registry while Zot serves (#61, inert until
-  # stores.orgLayout.enabled), and the router checks take curl's exit 55 as a
-  # refusal (#62, scripts only); v0.1.18 before it, the WorkerPool agents,
-  # where an org's agent steps run as Agent Substrate actors with
-  # runner.actors on (#60, infrared-docs-internal ADR 0089); v0.1.17 before it,
-  # Agent Substrate v1.0.0 reinstalled on new stores (#59, a new database
-  # substrate_v1 and snapshot location, the old ones left unused); and v0.1.16
-  # (the stores' org layout, the registry's pause, the stores' applier of path
-  # rules and moves, the bucket media). New gitops repos take it. An existing one
-  # moves to the Chart.yaml annotation infrared.darkshift.io/gitops-template,
-  # which must equal this, while the rollout flag templateFollowsChart is on
-  # (workspace TODO 687), unless it is held or pinned to a later tag; otherwise
-  # it keeps its spec.template.version until that is patched. A tag, never a
-  # commit, so the API can tell a later pin from an older one.
-  templateVersion: v0.1.19
+  # to install from a branch of the template. Here v0.1.20: the stores' applier
+  # asks the SeaweedFS masters' raft leader, which alone answers their gRPC behind
+  # the masters' headless Service (#64, inert until stores.orgLayout.enabled), and
+  # the Substrate actor check before a credential enters an actor (#63, scripts
+  # only); v0.1.19 before it, the stores' applier copies the registry while Zot
+  # serves (#61), and the router checks take curl's exit 55 as a refusal (#62,
+  # scripts only); v0.1.18 before it, the WorkerPool agents, where an org's agent
+  # steps run as Agent Substrate actors with runner.actors on (#60,
+  # infrared-docs-internal ADR 0089); v0.1.17 before it, Agent Substrate v1.0.0
+  # reinstalled on new stores (#59, a new database substrate_v1 and snapshot
+  # location, the old ones left unused); and v0.1.16 (the stores' org layout, the
+  # registry's pause, the stores' applier of path rules and moves, the bucket
+  # media). New gitops repos take it. An existing one moves to the Chart.yaml
+  # annotation infrared.darkshift.io/gitops-template, which must equal this, while
+  # the rollout flag templateFollowsChart is on (workspace TODO 687), unless it is
+  # held or pinned to a later tag; otherwise it keeps its spec.template.version
+  # until that is patched. A tag, never a commit, so the API can tell a later pin
+  # from an older one.
+  templateVersion: v0.1.20
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

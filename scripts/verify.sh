@@ -191,6 +191,9 @@ helm template infrared "$chart" -n infrared --set runner.actors.enabled=true >"$
 helm template infrared "$chart" -n infrared --set runner.actors.enabled=true --set 'runner.actors.hosts={proxy.golang.org}' \
   --set "runner.actors.agentImage=registry.example.com/infrared-runner:v1-agent@sha256:0000000000000000000000000000000000000000000000000000000000000041" \
   >"$out/actors-hosts.yaml"
+# The WorkerPool agents elastic (runner.actors.maxWorkers, ADR 0089 slice 2).
+helm template infrared "$chart" -n infrared --set runner.actors.enabled=true --set runner.actors.minWorkers=1 \
+  --set runner.actors.maxWorkers=10 >"$out/actors-elastic.yaml"
 # A platform Product's production outside the install (operator.externalZones, ADR 0067 D6).
 helm template infrared "$chart" -n infrared --set operator.externalZones=true >"$out/external-zones.yaml"
 # A poor environment preview becomes a card drawn from the Product's assets (operator #74).
@@ -234,7 +237,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -243,7 +246,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -513,6 +516,15 @@ has actors-hosts.env "runner.actors with its own hosts and an agent image: both 
 check actors.yaml "runner.actors on: the operator's pod certificate from the pod identity signer" 'signerName: podidentity\.podcert\.ate\.dev/identity$' 1
 check actors.yaml "runner.actors on: the router's trust bundle from the servicedns signer" 'signerName: servicedns\.podcert\.ate\.dev/identity$' 1
 check actors.yaml "runner.actors on: both mounted at /run/substrate-router" 'mountPath: /run/substrate-router$' 1
+has actors-elastic.env "runner.actors elastic: its floor and ceiling handed on, and nothing of them when left out" \
+  'INFRARED_AGENT_ACTORS="{\"agentImage\":\"\",\"cpu\":\"\",\"dryRun\":false,\"enabled\":true,\"hosts\":[\"proxy.golang.org\",\"sum.golang.org\",\"registry.npmjs.org\",\"pypi.org\",\"files.pythonhosted.org\"],\"maxWorkers\":10,\"memory\":\"\",\"minWorkers\":1,\"workers\":4}"'
+for bad_pool in "--set runner.actors.minWorkers=2" "--set runner.actors.minWorkers=5 --set runner.actors.maxWorkers=4" \
+    "--set runner.actors.maxWorkers=65"; do
+  # shellcheck disable=SC2086 # the flags are meant to split
+  if helm template infrared "$chart" -n infrared --set runner.actors.enabled=true $bad_pool >/dev/null 2>&1; then
+    bad "runner.actors took $bad_pool"
+  else ok "runner.actors refuses $bad_pool"; fi
+done
 check defaults.env "runner.actors off: no INFRARED_AGENT_ACTORS" '^INFRARED_AGENT_ACTORS=' 0
 check defaults.yaml "runner.actors off: no pod certificate and no router volume" 'podcert\.ate\.dev|substrate-router' 0
 # Bedrock only when asked for: off, the operator gets nothing and every org stays on the
@@ -2349,7 +2361,7 @@ for set in supportChat.baseUrl=support.example.com supportChat.baseUrl=http://su
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

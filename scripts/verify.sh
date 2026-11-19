@@ -839,8 +839,18 @@ check code-index-adopted-old.yaml "a template that carries codeIndex alone rende
 # listener, only while the code index runs; without it the API's code endpoints
 # answer 501 (INFRARED_CODE_INDEX_URL=off).
 for f in code-index code-index-adopted; do
-  has "$f.env" "$f: steps reach the MCP server's in-cluster listener" 'INFRARED_MCP_URL="http://infrared-mcp.infrared.svc:8081/mcp"'
+  has "$f.env" "$f: steps reach the MCP server's in-cluster listener, by its full name (an actor's DNS takes no search suffix)" \
+    'INFRARED_MCP_URL="http://infrared-mcp.infrared.svc.cluster.local:8081/mcp"'
   has "$f.env" "$f: the runner's proxy holds the MCP access Secret's token" 'INFRARED_MCP_ACCESS_SECRET="infrared-mcp-access"'
+  # What the operator hands an agent step to dial inside the cluster is a full
+  # name: an Agent Substrate actor's DNS forwards only the exact names its egress
+  # policy holds, never one with a search suffix (ADR 0089). Only the platform's
+  # own pods use INFRARED_API_URL, INFRARED_UI_URL and INFRARED_METRICS_URL, which
+  # stay short (the zone gateway reads <service>.<namespace>.svc from the first).
+  short="$(grep -E '^INFRARED_[A-Z_]+="https?://[a-z0-9-]+\.[a-z0-9-]+\.svc[:/"]' "$out/$f.env" |
+    grep -vE '^INFRARED_(API|UI|METRICS)_URL=' || true)"
+  if [[ -z "$short" ]]; then ok "$f: no other short <service>.<namespace>.svc URL handed on, for steps to dial"
+  else bad "$f: a short <service>.<namespace>.svc URL a step may dial: $short"; fi
   check "$f.env" "$f: the API reaches the code index at its default address" '^INFRARED_CODE_INDEX_URL=' 0
   if [[ "$(objn "$f" Service infrared-mcp '^    - name: (http|code)$')" == 2 && "$(objn "$f" Service infrared-mcp '^      port: 8081$')" == 1 ]] &&
      [[ "$(objn "$f" Deployment infrared-mcp '^              containerPort: 8081$')" == 1 ]]; then

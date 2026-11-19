@@ -352,9 +352,12 @@ spec:
             {{- if .Values.codeIndex.enabled }}
             # Agent steps get Infrared's MCP server, the code tools among its
             # tools, at its in-cluster listener, with the access Secret's token
-            # behind the runner's proxy: only while the code index runs.
+            # behind the runner's proxy: only while the code index runs. A full
+            # name: an Agent Substrate actor's DNS answers only the exact names
+            # its egress policy holds, never a search suffix, so a short
+            # <service>.<namespace>.svc does not resolve there (ADR 0089).
             - name: INFRARED_MCP_URL
-              value: {{ printf "http://%s.%s.svc:8081/mcp" (include "infrared.componentName" (dict "root" . "component" "mcp")) .Release.Namespace | quote }}
+              value: {{ printf "http://%s.%s.svc.cluster.local:8081/mcp" (include "infrared.componentName" (dict "root" . "component" "mcp")) .Release.Namespace | quote }}
             - name: INFRARED_MCP_ACCESS_SECRET
               value: {{ include "infrared.mcpAccessSecret" . | quote }}
             {{- end }}

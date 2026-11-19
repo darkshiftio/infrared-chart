@@ -132,6 +132,22 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ate.dev
+  resources:
+  - workerpools
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ate.dev
+  resources:
+  - workerpools/scale
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - authentication.k8s.io
   resources:
   - selfsubjectreviews

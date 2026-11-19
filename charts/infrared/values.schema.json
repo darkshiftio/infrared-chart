@@ -1944,7 +1944,19 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 64,
-              "description": "The WorkerPool agents' warm workers, each sized for one step's actor."
+              "description": "The WorkerPool agents' warm workers, each sized for one step's actor; with the pool elastic, its size only until the operator first sets it."
+            },
+            "minWorkers": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64,
+              "description": "The elastic pool's floor: the operator never sets fewer workers. Needs maxWorkers, and no more than it."
+            },
+            "maxWorkers": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64,
+              "description": "Makes the WorkerPool agents elastic: the operator sets its replicas from the agent steps that hold or wait for an actor, never more than this. 0 or left out keeps workers fixed."
             },
             "cpu": {
               "type": "string",

@@ -140,11 +140,13 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.20: the stores' applier
-  # asks the SeaweedFS masters' raft leader, which alone answers their gRPC behind
-  # the masters' headless Service (#64, inert until stores.orgLayout.enabled), and
-  # the Substrate actor check before a credential enters an actor (#63, scripts
-  # only); v0.1.19 before it, the stores' applier copies the registry while Zot
+  # to install from a branch of the template. Here v0.1.21: the WorkerPool agents
+  # elastic with runner.actors.maxWorkers, its replicas left to the operator (#66,
+  # infrared-docs-internal ADR 0089 slice 2; a fixed pool renders as before), and
+  # the actor check's in-cluster probe (#65, scripts only); v0.1.20 before it, the
+  # stores' applier asks the SeaweedFS masters' raft leader, which alone answers
+  # their gRPC behind the masters' headless Service (#64), and the Substrate actor
+  # check before a credential enters an actor (#63, scripts only); v0.1.19 before it, the stores' applier copies the registry while Zot
   # serves (#61), and the router checks take curl's exit 55 as a refusal (#62,
   # scripts only); v0.1.18 before it, the WorkerPool agents, where an org's agent
   # steps run as Agent Substrate actors with runner.actors on (#60,
@@ -158,7 +160,7 @@ gitops:
   # held or pinned to a later tag; otherwise it keeps its spec.template.version
   # until that is patched. A tag, never a commit, so the API can tell a later pin
   # from an older one.
-  templateVersion: v0.1.20
+  templateVersion: v0.1.21
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
@@ -850,8 +852,17 @@ runner:
     # runs as before, and an org placed on actors runs its steps as Jobs. The API's rollout flag agentActors lets
     # an org admin choose the placement.
     enabled: false
-    # -- The WorkerPool agents' warm workers, each sized for one step's actor (the gitops template).
+    # -- The WorkerPool agents' warm workers, each sized for one step's actor (the gitops template). With the pool
+    # elastic, only its size until the operator first sets it, kept between minWorkers and maxWorkers.
     workers: 4
+    # The WorkerPool agents elastic (ADR 0089, slice 2), off unless set, so INFRARED_AGENT_ACTORS keeps its bytes:
+    # with maxWorkers (1 to 64) the operator sets the pool's replicas from the agent steps that hold or wait for an
+    # actor, never under minWorkers (0 to maxWorkers; 0 left out) or over maxWorkers, and the gitops template, from
+    # v0.1.21, leaves the replicas to it, so the nodes come and go with the steps, down to none. A burst waits for the
+    # pool to grow rather than running as Jobs. Turning it on restarts the pool's workers once: do it while no step
+    # runs.
+    # minWorkers: 0
+    # maxWorkers: 10
     # -- Each step actor's limits; empty: 2 CPUs and 8Gi, a Job's runner and agent containers' together.
     cpu: ""
     memory: ""

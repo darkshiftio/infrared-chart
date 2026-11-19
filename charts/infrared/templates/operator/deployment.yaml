@@ -437,8 +437,17 @@ spec:
             # (runner.actors, infrared-docs-internal ADR 0089). An actor reaches
             # only its hosts: runner.actors.hosts, or else the module proxies of
             # runner.networkPolicy.egressByName.hosts. Without agentImage the
-            # operator writes the agent's image beside the runner's itself.
+            # operator writes the agent's image beside the runner's itself. With
+            # maxWorkers it sizes the WorkerPool agents from the steps.
             {{- $actors := deepCopy .Values.runner.actors }}
+            {{- $maxWorkers := int ($actors.maxWorkers | default 0) }}
+            {{- $minWorkers := int ($actors.minWorkers | default 0) }}
+            {{- if and (gt $minWorkers 0) (eq $maxWorkers 0) }}
+            {{- fail "runner.actors.minWorkers needs runner.actors.maxWorkers: an elastic pool's floor needs its ceiling" }}
+            {{- end }}
+            {{- if gt $minWorkers $maxWorkers }}
+            {{- fail "runner.actors.minWorkers is above runner.actors.maxWorkers" }}
+            {{- end }}
             {{- if not $actors.hosts }}
             {{- $_ := set $actors "hosts" (.Values.runner.networkPolicy.egressByName.hosts | default list) }}
             {{- end }}

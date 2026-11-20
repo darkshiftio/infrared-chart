@@ -140,7 +140,9 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.25: cert-manager v1.21.3 and
+  # to install from a branch of the template. Here v0.1.26: the builder's Paketo go
+  # 4.23.5 (Go 1.27.4), nodejs 10.17.0 and Noble 0.0.162 (#71; workspace TODO 742);
+  # v0.1.25 before it, cert-manager v1.21.3 and
   # Envoy Gateway v1.9.4 (#70; workspace TODO 742); v0.1.24 before it, Argo CD v3.5.8, past
   # four critical advisories fixed in 3.5.4 (#69; workspace TODO 742); v0.1.23 before
   # it, infrared-builder's
@@ -168,7 +170,7 @@ gitops:
   # held or pinned to a later tag; otherwise it keeps its spec.template.version
   # until that is patched. A tag, never a commit, so the API can tell a later pin
   # from an older one.
-  templateVersion: v0.1.25
+  templateVersion: v0.1.26
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

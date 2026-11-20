@@ -140,7 +140,8 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.24: Argo CD v3.5.8, past
+  # to install from a branch of the template. Here v0.1.25: cert-manager v1.21.3 and
+  # Envoy Gateway v1.9.4 (#70; workspace TODO 742); v0.1.24 before it, Argo CD v3.5.8, past
   # four critical advisories fixed in 3.5.4 (#69; workspace TODO 742); v0.1.23 before
   # it, infrared-builder's
   # ClusterStore on Paketo web-servers 4.16.3, whose nginx is 1.31.9, the fix for
@@ -167,7 +168,7 @@ gitops:
   # held or pinned to a later tag; otherwise it keeps its spec.template.version
   # until that is patched. A tag, never a commit, so the API can tell a later pin
   # from an older one.
-  templateVersion: v0.1.24
+  templateVersion: v0.1.25
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
@@ -905,10 +906,10 @@ runner:
   # -- Image an init container copies a Go toolchain and make from, so agents can build
   # and test Go repos: a Go patch release, pinned by digest. Steps build with
   # GOTOOLCHAIN=local, so a repo whose go.mod asks for a newer Go fails to build.
-  goToolchainImage: "golang:1.26.10@sha256:24a707af49702fa44f02785475d02fb752f6982d3e9c0afb7696e1f0204e7ce9"
+  goToolchainImage: "golang:1.26.11@sha256:4165ee6bf3b7811fd7b40373290405c83d0167dcb87ee5f29c427cdcef45ff8f"
   # -- Image an init container copies helm from, so agents can lint and
   # template a Product's chart. Pinned by digest.
-  helmImage: "alpine/helm:3.19.0@sha256:aef9b56f64e866207d9591d0abd8f6d767b36aadd12edf68f8a719716d9d29c9"
+  helmImage: "alpine/helm:3.22.1@sha256:8191701ad1f82ee3695c87211fcbfe6d7b1bb7df92ac1c8de9ccdb0995a6a2c1"
   # -- Image an init container copies golangci-lint from, onto the agents' PATH, so they
   # can lint Go repos: a v2 release built with a Go at least as new as goToolchainImage's.
   # Pinned by digest.

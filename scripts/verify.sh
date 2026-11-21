@@ -221,6 +221,9 @@ helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=fals
 helm template infrared "$chart" -n infrared --set operator.supportDesk=true >"$out/support-desk.yaml"
 # The operator researches support conversations only when asked, beside its desks (operator.supportResearch, TODO 680).
 helm template infrared "$chart" -n infrared --set operator.supportDesk=true,operator.supportResearch=true >"$out/support-research.yaml"
+# The operator asks research for a typed plan only when asked, beside its research (operator.supportFixes, TODO 750).
+helm template infrared "$chart" -n infrared --set operator.supportDesk=true,operator.supportResearch=true,operator.supportFixes=true \
+  >"$out/support-fixes.yaml"
 # The size of the install's own metrics store, which the operator hands the
 # gitops template (operator.metricsStorage, ADR 0075, lane H).
 helm template infrared "$chart" -n infrared --set operator.metricsStorage=40Gi >"$out/metrics-storage.yaml"
@@ -251,7 +254,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -456,6 +459,32 @@ has tunnel-own-key.env "a credentials key of the install's own reaches the opera
   'INFRARED_TUNNEL="{\"credentialsKey\":\"tunnel-saas2\",\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
 check defaults.yaml "the Installation CRD has spec.tunnel" '^              tunnel:$' 1
 check defaults.yaml "...whose credentialsKey defaults to cloudflare-tunnel-credentials" '^                    default: cloudflare-tunnel-credentials$' 1
+# A tunnel beside the nodes' own ports and Infrared's name kept off the edge
+# (infrared-docs-internal ADR 0090): installation.tunnel.mode and .publish, and
+# installation.previews.signInPrivate, reach the operator in INFRARED_TUNNEL
+# and INFRARED_PREVIEWS as set, and the CRD keeps them (synced from an operator
+# that has them), its rule refusing publish without beside. Unset, nothing
+# changes: the checks above render without them. The refusals are below.
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.mode=beside --set installation.tunnel.publish=true \
+  --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-beside.yaml"
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.mode=only --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-only.yaml"
+helm template infrared "$chart" -n infrared --set installation.edge=gateway \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
+  --set installation.previews.signInPrivate=true >"$out/sign-in-private.yaml"
+envs tunnel-beside
+envs tunnel-only
+envs sign-in-private
+has tunnel-beside.env "a tunnel beside the nodes' ports, publishing, reaches the operator with its id" \
+  'INFRARED_TUNNEL="{\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\",\"mode\":\"beside\",\"publish\":true}"'
+has tunnel-only.env "mode only reaches the operator as set" \
+  'INFRARED_TUNNEL="{\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\",\"mode\":\"only\"}"'
+has sign-in-private.env "the private sign-in reaches the operator in its previews" \
+  'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"signInPrivate\":true,\"signInURL\":\"https://infrared.example.com\"}"'
+check defaults.yaml "the Installation CRD has spec.tunnel.mode" 'Mode is how the tunnel stands beside the nodes' 1
+check defaults.yaml "...whose rule takes publish with mode beside alone" 'publish takes mode beside' 1
+check defaults.yaml "...and spec.previews.signInPrivate" '^                  signInPrivate:$' 1
 check install.yaml "no cloudflare-tunnel-credentials without platformTokens.cloudflareTunnelCredentials" '^  cloudflare-tunnel-credentials: ' 0
 check tunnel-credentials.yaml "the tunnel's credentials alone render infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check tunnel-credentials.yaml "...with no other key" '^  (cloudflare-api-token|cloudflare-domain-api-token|backup-access-key-id|backup-secret-access-key): ' 0
@@ -474,7 +503,7 @@ if helm template infrared "$chart" -n infrared -f "$chart/ci/previews-values.yam
   ok "a values file setting every documented field of installation.previews renders"
   envs previews
   has previews.env "every field of installation.previews reaches the operator, as JSON" \
-    'INFRARED_PREVIEWS="{\"acmeEmail\":\"alerts@example.com\",\"cloudflareTokenKey\":\"cloudflare-api-token\",\"cloudflareTokenSecret\":\"infrared-platform-tokens\",\"customHostnames\":true,\"domain\":\"tenants.example.net\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"ingressHost\":\"edge.tenants.example.net\",\"ingressIP\":\"203.0.113.7\",\"managedRoots\":[\"example.com\"],\"signInURL\":\"https://infrared.example.com\"}"'
+    'INFRARED_PREVIEWS="{\"acmeEmail\":\"alerts@example.com\",\"cloudflareTokenKey\":\"cloudflare-api-token\",\"cloudflareTokenSecret\":\"infrared-platform-tokens\",\"customHostnames\":true,\"domain\":\"tenants.example.net\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"ingressHost\":\"edge.tenants.example.net\",\"ingressIP\":\"203.0.113.7\",\"managedRoots\":[\"example.com\"],\"signInPrivate\":true,\"signInURL\":\"https://infrared.example.com\"}"'
 else
   cat "$out/previews.err"; bad "a values file setting every documented field of installation.previews renders"
 fi
@@ -621,6 +650,10 @@ check defaults.env "the operator researches no support conversation by default" 
 check support-desk.env "the desks alone research nothing" '^INFRARED_SUPPORT_RESEARCH=' 0
 has support-research.env "the operator researches support conversations when asked" 'INFRARED_SUPPORT_RESEARCH="true"'
 has support-research.env "research keeps the desks it posts in" 'INFRARED_SUPPORT_DESK="true"'
+check defaults.env "the operator asks research for no plan by default" '^INFRARED_SUPPORT_FIXES=' 0
+check support-research.env "research alone asks for no plan" '^INFRARED_SUPPORT_FIXES=' 0
+has support-fixes.env "the operator asks research for a typed plan when asked" 'INFRARED_SUPPORT_FIXES="true"'
+has support-fixes.env "the plan keeps the research it rides on" 'INFRARED_SUPPORT_RESEARCH="true"'
 check defaults.env "the metrics store keeps the template's own size by default" '^INFRARED_METRICS_STORAGE=' 0
 has metrics-storage.env "the metrics store's size reaches the operator" 'INFRARED_METRICS_STORAGE="40Gi"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the
@@ -741,6 +774,12 @@ else bad "api.flags changes the API's Deployment, so a changed flag would roll t
 if obj defaults ClusterRole infrared-api | grep -A1 -xF '    resources: ["configmaps"]' | grep -q '"get"'; then
   ok "the API's ClusterRole gets ConfigMaps: it reads infrared-flags by name"
 else bad "the API's ClusterRole does not get ConfigMaps, so it cannot read infrared-flags"; fi
+# An environment's detail with the API's rollout flag zoneDiagnostics (workspace
+# TODO 750): its namespace's ResourceQuotas, read and never written.
+if [[ "$(obj defaults ClusterRole infrared-api | grep -A1 -E '^    resources: \[.*"resourcequotas".*\]$' | grep -c -xF '    verbs: ["get", "list"]')" == 1 ]] \
+    && ! obj defaults ClusterRole infrared-api | grep -A1 -E '"resourcequotas"' | grep -qE '"(create|update|patch|delete|watch)"'; then
+  ok "the API's ClusterRole gets and lists ResourceQuotas, and writes none: an environment's quotas"
+else bad "the API's ClusterRole does not get and list ResourceQuotas alone, so an environment's detail leaves its quotas out"; fi
 if [[ "$(objn gitea Deployment gitea '^ +name: infrared-gitea-admin$')" == 2 ]]; then
   ok "Gitea's admin username and password come from infrared-gitea-admin"
 else bad "Gitea does not read its admin from infrared-gitea-admin"; fi
@@ -1260,6 +1299,8 @@ refuse "license.key with license.existingSecret fails" "license.key and license.
 refuse "a license.key that is not a licence fails" "license.key is not an Infrared licence" --set license.key=not-a-licence
 refuse "operator.supportResearch without operator.supportDesk fails" "operator.supportResearch needs operator.supportDesk" \
   --set operator.supportResearch=true
+refuse "operator.supportFixes without operator.supportResearch fails" "operator.supportFixes needs operator.supportResearch" \
+  --set operator.supportDesk=true,operator.supportFixes=true
 
 ext='ui.extensions[0].id=back-office,ui.extensions[0].title=Back Office,ui.extensions[0].upstream=back-office.back-office.svc.cluster.local:8080'
 refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"
@@ -1334,6 +1375,17 @@ refuse "a tunnel's credentialsKey that is no Secret's key fails" "at '/installat
   --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.credentialsKey=tokens/tunnel
 refuse "a tunnel's credentialsKey no Secret takes fails" "at '/installation/tunnel/credentialsKey'" \
   --set installation.tunnel.id="$tunnel_id" --set-string installation.tunnel.credentialsKey=..
+# Beside the nodes' own ports (ADR 0090): a mode of only, beside or empty, and
+# publish with beside alone; the private sign-in a bool.
+refuse "a tunnel mode of neither only nor beside fails" "at '/installation/tunnel/mode'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.mode=both
+refuse "publish without a tunnel mode fails" "at '/installation/tunnel': missing property 'mode'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.publish=true
+refuse "publish with mode only fails" "at '/installation/tunnel/mode': value must be 'beside'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.mode=only --set installation.tunnel.publish=true
+refuse "a private sign-in that is no bool fails" "at '/installation/previews/signInPrivate'" \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
+  --set-string installation.previews.signInPrivate=yes
 printf 'ci-not-json\n' >"$out/ci-tunnel-not-json"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret="}\n' >"$out/ci-tunnel-no-id"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"0b2a7a51-1c39-4d4e-9b0e-2f6a31e4c7d8"}\n' \

@@ -147,6 +147,10 @@
                 "pattern": "^[.]([.]|$)"
               },
               "description": "The key of infrared-platform-tokens that holds a Cloudflare token for domain's zone alone, when it is not the sign-in URL host's zone (infrared-docs-internal ADR 0063): cloudflare-domain-api-token, from platformTokens.cloudflareDomainApiToken. A Gateway edge then takes the certificate and DNS records of *.<domain> with it. A Secret's key: letters, digits, '-', '_' and '.', neither . nor starting with ..; empty: cloudflare-api-token serves both names."
+            },
+            "signInPrivate": {
+              "type": "boolean",
+              "description": "Keep Infrared's own name, signInURL's host, off a Gateway edge (infrared-docs-internal ADR 0090): no listener, route, cloudflared route or certificate name for it, so nothing publishes it, and the install's own private ingress serves it; signInURL stays the issuer and the preview sign-in's address. Off by default."
             }
           },
           "anyOf": [
@@ -179,6 +183,19 @@
                 "pattern": "^[.]([.]|$)"
               },
               "description": "The key of infrared-platform-tokens that holds the tunnel's credentials file. A Secret's key: letters, digits, '-', '_' and '.', neither . nor starting with ..; empty: cloudflare-tunnel-credentials, which platformTokens.cloudflareTunnelCredentials writes."
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "",
+                "only",
+                "beside"
+              ],
+              "description": "only, the tunnel alone (ADR 0064), or beside: cloudflared beside an edge that stays on the nodes' own ports with Cloudflare's Origin CA and external-dns, so each name moves onto the tunnel by its record (infrared-docs-internal ADR 0090); empty means only."
+            },
+            "publish": {
+              "type": "boolean",
+              "description": "With mode beside, external-dns publishes the edge's names as proxied CNAMEs to <id>.cfargotunnel.com instead of the nodes' addresses. Off by default; it takes mode beside."
             }
           },
           "anyOf": [
@@ -190,7 +207,27 @@
                 "id"
               ]
             }
-          ]
+          ],
+          "if": {
+            "properties": {
+              "publish": {
+                "const": true
+              }
+            },
+            "required": [
+              "publish"
+            ]
+          },
+          "then": {
+            "properties": {
+              "mode": {
+                "const": "beside"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          }
         },
         "telemetry": {
           "type": "object",
@@ -532,6 +569,10 @@
         "supportResearch": {
           "type": "boolean",
           "description": "Research support conversations for the people who answer them: a hand-off starts a run of the support-research workflow, and the operator posts its findings and a suggested reply in the desk as a private note, and sets the Installation's condition SupportResearch (INFRARED_SUPPORT_RESEARCH, workspace TODO 680). Needs operator.supportDesk, and the API's rollout flag supportResearch for a customer's later messages. Off by default: a research run fails before its step and nothing is posted."
+        },
+        "supportFixes": {
+          "type": "boolean",
+          "description": "Ask each support research step for a typed plan beside its findings (INFRARED_SUPPORT_FIXES, workspace TODO 750): api, platform, reply and issue actions, each with why, its read, its undo and whether the customer could do it, which the operator lists in the research note under Plan:. Nothing applies them. Needs operator.supportResearch. Off by default: no plan is asked for."
         },
         "metricsStorage": {
           "type": "string",

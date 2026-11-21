@@ -1080,6 +1080,15 @@ operator:
   # it. Off, a research run fails before its step and nothing is posted. Until the operator reads
   # rollout flags (ADR 0061 decision 9).
   supportResearch: false
+  # -- Ask each support research step for a typed plan beside its findings
+  # (INFRARED_SUPPORT_FIXES, operator; workspace TODO 750, infrared-docs-internal ADR 0092): the
+  # actions that would fix what it found, each api (an operation on the API's list, with what it
+  # acts on), platform, reply or issue, with why, its read, its undo and whether the customer could
+  # do it, which the operator lists under "Plan:" in the research note and Support shows behind
+  # SUPPORT_FIXES. Nothing applies them. Needs operator.supportResearch: the render fails without
+  # it. Off, no plan is asked for and the note is as before. Until the operator reads rollout flags
+  # (ADR 0061 decision 9).
+  supportFixes: false
   # -- The size of the install's own metrics store (INFRARED_METRICS_STORAGE, operator;
   # infrared-docs-internal ADR 0075, lane H): the gitops template gives it to VMSingle's claim
   # (victoria-metrics-k8s-stack), or on k3s with the stores to the emptyDir VMSingle's data is on.

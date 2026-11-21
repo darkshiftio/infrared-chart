@@ -480,6 +480,30 @@ has sign-in-private.env "the private sign-in reaches the operator in its preview
 check defaults.yaml "the Installation CRD has spec.tunnel.mode" 'Mode is how the tunnel stands beside the nodes' 1
 check defaults.yaml "...whose rule takes publish with mode beside alone" 'publish takes mode beside' 1
 check defaults.yaml "...and spec.previews.signInPrivate" '^                  signInPrivate:$' 1
+# The tunnel's hostnames (ADR 0090, workspace TODO 745): the other names a
+# record sends to the tunnel, which cloudflared routes one by one, reach the
+# operator in INFRARED_TUNNEL as set, beside or behind the tunnel alone, and
+# the CRD keeps them as a set of lower-case DNS names, at most 100. Unset,
+# nothing changes: the renders above have none. The refusals are below.
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.mode=beside --set 'installation.tunnel.hostnames={support.darkshift.io,hooks.darkshift.io}' \
+  --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-hostnames.yaml"
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set 'installation.tunnel.hostnames={hive.football}' --set platformTokens.existingSecret=infrared-platform-tokens \
+  >"$out/tunnel-hostnames-alone.yaml"
+envs tunnel-hostnames
+envs tunnel-hostnames-alone
+has tunnel-hostnames.env "a tunnel's hostnames reach the operator beside the nodes' ports, as listed" \
+  'INFRARED_TUNNEL="{\"hostnames\":[\"support.darkshift.io\",\"hooks.darkshift.io\"],\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\",\"mode\":\"beside\"}"'
+has tunnel-hostnames-alone.env "...and behind the tunnel alone" \
+  'INFRARED_TUNNEL="{\"hostnames\":[\"hive.football\"],\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
+check defaults.yaml "the Installation CRD has spec.tunnel.hostnames" '^                  hostnames:$' 1
+hosts_schema="$(yq -N -o json -I0 'select(.kind == "CustomResourceDefinition" and .metadata.name == "installations.infrared.darkshift.io")
+  | .spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.tunnel.properties.hostnames
+  | {"listType": .["x-kubernetes-list-type"], "maxItems": .maxItems, "items": .items}' "$out/defaults.yaml")"
+if [[ "$hosts_schema" == '{"listType":"set","maxItems":100,"items":{"maxLength":253,"pattern":"^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\\.)+[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$","type":"string"}}' ]]; then
+  ok "...a set of at most 100 lower-case DNS names with no wildcard"
+else bad "...spec.tunnel.hostnames is $hosts_schema"; fi
 check install.yaml "no cloudflare-tunnel-credentials without platformTokens.cloudflareTunnelCredentials" '^  cloudflare-tunnel-credentials: ' 0
 check tunnel-credentials.yaml "the tunnel's credentials alone render infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check tunnel-credentials.yaml "...with no other key" '^  (cloudflare-api-token|cloudflare-domain-api-token|backup-access-key-id|backup-secret-access-key): ' 0
@@ -1371,6 +1395,20 @@ refuse "publish with mode only fails" "at '/installation/tunnel/mode': value mus
 refuse "a private sign-in that is no bool fails" "at '/installation/previews/signInPrivate'" \
   --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
   --set-string installation.previews.signInPrivate=yes
+# The tunnel's hostnames (ADR 0090): lower-case DNS names with no wildcard,
+# each once, at most 100, as the CRD takes them.
+refuse "a tunnel hostname in capitals fails" "at '/installation/tunnel/hostnames/0'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={Support.darkshift.io}'
+refuse "a wildcard tunnel hostname fails" "at '/installation/tunnel/hostnames/0'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={*.darkshift.io}'
+refuse "a tunnel hostname of one label fails" "at '/installation/tunnel/hostnames/0'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={localhost}'
+refuse "a tunnel hostname listed twice fails" "at '/installation/tunnel/hostnames'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={hooks.darkshift.io,hooks.darkshift.io}'
+refuse "more than 100 tunnel hostnames fail" "at '/installation/tunnel/hostnames'" \
+  --set installation.tunnel.id="$tunnel_id" --set "installation.tunnel.hostnames={$(printf 'h%d.example.com,' $(seq 1 100))h101.example.com}"
+refuse "tunnel hostnames that are no list fail" "at '/installation/tunnel/hostnames'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.hostnames=hooks.darkshift.io
 printf 'ci-not-json\n' >"$out/ci-tunnel-not-json"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret="}\n' >"$out/ci-tunnel-no-id"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"0b2a7a51-1c39-4d4e-9b0e-2f6a31e4c7d8"}\n' \

@@ -794,10 +794,20 @@ observability:
 # turns its telemetry on, behind the rollout flag installTelemetry.
 telemetry:
   # -- The plane's address, https, no path (INFRARED_TELEMETRY_PLANE, api; a trailing
-  # slash trimmed): the home, infrared-cp-google, until groundcover's central ingestion
-  # takes over, when this value moves and no install changes. Overridable per install;
-  # empty: the API registers nowhere.
-  plane: "https://infrared.internal.darkshift.io"
+  # slash trimmed): the home, infrared-cp-google, at the name of its own that answers the
+  # telemetry paths alone (workspace TODO 745), until groundcover's central ingestion
+  # takes over, when this value moves and no install changes. While the plane is this
+  # address, the API moves a write path its Installation names at the home's old public
+  # name, infrared.internal.darkshift.io, to the same path here at start; the token stays
+  # valid. Overridable per install; empty: the API's own default, the same address.
+  plane: "https://telemetry.darkshift.io"
+  # -- On a plane of record, its public write address, https, no path
+  # (INFRARED_TELEMETRY_PUBLIC_URL, api; a trailing slash trimmed; rendered only when
+  # set): the base of every write path it hands out, to installs that register with it
+  # and to stacks it vouches for, so a stack connected over a private name still writes
+  # to one it can reach. The home sets https://telemetry.darkshift.io. Empty: the
+  # address each request came to.
+  publicURL: ""
 
 # The chat with the install's support desk (workspace TODO 668): infrared-api's
 # get-support-chat hands a signed-in person what the desk's website widget,
@@ -1150,6 +1160,15 @@ api:
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+  # -- Where callers outside the install reach its API, https, no path
+  # (INFRARED_CALLERS_URL; a trailing slash trimmed; rendered only when set): the
+  # base of the request URLs in the Slack app's manifest (Event Subscriptions and
+  # Interactivity) and of a new GitHub App's webhook URL, so an install people reach
+  # on a private name still gives GitHub and Slack an address they can call, such as
+  # https://hooks.darkshift.io for the home (workspace TODO 745). A person's way back
+  # (OAuth redirects, sign-in callbacks) stays on the address they came to. Empty: the
+  # address each request came to.
+  callersURL: ""
   # -- The header that carries a caller's address (INFRARED_CLIENT_ADDRESS_HEADER),
   # which the password sign-in's limits count failures by: for example
   # CF-Connecting-IP, where every request from outside comes through Cloudflare.

@@ -752,6 +752,12 @@ else bad "api.flags changes the API's Deployment, so a changed flag would roll t
 if obj defaults ClusterRole infrared-api | grep -A1 -xF '    resources: ["configmaps"]' | grep -q '"get"'; then
   ok "the API's ClusterRole gets ConfigMaps: it reads infrared-flags by name"
 else bad "the API's ClusterRole does not get ConfigMaps, so it cannot read infrared-flags"; fi
+# An environment's detail with the API's rollout flag zoneDiagnostics (workspace
+# TODO 750): its namespace's ResourceQuotas, read and never written.
+if [[ "$(obj defaults ClusterRole infrared-api | grep -A1 -E '^    resources: \[.*"resourcequotas".*\]$' | grep -c -xF '    verbs: ["get", "list"]')" == 1 ]] \
+    && ! obj defaults ClusterRole infrared-api | grep -A1 -E '"resourcequotas"' | grep -qE '"(create|update|patch|delete|watch)"'; then
+  ok "the API's ClusterRole gets and lists ResourceQuotas, and writes none: an environment's quotas"
+else bad "the API's ClusterRole does not get and list ResourceQuotas alone, so an environment's detail leaves its quotas out"; fi
 if [[ "$(objn gitea Deployment gitea '^ +name: infrared-gitea-admin$')" == 2 ]]; then
   ok "Gitea's admin username and password come from infrared-gitea-admin"
 else bad "Gitea does not read its admin from infrared-gitea-admin"; fi

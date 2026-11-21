@@ -53,9 +53,11 @@ rules:
   - apiGroups: ["postgresql.cnpg.io"]
     resources: ["clusters", "backups"]
     verbs: ["get", "list"]
-  # Environment detail: each zone's persistent volume claims and recent events.
+  # Environment detail: each zone's persistent volume claims and recent events,
+  # and, with the API's rollout flag zoneDiagnostics (workspace TODO 750), the
+  # ResourceQuotas of its namespace, used against hard. Read-only.
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims", "events"]
+    resources: ["persistentvolumeclaims", "events", "resourcequotas"]
     verbs: ["get", "list"]
   # Storage policies (infrared-docs-internal ADR 0087 D9): each write a platform
   # admin makes records an Event on the Installation or the Organization, a core

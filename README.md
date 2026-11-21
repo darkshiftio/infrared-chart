@@ -418,6 +418,39 @@ a `TunnelID`, or whose `TunnelID` is not `installation.tunnel.id`, without
 printing it. A `credentialsKey` other than the default names a key the chart
 does not write, so it goes with `platformTokens.existingSecret`.
 
+An install that serves zones' own addresses or custom hostnames, which the
+tunnel alone does not serve yet, runs its tunnel beside the edge on the nodes'
+own ports instead (infrared-docs-internal ADR 0090): with `mode: beside` the
+gitops template keeps the edge as it is without a tunnel (host ports,
+Cloudflare's Origin CA, external-dns) and adds cloudflared, so a name reaches
+Envoy through the tunnel once its record is a proxied CNAME to
+`<id>.cfargotunnel.com`, and through the nodes' ports until then. `publish:
+true` then has external-dns write the edge's own names as CNAMEs to the tunnel.
+`installation.previews.signInPrivate: true` keeps Infrared's own name off the
+edge altogether, for an install whose people reach it through a private
+ingress, such as a VPN's proxy; the sign-in URL stays the issuer and the
+preview sign-in's address:
+
+```yaml
+installation:
+  edge: gateway
+  previews:
+    domain: google.internal.darkshift.io
+    signInURL: https://infrared.infrared-cp-google.private.darkshift.io
+    signInPrivate: true                         # no listener, route or record for the name on the edge
+  tunnel:
+    id: 6ff42ae2-765d-4adf-8112-31c55c1551ef
+    mode: beside                                # the edge stays on the nodes' own ports
+    publish: true                               # external-dns points the edge's names at the tunnel
+```
+
+Like the rest of `installation`, these are written to the Installation only
+while its field is empty: on an install whose `spec.tunnel` or `spec.previews`
+is already set, changing them here changes nothing, and a person patches the
+Installation's field instead (the operator hydrates the gitops repo again on
+the change). None of them is a rollout flag: each is install configuration,
+off by default (ADR 0061).
+
 ## The stores, the backup bucket and the components left out
 
 Three settings the operator hands to the gitops template, which installs what
@@ -895,8 +928,8 @@ only after the pin to a chart with `api.flags` is Synced.
 | `oidc.grafanaURL` | `""` | Grafana's address in a browser, `https://` (plain `http://` only for localhost), such as `https://grafana.example.com` (`INFRARED_OIDC_GRAFANA_URL`, api and operator, a trailing slash trimmed). Grafana's redirect URI is `<grafanaURL>/login/generic_oauth`; empty: no Grafana client |
 | `oidc.mcpURL` | `""` | Where MCP clients on people's machines (Claude Code, `ir` for localred) reach the code index's tools, signed in through Infrared: the UI's address followed by `/mcp/code`, such as `https://infrared.example.com/mcp/code`, `https://` (plain `http://` only for localhost), a trailing slash trimmed. Set, the API has the public client `mcp` (`INFRARED_OIDC_MCP_URL`); with `oidc.enabled`, infrared-mcp serves the code tools and `knowledge_sources` there, for the platform org alone, to the provider's access tokens for this address (`INFRARED_MCP_CODE_URL`). Empty: the code tools stay inside the cluster |
 | `installation.edge` | `""` | `traefik` or `gateway`; empty means traefik. The operator writes it to the Installation's `spec.edge` while that is empty (`INFRARED_EDGE`). See "The Installation's edge and previews" |
-| `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret` and `cloudflareTokenKey` (the managed roots' token; empty key is `api-token`), `customHostnames` and `acmeEmail` (a Gateway edge serves addresses under orgs' own domains as Cloudflare for SaaS custom hostnames, with Let's Encrypt's contact), and `domainTokenKey`: the key of `infrared-platform-tokens` with a Cloudflare token for `domain`'s zone alone, `cloudflare-domain-api-token` (see "The Installation's edge and previews"). The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
-| `installation.tunnel` | `{}` | The Cloudflare Tunnel a Gateway edge is reached through (infrared-docs-internal ADR 0064): `id`, its UUID in lower case (required when set), and `credentialsKey`, the key of `infrared-platform-tokens` with its credentials file, empty for `cloudflare-tunnel-credentials`. The operator writes it to the Installation's `spec.tunnel` while that is empty (`INFRARED_TUNNEL`, JSON). Empty: the edge on the nodes' own ports. See "The Installation's edge and previews" |
+| `installation.previews` | `{}` | `domain` and `signInURL` (both required when set), optional `ingressHost`, `ingressIP`, `managedRoots`, `cloudflareTokenSecret` and `cloudflareTokenKey` (the managed roots' token; empty key is `api-token`), `customHostnames` and `acmeEmail` (a Gateway edge serves addresses under orgs' own domains as Cloudflare for SaaS custom hostnames, with Let's Encrypt's contact), and `domainTokenKey`: the key of `infrared-platform-tokens` with a Cloudflare token for `domain`'s zone alone, `cloudflare-domain-api-token`, and `signInPrivate` (off by default): Infrared's own name kept off a Gateway edge, served by the install's own private ingress (infrared-docs-internal ADR 0090; see "The Installation's edge and previews"). The operator writes it to the Installation's `spec.previews` while that is empty (`INFRARED_PREVIEWS`, JSON) |
+| `installation.tunnel` | `{}` | The Cloudflare Tunnel a Gateway edge is reached through (infrared-docs-internal ADR 0064): `id`, its UUID in lower case (required when set), `credentialsKey`, the key of `infrared-platform-tokens` with its credentials file, empty for `cloudflare-tunnel-credentials`, `mode`, `only` (the default, the tunnel alone) or `beside` (cloudflared beside the edge on the nodes' own ports, ADR 0090), and `publish` (with `beside` alone, off by default: external-dns points the edge's names at the tunnel). The operator writes it to the Installation's `spec.tunnel` while that is empty (`INFRARED_TUNNEL`, JSON). Empty: the edge on the nodes' own ports. See "The Installation's edge and previews" |
 | `installation.telemetry` | `{url: "", platform: ""}` | A seed for the Installation's `spec.observability.telemetry` (infrared-docs-internal ADR 0044; ADR 0069 T5): the telemetry plane this install writes its numbers to and the platform label its series carry. The Installation is the source of truth, written by `ir install`'s registration (`install-<id>`), `ir local telemetry connect` (`<login>-<stack>`), `ir telemetry connect` and Settings, Telemetry, with the token in the Secret `monitoring/telemetry-token`; the operator copies these values in (`INFRARED_TELEMETRY_URL`, `INFRARED_TELEMETRY_PLATFORM`) only while that field is empty. The gitops template then renders the write: the metrics stack's own vmagent with the stack on, the telemetry component without it. Empty, and nothing connected: no write |
 | `cloud` | `""` | The control plane's cloud, `gcp` or `aws` (empty is `gcp`): the default image registry and chart repository, Artifact Registry or ECR (ADR 0033) |
 | `gitops.chartRepository` | `""` | This chart's OCI repository; empty for the cloud's (Artifact Registry's `.../infrared/charts`, or ECR's `<ecr>/charts` with `cloud: aws`), no `oci://` (`INFRARED_CHART_REPO`): the gitops repo's `infrared` Application pulls the chart from it, and the operator registers it with Argo CD with the pull secret's credential for its registry |

@@ -451,6 +451,32 @@ has tunnel-own-key.env "a credentials key of the install's own reaches the opera
   'INFRARED_TUNNEL="{\"credentialsKey\":\"tunnel-saas2\",\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
 check defaults.yaml "the Installation CRD has spec.tunnel" '^              tunnel:$' 1
 check defaults.yaml "...whose credentialsKey defaults to cloudflare-tunnel-credentials" '^                    default: cloudflare-tunnel-credentials$' 1
+# A tunnel beside the nodes' own ports and Infrared's name kept off the edge
+# (infrared-docs-internal ADR 0090): installation.tunnel.mode and .publish, and
+# installation.previews.signInPrivate, reach the operator in INFRARED_TUNNEL
+# and INFRARED_PREVIEWS as set, and the CRD keeps them (synced from an operator
+# that has them), its rule refusing publish without beside. Unset, nothing
+# changes: the checks above render without them. The refusals are below.
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.mode=beside --set installation.tunnel.publish=true \
+  --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-beside.yaml"
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.mode=only --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-only.yaml"
+helm template infrared "$chart" -n infrared --set installation.edge=gateway \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
+  --set installation.previews.signInPrivate=true >"$out/sign-in-private.yaml"
+envs tunnel-beside
+envs tunnel-only
+envs sign-in-private
+has tunnel-beside.env "a tunnel beside the nodes' ports, publishing, reaches the operator with its id" \
+  'INFRARED_TUNNEL="{\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\",\"mode\":\"beside\",\"publish\":true}"'
+has tunnel-only.env "mode only reaches the operator as set" \
+  'INFRARED_TUNNEL="{\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\",\"mode\":\"only\"}"'
+has sign-in-private.env "the private sign-in reaches the operator in its previews" \
+  'INFRARED_PREVIEWS="{\"domain\":\"preview.example.com\",\"signInPrivate\":true,\"signInURL\":\"https://infrared.example.com\"}"'
+check defaults.yaml "the Installation CRD has spec.tunnel.mode" 'Mode is how the tunnel stands beside the nodes' 1
+check defaults.yaml "...whose rule takes publish with mode beside alone" 'publish takes mode beside' 1
+check defaults.yaml "...and spec.previews.signInPrivate" '^                  signInPrivate:$' 1
 check install.yaml "no cloudflare-tunnel-credentials without platformTokens.cloudflareTunnelCredentials" '^  cloudflare-tunnel-credentials: ' 0
 check tunnel-credentials.yaml "the tunnel's credentials alone render infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check tunnel-credentials.yaml "...with no other key" '^  (cloudflare-api-token|cloudflare-domain-api-token|backup-access-key-id|backup-secret-access-key): ' 0
@@ -469,7 +495,7 @@ if helm template infrared "$chart" -n infrared -f "$chart/ci/previews-values.yam
   ok "a values file setting every documented field of installation.previews renders"
   envs previews
   has previews.env "every field of installation.previews reaches the operator, as JSON" \
-    'INFRARED_PREVIEWS="{\"acmeEmail\":\"alerts@example.com\",\"cloudflareTokenKey\":\"cloudflare-api-token\",\"cloudflareTokenSecret\":\"infrared-platform-tokens\",\"customHostnames\":true,\"domain\":\"tenants.example.net\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"ingressHost\":\"edge.tenants.example.net\",\"ingressIP\":\"203.0.113.7\",\"managedRoots\":[\"example.com\"],\"signInURL\":\"https://infrared.example.com\"}"'
+    'INFRARED_PREVIEWS="{\"acmeEmail\":\"alerts@example.com\",\"cloudflareTokenKey\":\"cloudflare-api-token\",\"cloudflareTokenSecret\":\"infrared-platform-tokens\",\"customHostnames\":true,\"domain\":\"tenants.example.net\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"ingressHost\":\"edge.tenants.example.net\",\"ingressIP\":\"203.0.113.7\",\"managedRoots\":[\"example.com\"],\"signInPrivate\":true,\"signInURL\":\"https://infrared.example.com\"}"'
 else
   cat "$out/previews.err"; bad "a values file setting every documented field of installation.previews renders"
 fi
@@ -1319,6 +1345,17 @@ refuse "a tunnel's credentialsKey that is no Secret's key fails" "at '/installat
   --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.credentialsKey=tokens/tunnel
 refuse "a tunnel's credentialsKey no Secret takes fails" "at '/installation/tunnel/credentialsKey'" \
   --set installation.tunnel.id="$tunnel_id" --set-string installation.tunnel.credentialsKey=..
+# Beside the nodes' own ports (ADR 0090): a mode of only, beside or empty, and
+# publish with beside alone; the private sign-in a bool.
+refuse "a tunnel mode of neither only nor beside fails" "at '/installation/tunnel/mode'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.mode=both
+refuse "publish without a tunnel mode fails" "at '/installation/tunnel': missing property 'mode'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.publish=true
+refuse "publish with mode only fails" "at '/installation/tunnel/mode': value must be 'beside'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.mode=only --set installation.tunnel.publish=true
+refuse "a private sign-in that is no bool fails" "at '/installation/previews/signInPrivate'" \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
+  --set-string installation.previews.signInPrivate=yes
 printf 'ci-not-json\n' >"$out/ci-tunnel-not-json"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret="}\n' >"$out/ci-tunnel-no-id"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"0b2a7a51-1c39-4d4e-9b0e-2f6a31e4c7d8"}\n' \

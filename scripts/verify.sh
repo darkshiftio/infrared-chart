@@ -221,6 +221,9 @@ helm template infrared "$chart" -n infrared --set operator.declinedOutcomes=fals
 helm template infrared "$chart" -n infrared --set operator.supportDesk=true >"$out/support-desk.yaml"
 # The operator researches support conversations only when asked, beside its desks (operator.supportResearch, TODO 680).
 helm template infrared "$chart" -n infrared --set operator.supportDesk=true,operator.supportResearch=true >"$out/support-research.yaml"
+# The operator asks research for a typed plan only when asked, beside its research (operator.supportFixes, TODO 750).
+helm template infrared "$chart" -n infrared --set operator.supportDesk=true,operator.supportResearch=true,operator.supportFixes=true \
+  >"$out/support-fixes.yaml"
 # The size of the install's own metrics store, which the operator hands the
 # gitops template (operator.metricsStorage, ADR 0075, lane H).
 helm template infrared "$chart" -n infrared --set operator.metricsStorage=40Gi >"$out/metrics-storage.yaml"
@@ -246,7 +249,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -642,6 +645,10 @@ check defaults.env "the operator researches no support conversation by default" 
 check support-desk.env "the desks alone research nothing" '^INFRARED_SUPPORT_RESEARCH=' 0
 has support-research.env "the operator researches support conversations when asked" 'INFRARED_SUPPORT_RESEARCH="true"'
 has support-research.env "research keeps the desks it posts in" 'INFRARED_SUPPORT_DESK="true"'
+check defaults.env "the operator asks research for no plan by default" '^INFRARED_SUPPORT_FIXES=' 0
+check support-research.env "research alone asks for no plan" '^INFRARED_SUPPORT_FIXES=' 0
+has support-fixes.env "the operator asks research for a typed plan when asked" 'INFRARED_SUPPORT_FIXES="true"'
+has support-fixes.env "the plan keeps the research it rides on" 'INFRARED_SUPPORT_RESEARCH="true"'
 check defaults.env "the metrics store keeps the template's own size by default" '^INFRARED_METRICS_STORAGE=' 0
 has metrics-storage.env "the metrics store's size reaches the operator" 'INFRARED_METRICS_STORAGE="40Gi"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the
@@ -1277,6 +1284,8 @@ refuse "license.key with license.existingSecret fails" "license.key and license.
 refuse "a license.key that is not a licence fails" "license.key is not an Infrared licence" --set license.key=not-a-licence
 refuse "operator.supportResearch without operator.supportDesk fails" "operator.supportResearch needs operator.supportDesk" \
   --set operator.supportResearch=true
+refuse "operator.supportFixes without operator.supportResearch fails" "operator.supportFixes needs operator.supportResearch" \
+  --set operator.supportDesk=true,operator.supportFixes=true
 
 ext='ui.extensions[0].id=back-office,ui.extensions[0].title=Back Office,ui.extensions[0].upstream=back-office.back-office.svc.cluster.local:8080'
 refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"

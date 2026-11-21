@@ -570,6 +570,10 @@
           "type": "boolean",
           "description": "Research support conversations for the people who answer them: a hand-off starts a run of the support-research workflow, and the operator posts its findings and a suggested reply in the desk as a private note, and sets the Installation's condition SupportResearch (INFRARED_SUPPORT_RESEARCH, workspace TODO 680). Needs operator.supportDesk, and the API's rollout flag supportResearch for a customer's later messages. Off by default: a research run fails before its step and nothing is posted."
         },
+        "supportFixes": {
+          "type": "boolean",
+          "description": "Ask each support research step for a typed plan beside its findings (INFRARED_SUPPORT_FIXES, workspace TODO 750): api, platform, reply and issue actions, each with why, its read, its undo and whether the customer could do it, which the operator lists in the research note under Plan:. Nothing applies them. Needs operator.supportResearch. Off by default: no plan is asked for."
+        },
         "metricsStorage": {
           "type": "string",
           "pattern": "^$|^[1-9][0-9]*(Mi|Gi|Ti)$",

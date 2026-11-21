@@ -89,8 +89,13 @@ installation:
   # tenants' domain, infrared-docs-internal ADR 0063; on a Gateway edge the
   # certificate and DNS records of `*.<domain>` then use it, and Infrared's own
   # name keeps `cloudflare-api-token`; `cloudflare-domain-api-token` with
-  # platformTokens.cloudflareDomainApiToken). Written to the Installation's
-  # `spec.previews`. Empty leaves previews to a person, as before.
+  # platformTokens.cloudflareDomainApiToken), and `signInPrivate` (true keeps
+  # Infrared's own name, signInURL's host, off a Gateway edge: no listener,
+  # route, tunnel route or certificate name for it, so nothing publishes it,
+  # and the install's own private ingress, such as a VPN's proxy, serves it;
+  # infrared-docs-internal ADR 0090; off by default). Written to the
+  # Installation's `spec.previews`. Empty leaves previews to a person, as
+  # before.
   previews: {}
   #   domain: preview.example.com              # zone z answers at https://<z>.<domain>
   #   signInURL: https://infrared.example.com  # where preview visitors sign in
@@ -104,10 +109,18 @@ installation:
   # inside the cluster and leaves external-dns and Cloudflare's origin issuer
   # out, so the install needs no Cloudflare token for its own names; the edge's
   # names are proxied CNAMEs to <id>.cfargotunnel.com, made once by a person.
+  # `mode` is `only`, that, the default, or `beside` (infrared-docs-internal ADR
+  # 0090): cloudflared runs beside an edge that stays on the nodes' own ports
+  # with Cloudflare's Origin CA and external-dns, so each name moves onto the
+  # tunnel when its record points there, and back. `publish` (with `beside`
+  # only, off by default) has external-dns publish the edge's own names as
+  # proxied CNAMEs to the tunnel instead of the nodes' addresses.
   # Written to the Installation's `spec.tunnel`. Empty: the edge is on the
   # nodes' own ports, as before.
   tunnel: {}
   #   id: 6ff42ae2-765d-4adf-8112-31c55c1551ef
+  #   mode: beside       # or only, the default
+  #   publish: false     # with mode beside: external-dns points the edge's names at the tunnel
   # A seed for the Installation's `spec.observability.telemetry` (infrared-docs-
   # internal ADR 0044; ADR 0069 T5): the telemetry plane this install writes its
   # numbers to, and the platform label every series carries. The Installation is

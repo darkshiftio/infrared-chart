@@ -446,6 +446,19 @@ spec:
                     items:
                       type: string
                     type: array
+                  signInPrivate:
+                    description: |-
+                      SignInPrivate keeps Infrared's own name, SignInURL's host, off a
+                      Gateway edge: the gitops template renders no listener, route, tunnel
+                      route or certificate name for it, so nothing publishes the name, and
+                      the install's own private ingress (a VPN's proxy) serves it
+                      (infrared-docs-internal ADR 0090, workspace TODO 745). SignInURL stays
+                      the issuer, the preview sign-in's address and the links Infrared
+                      writes, and Grafana still signs people in there. external-dns deletes
+                      a record of the name it owns. Keep the name outside Domain's wildcard,
+                      whose listener would otherwise take a name one label under it. Only a
+                      Gateway edge reads it; off, the edge serves the name as before.
+                    type: boolean
                   signInURL:
                     description: |-
                       SignInURL is Infrared's public URL, where preview visitors sign in,
@@ -736,10 +749,11 @@ spec:
                   Infrared's own name and *.<previews domain> to it, the edge's
                   certificate comes from a certificate authority inside the cluster, and
                   neither external-dns nor Cloudflare's origin issuer runs. The edge's
-                  names are proxied CNAMEs to the tunnel, made once by a person. Only a
-                  Gateway edge reads it; empty, nothing changes. The operator fills it
-                  from INFRARED_TUNNEL while it is empty, and never overwrites a value
-                  someone set.
+                  names are proxied CNAMEs to the tunnel, made once by a person. With
+                  mode beside, cloudflared runs beside an edge that stays on the nodes'
+                  own ports instead (ADR 0090). Only a Gateway edge reads it; empty,
+                  nothing changes. The operator fills it from INFRARED_TUNNEL while it
+                  is empty, and never overwrites a value someone set.
                 properties:
                   credentialsKey:
                     default: cloudflare-tunnel-credentials
@@ -758,9 +772,39 @@ spec:
                       names are proxied CNAMEs to <id>.cfargotunnel.com.
                     pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
                     type: string
+                  mode:
+                    description: |-
+                      Mode is how the tunnel stands beside the nodes' own ports: only, the
+                      tunnel alone (ADR 0064), or beside, cloudflared beside an edge that
+                      stays on the nodes' own ports with Cloudflare's Origin CA and
+                      external-dns, so each of its names moves onto the tunnel when its
+                      record points at <id>.cfargotunnel.com, and back the same way
+                      (infrared-docs-internal ADR 0090, workspace TODO 745). Beside,
+                      cloudflared sends a Let's Encrypt challenge to Envoy's plain HTTP, then
+                      Infrared's own name, the previews domain's wildcard and every other
+                      name to Envoy's HTTPS, each by its own name. Empty means only, as
+                      before the field existed.
+                    enum:
+                    - ""
+                    - only
+                    - beside
+                    type: string
+                  publish:
+                    description: |-
+                      Publish, beside, gives external-dns the tunnel as the target of the
+                      names it publishes from the edge (Infrared's own name, the previews
+                      domain's wildcard and edge.<domain>): proxied CNAMEs to
+                      <id>.cfargotunnel.com in place of the nodes' addresses. Off, it
+                      publishes the nodes' addresses, as before. Only mode beside reads it.
+                    type: boolean
                 required:
                 - id
                 type: object
+                x-kubernetes-validations:
+                - message: 'publish takes mode beside: only beside the nodes'' own
+                    ports does external-dns publish the edge''s names'
+                  rule: '!has(self.publish) || !self.publish || (has(self.mode) &&
+                    self.mode == ''beside'')'
             type: object
           status:
             description: InstallationStatus is the observed state of the install.

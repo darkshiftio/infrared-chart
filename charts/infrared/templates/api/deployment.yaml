@@ -51,6 +51,13 @@ the kubelet does not update. */}}
 {{- $volumes = append $volumes (dict "name" "support-chat" "secret" (dict "secretName" . "items" (list (dict "key" $.Values.supportChat.hmacKeySecret.key "path" "hmac-key")) "optional" true)) }}
 {{- $mounts = append $mounts (dict "name" "support-chat" "mountPath" "/var/run/infrared/support-chat" "readOnly" true) }}
 {{- end }}
+{{- if include "infrared.metricsClients" . }}
+{{- /* The metrics' door from the stage clients on (observability.metricsAuth):
+the API's own ServiceAccount token, of the door's audience, which it sends with
+every query and every telemetry write it forwards. */}}
+{{- $volumes = append $volumes (include "infrared.metricsTokenVolume" . | fromYaml) }}
+{{- $mounts = append $mounts (include "infrared.metricsTokenMount" . | fromYaml) }}
+{{- end }}
 {{- with $volumes }}
 {{- $_ := set $ctx "volumes" . }}
 {{- end }}
@@ -235,13 +242,20 @@ spec:
                   key: AWS_SECRET_ACCESS_KEY
                   optional: true
             {{- end }}
-            {{- with .Values.observability.metricsURL }}
+            {{- with include "infrared.metricsURL" . }}
             - name: INFRARED_METRICS_URL
               value: {{ . | quote }}
             {{- end }}
             {{- with .Values.observability.metricsWriteURL }}
             - name: INFRARED_METRICS_WRITE_URL
               value: {{ . | quote }}
+            {{- end }}
+            {{- if include "infrared.metricsClients" . }}
+            # The metrics' door (observability.metricsAuth, from the stage clients on): the
+            # API signs in to the metrics store with its own ServiceAccount token, for its
+            # reads and the telemetry it forwards.
+            - name: INFRARED_METRICS_TOKEN_FILE
+              value: {{ include "infrared.metricsTokenFile" . | quote }}
             {{- end }}
             {{- with .Values.observability.platformProduct }}
             # The platform org's Product the install's own Incidents open on

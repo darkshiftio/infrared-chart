@@ -4,6 +4,8 @@
 {{- end }}
 {{- $c := .Values.operator }}
 {{- $ctx := dict "root" . "c" $c "component" "operator" }}
+{{- $volumes := list }}
+{{- $mounts := list }}
 {{- if .Values.runner.actors.enabled }}
 {{- /* The operator's way to its steps' actors (runner.actors, infrared-docs-internal
 ADR 0089): Agent Substrate's router admits only Infrared's operator, by the
@@ -13,8 +15,21 @@ component). The operator reads both at /run/substrate-router; the kubelet
 renews the certificate before it expires. */}}
 {{- $podCertificate := dict "signerName" "podidentity.podcert.ate.dev/identity" "keyType" "ECDSAP256" "credentialBundlePath" "credential-bundle.pem" }}
 {{- $routerCA := dict "signerName" "servicedns.podcert.ate.dev/identity" "labelSelector" (dict "matchLabels" (dict "podcert.ate.dev/canarying" "live")) "path" "router-ca.pem" }}
-{{- $_ := set $ctx "volumes" (list (dict "name" "substrate-router" "projected" (dict "sources" (list (dict "podCertificate" $podCertificate) (dict "clusterTrustBundle" $routerCA))))) }}
-{{- $_ := set $ctx "volumeMounts" (list (dict "name" "substrate-router" "mountPath" "/run/substrate-router" "readOnly" true)) }}
+{{- $volumes = append $volumes (dict "name" "substrate-router" "projected" (dict "sources" (list (dict "podCertificate" $podCertificate) (dict "clusterTrustBundle" $routerCA)))) }}
+{{- $mounts = append $mounts (dict "name" "substrate-router" "mountPath" "/run/substrate-router" "readOnly" true) }}
+{{- end }}
+{{- if include "infrared.metricsClients" . }}
+{{- /* The metrics' door from the stage clients on (observability.metricsAuth):
+the operator's own ServiceAccount token, of the door's audience, which the
+release guard sends with every query and the upgrade guard's Job mounts too. */}}
+{{- $volumes = append $volumes (include "infrared.metricsTokenVolume" . | fromYaml) }}
+{{- $mounts = append $mounts (include "infrared.metricsTokenMount" . | fromYaml) }}
+{{- end }}
+{{- with $volumes }}
+{{- $_ := set $ctx "volumes" . }}
+{{- end }}
+{{- with $mounts }}
+{{- $_ := set $ctx "volumeMounts" . }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -269,6 +284,13 @@ spec:
             # The admission policies on tenants' namespaces (ADR 0066 D6).
             - name: INFRARED_ADMISSION_POLICIES
               value: "true"
+            {{- with .Values.tenancy.admissionPolicies.platformNamespaces }}
+            # The install's own platform namespaces, which Argo CD may make
+            # beside the template's and the chart's (the security review of
+            # 2026-11-21, F31).
+            - name: INFRARED_ADMISSION_PLATFORM_NAMESPACES
+              value: {{ toJson . | quote }}
+            {{- end }}
             {{- end }}
             {{- if .Values.tenancy.denyLogging.enabled }}
             # GKE logs the denies of tenants' namespaces (ADR 0066 D10).
@@ -477,10 +499,30 @@ spec:
               value: {{ .Values.builds.placement | default dict | toJson | quote }}
             - name: INFRARED_AGENT_STEP_PLACEMENT
               value: {{ .Values.runner.placement | default dict | toJson | quote }}
-            {{- with .Values.observability.metricsURL }}
+            {{- with include "infrared.metricsURL" . }}
             # The release guard's error budget check reads VictoriaMetrics (ADR 0046 phase 6).
             - name: INFRARED_METRICS_URL
               value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.observability.metricsAuth }}
+            {{- if ne .stage "off" }}
+            # The metrics' door (observability.metricsAuth; infrared-docs-internal
+            # docs/home-defense.md, step 5): the gitops template puts vmauth in front of
+            # the metrics store and Alertmanager, with users whose tokens carry this audience.
+            - name: INFRARED_METRICS_AUTH
+              value: {{ .stage | quote }}
+            - name: INFRARED_METRICS_TOKEN_AUDIENCE
+              value: {{ .audience | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if include "infrared.metricsClients" . }}
+            - name: INFRARED_METRICS_TOKEN_FILE
+              value: {{ include "infrared.metricsTokenFile" . | quote }}
+            {{- end }}
+            {{- if .Values.observability.nodeExporterAuth.enabled }}
+            # node-exporter behind kube-rbac-proxy (observability.nodeExporterAuth).
+            - name: INFRARED_NODE_EXPORTER_AUTH
+              value: "true"
             {{- end }}
             # Alertmanager sends SLO alerts here (/v1/webhooks/alertmanager/<org>).
             - name: INFRARED_API_URL

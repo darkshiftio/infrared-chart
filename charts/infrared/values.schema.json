@@ -196,6 +196,17 @@
             "publish": {
               "type": "boolean",
               "description": "With mode beside, external-dns publishes the edge's names as proxied CNAMEs to <id>.cfargotunnel.com instead of the nodes' addresses. Off by default; it takes mode beside."
+            },
+            "hostnames": {
+              "type": "array",
+              "maxItems": 100,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\\.)+[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+              },
+              "description": "The other names a record sends to the tunnel, each served on the edge by a listener of its own that the gitops template does not render (names a gitops repo outside it serves, and a zone's own addresses and custom hostnames once they move onto the tunnel): cloudflared gives each a route of its own to Envoy by that name, and answers 404 for a name listed nowhere (infrared-docs-internal ADR 0090). Lower-case DNS names with no wildcard, each once, at most 100; empty by default, in either mode."
             }
           },
           "anyOf": [
@@ -1697,7 +1708,17 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES): ValidatingAdmissionPolicies that refuse, in the namespaces of every org but the platform org, what anyone but Infrared makes that would cross the tenancy. Needs Kubernetes 1.31 or later (CEL's IP and CIDR libraries in new expressions)."
+              "description": "Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES): ValidatingAdmissionPolicies that refuse, in the namespaces of every org but the platform org, what anyone but Infrared makes that would cross the tenancy, and any namespace Argo CD would make but a zone's and a platform component's. Needs Kubernetes 1.31 or later (CEL's IP and CIDR libraries in new expressions)."
+            },
+            "platformNamespaces": {
+              "type": "array",
+              "uniqueItems": true,
+              "description": "The install's own platform namespaces that Argo CD may make, beside the gitops template's and the chart's (INFRARED_ADMISSION_PLATFORM_NAMESPACES, as JSON; with enabled).",
+              "items": {
+                "type": "string",
+                "maxLength": 63,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              }
             }
           }
         },
@@ -2046,6 +2067,42 @@
           "type": "string",
           "pattern": "^$|^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
           "description": "INFRARED_PLATFORM_PRODUCT: the platform org's Product the install's own Incidents open on, through the Alertmanager's platform receiver (ADR 0069 T9); empty means an install-wide Incident."
+        },
+        "metricsAuth": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The metrics store and Alertmanager behind vmauth, the gitops template's door (infrared-docs-internal docs/home-defense.md, step 5): off, door (INFRARED_METRICS_AUTH and INFRARED_METRICS_TOKEN_AUDIENCE, operator), clients (the API and the operator at url with their projected ServiceAccount tokens, INFRARED_METRICS_URL and INFRARED_METRICS_TOKEN_FILE) or enforced (the stack's back doors closed). Each includes the ones before it.",
+          "properties": {
+            "stage": {
+              "type": "string",
+              "enum": [
+                "off",
+                "door",
+                "clients",
+                "enforced"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://[^\\s/?#]+$",
+              "description": "The door's address, http or https and a host with no path; from clients on, the API's and the operator's INFRARED_METRICS_URL."
+            },
+            "audience": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "description": "The audience of the API's and the operator's projected tokens, a DNS label, which the door's users match as their aud claim."
+            }
+          }
+        },
+        "nodeExporterAuth": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "node-exporter behind kube-rbac-proxy (INFRARED_NODE_EXPORTER_AUTH, operator; infrared-docs-internal docs/home-defense.md, step 5).",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },

@@ -315,6 +315,19 @@ spec:
                   signIn.google.selfSignUp (infrared-docs-internal ADR 0057), changed by
                   a platform admin. Unset means none.
                 properties:
+                  customDomains:
+                    description: |-
+                      CustomDomains caps the org's own (external) Domains, the domains it
+                      proves it controls and serves its environments at: unset means no cap,
+                      and 0 means none, the free tier's on a hosted plane, where a custom
+                      domain is part of a paid plan. A Domain the org has already stays. The
+                      API refuses the Domain past it, saying what to do; a platform admin may
+                      add Domains past it. An install that sets no limit, a self-hosted one,
+                      caps nothing.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
                   newTeams:
                     description: |-
                       NewTeams caps the Teams the org may make besides the catalog's
@@ -1020,6 +1033,43 @@ spec:
                       type: string
                     maxItems: 200
                     type: array
+                  reserved:
+                    description: |-
+                      Reserved are the attempts on the included key that have started and
+                      not yet ended, each holding its ceiling, which counts against the
+                      allowance beside what is spent (the security review of 2026-11-21,
+                      F24). When an attempt ends its cost is settled from its result, and
+                      one with no result is charged its ceiling.
+                    items:
+                      description: IncludedReservation is one attempt's hold on its
+                        org's included runs.
+                      properties:
+                        at:
+                          description: At is when it started.
+                          format: date-time
+                          type: string
+                        attempt:
+                          description: 'Attempt names the attempt in the org''s namespace:
+                            <run>/<step>#<attempt>.'
+                          maxLength: 320
+                          minLength: 1
+                          type: string
+                        ceilingUSD:
+                          description: |-
+                            CeilingUSD is the most the attempt may spend, in US dollars as a
+                            decimal: its step's or AgentRole's budget, within what the allowance
+                            had left when it started. The runner is given it as the step's budget.
+                          type: string
+                      required:
+                      - at
+                      - attempt
+                      - ceilingUSD
+                      type: object
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - attempt
+                    x-kubernetes-list-type: map
                   spentUSD:
                     description: |-
                       SpentUSD is the org's spend on the included key, a decimal in US

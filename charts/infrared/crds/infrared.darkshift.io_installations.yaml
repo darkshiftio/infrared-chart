@@ -531,6 +531,15 @@ spec:
                           before. Set by a platform admin in Settings, Sign-in; refused on an
                           install without Gitea, where an org with no forge could hold no Product.
                         properties:
+                          customDomains:
+                            description: |-
+                              CustomDomains is how many own (external) Domains the org a sign-up
+                              makes may hold (its limits.customDomains): 0 is none, the free tier,
+                              where a custom domain is part of a paid plan; unset is no limit.
+                            format: int32
+                            maximum: 1000
+                            minimum: 0
+                            type: integer
                           enabled:
                             description: |-
                               Enabled admits any Google account with a verified address, and makes a
@@ -746,7 +755,8 @@ spec:
                   Tunnel is the Cloudflare Tunnel a Gateway edge is reached through
                   (infrared-docs-internal ADR 0064). Set, the gitops template binds no
                   node's ports: Envoy's Service is a ClusterIP, cloudflared routes
-                  Infrared's own name and *.<previews domain> to it, the edge's
+                  Infrared's own name, the tunnel's hostnames and *.<previews domain> to
+                  it and answers 404 for any other name, the edge's
                   certificate comes from a certificate authority inside the cluster, and
                   neither external-dns nor Cloudflare's origin issuer runs. The edge's
                   names are proxied CNAMEs to the tunnel, made once by a person. With
@@ -765,6 +775,30 @@ spec:
                     maxLength: 253
                     pattern: ^[-._a-zA-Z0-9]+$
                     type: string
+                  hostnames:
+                    description: |-
+                      Hostnames are the other names a record sends to the tunnel, each served
+                      on the edge by a listener of its own: the names a gitops repo outside
+                      the template serves there (a support desk, a webhook receiver), and,
+                      until Infrared lists them itself, a zone's own addresses and the custom
+                      hostnames once their records, or the custom hostnames' fallback origin,
+                      point at the tunnel. cloudflared gives each a route of its own, which
+                      reaches Envoy by that name (originServerName), so every connection it
+                      holds to Envoy carries the name it serves: Envoy picks a listener by
+                      that name, and finds no route when a connection reused from another
+                      name carries the wrong one. A name listed nowhere, here, as Infrared's
+                      own name or one label under the previews domain, gets cloudflared's
+                      404 and never reaches Envoy
+                      (infrared-docs-internal ADR 0090, workspace TODO 745). Lower case and
+                      without a wildcard; Infrared's own name is never taken from here. Only
+                      a Gateway edge reads it, in either mode.
+                    items:
+                      maxLength: 253
+                      pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.)+[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$
+                      type: string
+                    maxItems: 100
+                    type: array
+                    x-kubernetes-list-type: set
                   id:
                     description: |-
                       ID is the tunnel's UUID, lower case, as Cloudflare names it, e.g.
@@ -781,9 +815,9 @@ spec:
                       record points at <id>.cfargotunnel.com, and back the same way
                       (infrared-docs-internal ADR 0090, workspace TODO 745). Beside,
                       cloudflared sends a Let's Encrypt challenge to Envoy's plain HTTP, then
-                      Infrared's own name, the previews domain's wildcard and every other
-                      name to Envoy's HTTPS, each by its own name. Empty means only, as
-                      before the field existed.
+                      Infrared's own name, each of Hostnames and the previews domain's
+                      wildcard to Envoy's HTTPS, each by its own name, and answers 404 for
+                      any other name. Empty means only, as before the field existed.
                     enum:
                     - ""
                     - only

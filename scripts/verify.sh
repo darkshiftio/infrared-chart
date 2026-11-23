@@ -485,6 +485,30 @@ has sign-in-private.env "the private sign-in reaches the operator in its preview
 check defaults.yaml "the Installation CRD has spec.tunnel.mode" 'Mode is how the tunnel stands beside the nodes' 1
 check defaults.yaml "...whose rule takes publish with mode beside alone" 'publish takes mode beside' 1
 check defaults.yaml "...and spec.previews.signInPrivate" '^                  signInPrivate:$' 1
+# The tunnel's hostnames (ADR 0090, workspace TODO 745): the other names a
+# record sends to the tunnel, which cloudflared routes one by one, reach the
+# operator in INFRARED_TUNNEL as set, beside or behind the tunnel alone, and
+# the CRD keeps them as a set of lower-case DNS names, at most 100. Unset,
+# nothing changes: the renders above have none. The refusals are below.
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set installation.tunnel.mode=beside --set 'installation.tunnel.hostnames={support.darkshift.io,hooks.darkshift.io}' \
+  --set platformTokens.existingSecret=infrared-platform-tokens >"$out/tunnel-hostnames.yaml"
+helm template infrared "$chart" -n infrared --set installation.edge=gateway --set installation.tunnel.id="$tunnel_id" \
+  --set 'installation.tunnel.hostnames={hive.football}' --set platformTokens.existingSecret=infrared-platform-tokens \
+  >"$out/tunnel-hostnames-alone.yaml"
+envs tunnel-hostnames
+envs tunnel-hostnames-alone
+has tunnel-hostnames.env "a tunnel's hostnames reach the operator beside the nodes' ports, as listed" \
+  'INFRARED_TUNNEL="{\"hostnames\":[\"support.darkshift.io\",\"hooks.darkshift.io\"],\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\",\"mode\":\"beside\"}"'
+has tunnel-hostnames-alone.env "...and behind the tunnel alone" \
+  'INFRARED_TUNNEL="{\"hostnames\":[\"hive.football\"],\"id\":\"6ff42ae2-765d-4adf-8112-31c55c1551ef\"}"'
+check defaults.yaml "the Installation CRD has spec.tunnel.hostnames" '^                  hostnames:$' 1
+hosts_schema="$(yq -N -o json -I0 'select(.kind == "CustomResourceDefinition" and .metadata.name == "installations.infrared.darkshift.io")
+  | .spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.tunnel.properties.hostnames
+  | {"listType": .["x-kubernetes-list-type"], "maxItems": .maxItems, "items": .items}' "$out/defaults.yaml")"
+if [[ "$hosts_schema" == '{"listType":"set","maxItems":100,"items":{"maxLength":253,"pattern":"^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\\.)+[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$","type":"string"}}' ]]; then
+  ok "...a set of at most 100 lower-case DNS names with no wildcard"
+else bad "...spec.tunnel.hostnames is $hosts_schema"; fi
 check install.yaml "no cloudflare-tunnel-credentials without platformTokens.cloudflareTunnelCredentials" '^  cloudflare-tunnel-credentials: ' 0
 check tunnel-credentials.yaml "the tunnel's credentials alone render infrared-platform-tokens" '^  name: infrared-platform-tokens$' 1
 check tunnel-credentials.yaml "...with no other key" '^  (cloudflare-api-token|cloudflare-domain-api-token|backup-access-key-id|backup-secret-access-key): ' 0
@@ -1386,6 +1410,20 @@ refuse "publish with mode only fails" "at '/installation/tunnel/mode': value mus
 refuse "a private sign-in that is no bool fails" "at '/installation/previews/signInPrivate'" \
   --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
   --set-string installation.previews.signInPrivate=yes
+# The tunnel's hostnames (ADR 0090): lower-case DNS names with no wildcard,
+# each once, at most 100, as the CRD takes them.
+refuse "a tunnel hostname in capitals fails" "at '/installation/tunnel/hostnames/0'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={Support.darkshift.io}'
+refuse "a wildcard tunnel hostname fails" "at '/installation/tunnel/hostnames/0'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={*.darkshift.io}'
+refuse "a tunnel hostname of one label fails" "at '/installation/tunnel/hostnames/0'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={localhost}'
+refuse "a tunnel hostname listed twice fails" "at '/installation/tunnel/hostnames'" \
+  --set installation.tunnel.id="$tunnel_id" --set 'installation.tunnel.hostnames={hooks.darkshift.io,hooks.darkshift.io}'
+refuse "more than 100 tunnel hostnames fail" "at '/installation/tunnel/hostnames'" \
+  --set installation.tunnel.id="$tunnel_id" --set "installation.tunnel.hostnames={$(printf 'h%d.example.com,' $(seq 1 100))h101.example.com}"
+refuse "tunnel hostnames that are no list fail" "at '/installation/tunnel/hostnames'" \
+  --set installation.tunnel.id="$tunnel_id" --set installation.tunnel.hostnames=hooks.darkshift.io
 printf 'ci-not-json\n' >"$out/ci-tunnel-not-json"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret="}\n' >"$out/ci-tunnel-no-id"
 printf '{"AccountTag":"ci-account","TunnelSecret":"ci-tunnel-secret=","TunnelID":"0b2a7a51-1c39-4d4e-9b0e-2f6a31e4c7d8"}\n' \
@@ -2286,9 +2324,17 @@ helm template infrared "$chart" -n infrared --include-crds "${tenancy_on[@]}" >"
 if helm lint --strict "$chart" "${install[@]}" "${tenancy_on[@]}" >"$out/lint.log" 2>&1; then
   ok "lint install with the rest of the tenancy"
 else cat "$out/lint.log"; bad "lint install with the rest of the tenancy"; fi
-for v in INFRARED_TENANT_PODS INFRARED_TENANT_QUOTAS INFRARED_ADMISSION_POLICIES INFRARED_DENY_LOGGING INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT; do
+for v in INFRARED_TENANT_PODS INFRARED_TENANT_QUOTAS INFRARED_ADMISSION_POLICIES INFRARED_ADMISSION_PLATFORM_NAMESPACES INFRARED_DENY_LOGGING INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT; do
   check defaults.yaml "$v handed to nobody by default" "$v" 0
 done
+# The install's own platform namespaces, which Argo CD may make while the
+# admission policies are on (the security review of 2026-11-21, F31): handed
+# on as JSON with the policies, and to nobody without them or when empty.
+check tenancy.yaml "no platform namespaces of the install's own handed on when none is listed" INFRARED_ADMISSION_PLATFORM_NAMESPACES 0
+helm template infrared "$chart" -n infrared --set tenancy.admissionPolicies.enabled=true \
+  --set-json 'tenancy.admissionPolicies.platformNamespaces=["private-access","chatwoot"]' >"$out/admission-namespaces.yaml"
+helm template infrared "$chart" -n infrared \
+  --set-json 'tenancy.admissionPolicies.platformNamespaces=["private-access"]' >"$out/admission-namespaces-off.yaml"
 # openv <render> <name>: the operator's variable, as the operator reads it.
 openv() {
   yq -N -r "select(.kind == \"Deployment\" and .metadata.name == \"infrared-operator\") | .spec.template.spec.containers[]
@@ -2299,6 +2345,10 @@ want_quotas='{"builds":{"concurrency":2,"memory":"4Gi"},"zones":{"cpu":"2","memo
 if [[ "$(openv tenancy INFRARED_TENANT_PODS)" == "$want_pods" ]] && [[ "$(openv tenancy INFRARED_TENANT_QUOTAS)" == "$want_quotas" ]]; then
   ok "tenants' pods and quotas handed to the operator as the JSON it reads"
 else bad "INFRARED_TENANT_PODS is '$(openv tenancy INFRARED_TENANT_PODS)', INFRARED_TENANT_QUOTAS '$(openv tenancy INFRARED_TENANT_QUOTAS)'"; fi
+if [[ "$(openv admission-namespaces INFRARED_ADMISSION_PLATFORM_NAMESPACES)" == '["private-access","chatwoot"]' ]] \
+  && [[ -z "$(openv admission-namespaces-off INFRARED_ADMISSION_PLATFORM_NAMESPACES)" ]]; then
+  ok "the install's own platform namespaces handed on as JSON with the admission policies alone"
+else bad "INFRARED_ADMISSION_PLATFORM_NAMESPACES is '$(openv admission-namespaces INFRARED_ADMISSION_PLATFORM_NAMESPACES)' with the policies, '$(openv admission-namespaces-off INFRARED_ADMISSION_PLATFORM_NAMESPACES)' without"; fi
 switches="$(openv tenancy INFRARED_ADMISSION_POLICIES),$(openv tenancy INFRARED_DENY_LOGGING),$(openv tenancy INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT)"
 if [[ "$switches" == true,true,true ]]; then
   ok "the admission policies, deny logging and Argo CD's default project handed to the operator"
@@ -2312,7 +2362,8 @@ else bad "INFRARED_TENANT_PODS is '$(openv tenancy-bare INFRARED_TENANT_PODS)', 
 if [[ "$(objects tenancy)" == "$(objects defaults)" ]]; then ok "none renders an object of its own"
 else bad "the tenancy renders objects of its own: $(diff <(objects defaults) <(objects tenancy) | tr '\n' ' ')"; fi
 for key in tenancy.tenantPods.placement.resources.limits.memory=1Gi tenancy.quotas.zones.gpus=1 tenancy.quotas.builds.concurrency=0 \
-  tenancy.admissionPolicies.on=true tenancy.argoCD.restrictDefault=true tenancy.tenantPods.placement.runtimeClassName=Not_A_Name; do
+  tenancy.admissionPolicies.on=true tenancy.argoCD.restrictDefault=true tenancy.tenantPods.placement.runtimeClassName=Not_A_Name \
+  'tenancy.admissionPolicies.platformNamespaces={Not_A_Namespace}'; do
   if helm template infrared "$chart" -n infrared --set "$key" >/dev/null 2>&1; then bad "the schema took $key"
   else ok "the schema refuses $key"; fi
 done
@@ -2431,8 +2482,85 @@ for set in supportChat.baseUrl=support.example.com supportChat.baseUrl=http://su
   else ok "the schema refuses $set"; fi
 done
 
+step "the metrics' door (observability.metricsAuth, observability.nodeExporterAuth; infrared-docs-internal docs/home-defense.md, step 5)"
+# Off by default: nothing handed to anyone, and the API and the operator read
+# the store itself. door: the stage and the tokens' audience to the operator
+# alone, which the gitops template makes the door from. clients and enforced:
+# the API and the operator read and write at the door, each with its own
+# projected ServiceAccount token of that audience. node-exporter: one variable.
+# Neither renders an object of its own.
+for st in door clients enforced; do
+  helm template infrared "$chart" -n infrared --include-crds --set "observability.metricsAuth.stage=$st" >"$out/metrics-$st.yaml"
+done
+helm template infrared "$chart" -n infrared --include-crds --set observability.nodeExporterAuth.enabled=true >"$out/node-exporter-auth.yaml"
+helm template infrared "$chart" -n infrared --set observability.metricsAuth.stage=clients \
+  --set observability.metricsWriteURL=http://ingest.monitoring.svc:8480/insert/0/prometheus/api/v1/write >"$out/metrics-clients-write.yaml"
+helm template infrared "$chart" -n infrared --set observability.metricsAuth.stage=clients --set runner.actors.enabled=true \
+  >"$out/metrics-clients-actors.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set observability.metricsAuth.stage=enforced --set observability.nodeExporterAuth.enabled=true \
+  >"$out/lint.log" 2>&1; then
+  ok "lint install with the metrics' door enforced and node-exporter behind its proxy"
+else cat "$out/lint.log"; bad "lint install with the metrics' door enforced and node-exporter behind its proxy"; fi
+for v in INFRARED_METRICS_AUTH INFRARED_METRICS_TOKEN_AUDIENCE INFRARED_METRICS_TOKEN_FILE INFRARED_NODE_EXPORTER_AUTH; do
+  check defaults.yaml "$v handed to nobody by default" "name: $v\$" 0
+done
+check defaults.yaml "no metrics token mounted by default" '^        - name: metrics-token$' 0
+# deployvar <render> <Deployment> <variable>: its value, empty when unset.
+deployvar() { yq -r "select(.kind == \"Deployment\" and .metadata.name == \"$2\") | .spec.template.spec.containers[0].env[] | select(.name == \"$3\") | .value" "$out/$1.yaml"; }
+# tokenvol <render> <Deployment>: the metrics token's volume and mount, as one line of JSON each.
+tokenvol() {
+  yq ea -o=json -I=0 "[select(.kind == \"Deployment\" and .metadata.name == \"$2\") | ((.spec.template.spec.volumes[] | select(.name == \"metrics-token\")), (.spec.template.spec.containers[0].volumeMounts[] | select(.name == \"metrics-token\")))]" "$out/$1.yaml"
+}
+store=http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428
+door=http://vmauth-victoria-metrics-k8s-stack.monitoring.svc:8427
+tokfile=/var/run/secrets/infrared.darkshift.io/metrics/token
+want_tokvol='[{"name":"metrics-token","projected":{"sources":[{"serviceAccountToken":{"audience":"infrared-metrics","expirationSeconds":3600,"path":"token"}}]}},{"mountPath":"/var/run/secrets/infrared.darkshift.io/metrics","name":"metrics-token","readOnly":true}]'
+if [[ "$(deployvar metrics-door infrared-operator INFRARED_METRICS_AUTH)" == door ]] &&
+  [[ "$(deployvar metrics-door infrared-operator INFRARED_METRICS_TOKEN_AUDIENCE)" == infrared-metrics ]] &&
+  [[ "$(deployvar metrics-door infrared-operator INFRARED_METRICS_URL)" == "$store" ]] &&
+  [[ "$(deployvar metrics-door infrared-api INFRARED_METRICS_URL)" == "$store" ]] &&
+  [[ -z "$(deployvar metrics-door infrared-operator INFRARED_METRICS_TOKEN_FILE)$(deployvar metrics-door infrared-api INFRARED_METRICS_TOKEN_FILE)" ]] &&
+  [[ -z "$(deployvar metrics-door infrared-api INFRARED_METRICS_AUTH)" ]] && [[ "$(tokenvol metrics-door infrared-api)$(tokenvol metrics-door infrared-operator)" == '[][]' ]]; then
+  ok "door: the stage and the audience to the operator alone; the API and the operator still read the store, with no token"
+else bad "door: operator $(deployvar metrics-door infrared-operator INFRARED_METRICS_AUTH)/$(deployvar metrics-door infrared-operator INFRARED_METRICS_URL), api $(deployvar metrics-door infrared-api INFRARED_METRICS_URL)"; fi
+for st in clients enforced; do
+  if [[ "$(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_AUTH)" == "$st" ]] &&
+    [[ "$(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_URL)" == "$door" ]] && [[ "$(deployvar "metrics-$st" infrared-api INFRARED_METRICS_URL)" == "$door" ]] &&
+    [[ "$(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_TOKEN_FILE)" == "$tokfile" ]] &&
+    [[ "$(deployvar "metrics-$st" infrared-api INFRARED_METRICS_TOKEN_FILE)" == "$tokfile" ]] &&
+    [[ "$(tokenvol "metrics-$st" infrared-operator)" == "$want_tokvol" ]] && [[ "$(tokenvol "metrics-$st" infrared-api)" == "$want_tokvol" ]]; then
+    ok "$st: the API and the operator read and write at the door, each with its own projected token of the audience"
+  else bad "$st: operator $(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_URL) $(tokenvol "metrics-$st" infrared-operator), api $(deployvar "metrics-$st" infrared-api INFRARED_METRICS_URL) $(tokenvol "metrics-$st" infrared-api)"; fi
+done
+if [[ "$(deployvar metrics-clients-write infrared-api INFRARED_METRICS_WRITE_URL)" == http://ingest.monitoring.svc:8480/insert/0/prometheus/api/v1/write ]] &&
+  [[ "$(deployvar metrics-clients-write infrared-api INFRARED_METRICS_TOKEN_FILE)" == "$tokfile" ]]; then
+  ok "clients keeps an explicit metricsWriteURL, which the API's token goes to too"
+else bad "clients with metricsWriteURL: $(deployvar metrics-clients-write infrared-api INFRARED_METRICS_WRITE_URL)"; fi
+opvols() { yq ea -o=json -I=0 '[select(.kind == "Deployment" and .metadata.name == "infrared-operator") | .spec.template.spec.volumes[].name]' "$out/$1.yaml"; }
+if [[ "$(opvols metrics-clients-actors)" == '["tmp","substrate-router","metrics-token"]' ]]; then
+  ok "the token beside the actors' router certificate"
+else bad "the operator's volumes with actors: $(opvols metrics-clients-actors)"; fi
+if [[ "$(deployvar node-exporter-auth infrared-operator INFRARED_NODE_EXPORTER_AUTH)" == true ]] &&
+  [[ -z "$(deployvar node-exporter-auth infrared-operator INFRARED_METRICS_AUTH)" ]]; then
+  ok "node-exporter behind its proxy handed to the operator (INFRARED_NODE_EXPORTER_AUTH), alone"
+else bad "INFRARED_NODE_EXPORTER_AUTH is '$(deployvar node-exporter-auth infrared-operator INFRARED_NODE_EXPORTER_AUTH)'"; fi
+for f in metrics-enforced node-exporter-auth; do
+  if [[ "$(objects "$f")" == "$(objects defaults)" ]]; then ok "$f renders no object of its own"
+  else bad "$f renders objects of its own: $(diff <(objects defaults) <(objects "$f") | tr '\n' ' ')"; fi
+done
+# The chart's gitops-template annotation stays where it is: the stages move no pin.
+if [[ "$(grep -c 'infrared.darkshift.io/gitops-template' "$out/metrics-enforced.yaml")" == "$(grep -c 'infrared.darkshift.io/gitops-template' "$out/defaults.yaml")" ]]; then
+  ok "the stages leave the chart's gitops-template annotation as it is"
+else bad "the stages change the chart's gitops-template annotation"; fi
+for set in observability.metricsAuth.stage=on observability.metricsAuth.stage=true observability.metricsAuth.url=vmauth:8427 \
+  observability.metricsAuth.url=http://vmauth:8427/api observability.metricsAuth.audience=infrared.metrics observability.metricsAuth.audience= \
+  observability.metricsAuth.enabled=true observability.nodeExporterAuth.enabled=yes observability.nodeExporterAuth.on=true; do
+  if helm template infrared "$chart" -n infrared --set "$set" >/dev/null 2>&1; then bad "the schema took $set"
+  else ok "the schema refuses $set"; fi
+done
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic metrics-door metrics-clients metrics-enforced metrics-clients-write metrics-clients-actors node-exporter-auth; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

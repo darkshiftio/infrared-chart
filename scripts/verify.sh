@@ -2463,8 +2463,85 @@ for set in supportChat.baseUrl=support.example.com supportChat.baseUrl=http://su
   else ok "the schema refuses $set"; fi
 done
 
+step "the metrics' door (observability.metricsAuth, observability.nodeExporterAuth; infrared-docs-internal docs/home-defense.md, step 5)"
+# Off by default: nothing handed to anyone, and the API and the operator read
+# the store itself. door: the stage and the tokens' audience to the operator
+# alone, which the gitops template makes the door from. clients and enforced:
+# the API and the operator read and write at the door, each with its own
+# projected ServiceAccount token of that audience. node-exporter: one variable.
+# Neither renders an object of its own.
+for st in door clients enforced; do
+  helm template infrared "$chart" -n infrared --include-crds --set "observability.metricsAuth.stage=$st" >"$out/metrics-$st.yaml"
+done
+helm template infrared "$chart" -n infrared --include-crds --set observability.nodeExporterAuth.enabled=true >"$out/node-exporter-auth.yaml"
+helm template infrared "$chart" -n infrared --set observability.metricsAuth.stage=clients \
+  --set observability.metricsWriteURL=http://ingest.monitoring.svc:8480/insert/0/prometheus/api/v1/write >"$out/metrics-clients-write.yaml"
+helm template infrared "$chart" -n infrared --set observability.metricsAuth.stage=clients --set runner.actors.enabled=true \
+  >"$out/metrics-clients-actors.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set observability.metricsAuth.stage=enforced --set observability.nodeExporterAuth.enabled=true \
+  >"$out/lint.log" 2>&1; then
+  ok "lint install with the metrics' door enforced and node-exporter behind its proxy"
+else cat "$out/lint.log"; bad "lint install with the metrics' door enforced and node-exporter behind its proxy"; fi
+for v in INFRARED_METRICS_AUTH INFRARED_METRICS_TOKEN_AUDIENCE INFRARED_METRICS_TOKEN_FILE INFRARED_NODE_EXPORTER_AUTH; do
+  check defaults.yaml "$v handed to nobody by default" "name: $v\$" 0
+done
+check defaults.yaml "no metrics token mounted by default" '^        - name: metrics-token$' 0
+# deployvar <render> <Deployment> <variable>: its value, empty when unset.
+deployvar() { yq -r "select(.kind == \"Deployment\" and .metadata.name == \"$2\") | .spec.template.spec.containers[0].env[] | select(.name == \"$3\") | .value" "$out/$1.yaml"; }
+# tokenvol <render> <Deployment>: the metrics token's volume and mount, as one line of JSON each.
+tokenvol() {
+  yq ea -o=json -I=0 "[select(.kind == \"Deployment\" and .metadata.name == \"$2\") | ((.spec.template.spec.volumes[] | select(.name == \"metrics-token\")), (.spec.template.spec.containers[0].volumeMounts[] | select(.name == \"metrics-token\")))]" "$out/$1.yaml"
+}
+store=http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc:8428
+door=http://vmauth-victoria-metrics-k8s-stack.monitoring.svc:8427
+tokfile=/var/run/secrets/infrared.darkshift.io/metrics/token
+want_tokvol='[{"name":"metrics-token","projected":{"sources":[{"serviceAccountToken":{"audience":"infrared-metrics","expirationSeconds":3600,"path":"token"}}]}},{"mountPath":"/var/run/secrets/infrared.darkshift.io/metrics","name":"metrics-token","readOnly":true}]'
+if [[ "$(deployvar metrics-door infrared-operator INFRARED_METRICS_AUTH)" == door ]] &&
+  [[ "$(deployvar metrics-door infrared-operator INFRARED_METRICS_TOKEN_AUDIENCE)" == infrared-metrics ]] &&
+  [[ "$(deployvar metrics-door infrared-operator INFRARED_METRICS_URL)" == "$store" ]] &&
+  [[ "$(deployvar metrics-door infrared-api INFRARED_METRICS_URL)" == "$store" ]] &&
+  [[ -z "$(deployvar metrics-door infrared-operator INFRARED_METRICS_TOKEN_FILE)$(deployvar metrics-door infrared-api INFRARED_METRICS_TOKEN_FILE)" ]] &&
+  [[ -z "$(deployvar metrics-door infrared-api INFRARED_METRICS_AUTH)" ]] && [[ "$(tokenvol metrics-door infrared-api)$(tokenvol metrics-door infrared-operator)" == '[][]' ]]; then
+  ok "door: the stage and the audience to the operator alone; the API and the operator still read the store, with no token"
+else bad "door: operator $(deployvar metrics-door infrared-operator INFRARED_METRICS_AUTH)/$(deployvar metrics-door infrared-operator INFRARED_METRICS_URL), api $(deployvar metrics-door infrared-api INFRARED_METRICS_URL)"; fi
+for st in clients enforced; do
+  if [[ "$(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_AUTH)" == "$st" ]] &&
+    [[ "$(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_URL)" == "$door" ]] && [[ "$(deployvar "metrics-$st" infrared-api INFRARED_METRICS_URL)" == "$door" ]] &&
+    [[ "$(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_TOKEN_FILE)" == "$tokfile" ]] &&
+    [[ "$(deployvar "metrics-$st" infrared-api INFRARED_METRICS_TOKEN_FILE)" == "$tokfile" ]] &&
+    [[ "$(tokenvol "metrics-$st" infrared-operator)" == "$want_tokvol" ]] && [[ "$(tokenvol "metrics-$st" infrared-api)" == "$want_tokvol" ]]; then
+    ok "$st: the API and the operator read and write at the door, each with its own projected token of the audience"
+  else bad "$st: operator $(deployvar "metrics-$st" infrared-operator INFRARED_METRICS_URL) $(tokenvol "metrics-$st" infrared-operator), api $(deployvar "metrics-$st" infrared-api INFRARED_METRICS_URL) $(tokenvol "metrics-$st" infrared-api)"; fi
+done
+if [[ "$(deployvar metrics-clients-write infrared-api INFRARED_METRICS_WRITE_URL)" == http://ingest.monitoring.svc:8480/insert/0/prometheus/api/v1/write ]] &&
+  [[ "$(deployvar metrics-clients-write infrared-api INFRARED_METRICS_TOKEN_FILE)" == "$tokfile" ]]; then
+  ok "clients keeps an explicit metricsWriteURL, which the API's token goes to too"
+else bad "clients with metricsWriteURL: $(deployvar metrics-clients-write infrared-api INFRARED_METRICS_WRITE_URL)"; fi
+opvols() { yq ea -o=json -I=0 '[select(.kind == "Deployment" and .metadata.name == "infrared-operator") | .spec.template.spec.volumes[].name]' "$out/$1.yaml"; }
+if [[ "$(opvols metrics-clients-actors)" == '["tmp","substrate-router","metrics-token"]' ]]; then
+  ok "the token beside the actors' router certificate"
+else bad "the operator's volumes with actors: $(opvols metrics-clients-actors)"; fi
+if [[ "$(deployvar node-exporter-auth infrared-operator INFRARED_NODE_EXPORTER_AUTH)" == true ]] &&
+  [[ -z "$(deployvar node-exporter-auth infrared-operator INFRARED_METRICS_AUTH)" ]]; then
+  ok "node-exporter behind its proxy handed to the operator (INFRARED_NODE_EXPORTER_AUTH), alone"
+else bad "INFRARED_NODE_EXPORTER_AUTH is '$(deployvar node-exporter-auth infrared-operator INFRARED_NODE_EXPORTER_AUTH)'"; fi
+for f in metrics-enforced node-exporter-auth; do
+  if [[ "$(objects "$f")" == "$(objects defaults)" ]]; then ok "$f renders no object of its own"
+  else bad "$f renders objects of its own: $(diff <(objects defaults) <(objects "$f") | tr '\n' ' ')"; fi
+done
+# The chart's gitops-template annotation stays where it is: the stages move no pin.
+if [[ "$(grep -c 'infrared.darkshift.io/gitops-template' "$out/metrics-enforced.yaml")" == "$(grep -c 'infrared.darkshift.io/gitops-template' "$out/defaults.yaml")" ]]; then
+  ok "the stages leave the chart's gitops-template annotation as it is"
+else bad "the stages change the chart's gitops-template annotation"; fi
+for set in observability.metricsAuth.stage=on observability.metricsAuth.stage=true observability.metricsAuth.url=vmauth:8427 \
+  observability.metricsAuth.url=http://vmauth:8427/api observability.metricsAuth.audience=infrared.metrics observability.metricsAuth.audience= \
+  observability.metricsAuth.enabled=true observability.nodeExporterAuth.enabled=yes observability.nodeExporterAuth.on=true; do
+  if helm template infrared "$chart" -n infrared --set "$set" >/dev/null 2>&1; then bad "the schema took $set"
+  else ok "the schema refuses $set"; fi
+done
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic; do
+for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic metrics-door metrics-clients metrics-enforced metrics-clients-write metrics-clients-actors node-exporter-auth; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

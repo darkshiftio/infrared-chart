@@ -286,6 +286,35 @@ request for the API. The API and the operator make it; no template renders it.
 {{- if dig "clientAddressProof" "enabled" false .Values.api }}true{{ end }}
 {{- end }}
 
+{{/*
+The metrics' door (observability.metricsAuth; infrared-docs-internal
+docs/home-defense.md, step 5). metricsClients is "true" from the stage clients
+on, when the API and the operator read and write through the door at
+metricsAuth.url, each with its own ServiceAccount token of metricsAuth.audience,
+projected at metricsTokenFile; metricsURL is where they read then, and
+observability.metricsURL before.
+*/}}
+{{- define "infrared.metricsClients" -}}
+{{- if has .Values.observability.metricsAuth.stage (list "clients" "enforced") }}true{{ end }}
+{{- end }}
+{{- define "infrared.metricsURL" -}}
+{{- if include "infrared.metricsClients" . }}{{ .Values.observability.metricsAuth.url }}{{ else }}{{ .Values.observability.metricsURL }}{{ end }}
+{{- end }}
+{{- define "infrared.metricsTokenDir" -}}
+/var/run/secrets/infrared.darkshift.io/metrics
+{{- end }}
+{{- define "infrared.metricsTokenFile" -}}
+{{- printf "%s/token" (include "infrared.metricsTokenDir" .) }}
+{{- end }}
+{{/* The token's volume, which the kubelet rewrites before it expires. */}}
+{{- define "infrared.metricsTokenVolume" -}}
+{{- $token := dict "audience" .Values.observability.metricsAuth.audience "expirationSeconds" 3600 "path" "token" }}
+{{- dict "name" "metrics-token" "projected" (dict "sources" (list (dict "serviceAccountToken" $token))) | toYaml }}
+{{- end }}
+{{- define "infrared.metricsTokenMount" -}}
+{{- dict "name" "metrics-token" "mountPath" (include "infrared.metricsTokenDir" .) "readOnly" true | toYaml }}
+{{- end }}
+
 {{/* The UI's extensions ConfigMap: <fullname>-ui-extensions. */}}
 {{- define "infrared.uiExtensionsName" -}}
 {{- printf "%s-extensions" (include "infrared.componentName" (dict "root" . "component" "ui")) | trunc 63 | trimSuffix "-" }}

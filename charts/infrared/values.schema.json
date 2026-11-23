@@ -2062,6 +2062,42 @@
           "type": "string",
           "pattern": "^$|^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
           "description": "INFRARED_PLATFORM_PRODUCT: the platform org's Product the install's own Incidents open on, through the Alertmanager's platform receiver (ADR 0069 T9); empty means an install-wide Incident."
+        },
+        "metricsAuth": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The metrics store and Alertmanager behind vmauth, the gitops template's door (infrared-docs-internal docs/home-defense.md, step 5): off, door (INFRARED_METRICS_AUTH and INFRARED_METRICS_TOKEN_AUDIENCE, operator), clients (the API and the operator at url with their projected ServiceAccount tokens, INFRARED_METRICS_URL and INFRARED_METRICS_TOKEN_FILE) or enforced (the stack's back doors closed). Each includes the ones before it.",
+          "properties": {
+            "stage": {
+              "type": "string",
+              "enum": [
+                "off",
+                "door",
+                "clients",
+                "enforced"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://[^\\s/?#]+$",
+              "description": "The door's address, http or https and a host with no path; from clients on, the API's and the operator's INFRARED_METRICS_URL."
+            },
+            "audience": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+              "description": "The audience of the API's and the operator's projected tokens, a DNS label, which the door's users match as their aud claim."
+            }
+          }
+        },
+        "nodeExporterAuth": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "node-exporter behind kube-rbac-proxy (INFRARED_NODE_EXPORTER_AUTH, operator; infrared-docs-internal docs/home-defense.md, step 5).",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },

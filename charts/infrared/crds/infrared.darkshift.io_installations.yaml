@@ -531,6 +531,15 @@ spec:
                           before. Set by a platform admin in Settings, Sign-in; refused on an
                           install without Gitea, where an org with no forge could hold no Product.
                         properties:
+                          customDomains:
+                            description: |-
+                              CustomDomains is how many own (external) Domains the org a sign-up
+                              makes may hold (its limits.customDomains): 0 is none, the free tier,
+                              where a custom domain is part of a paid plan; unset is no limit.
+                            format: int32
+                            maximum: 1000
+                            minimum: 0
+                            type: integer
                           enabled:
                             description: |-
                               Enabled admits any Google account with a verified address, and makes a

@@ -2305,9 +2305,17 @@ helm template infrared "$chart" -n infrared --include-crds "${tenancy_on[@]}" >"
 if helm lint --strict "$chart" "${install[@]}" "${tenancy_on[@]}" >"$out/lint.log" 2>&1; then
   ok "lint install with the rest of the tenancy"
 else cat "$out/lint.log"; bad "lint install with the rest of the tenancy"; fi
-for v in INFRARED_TENANT_PODS INFRARED_TENANT_QUOTAS INFRARED_ADMISSION_POLICIES INFRARED_DENY_LOGGING INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT; do
+for v in INFRARED_TENANT_PODS INFRARED_TENANT_QUOTAS INFRARED_ADMISSION_POLICIES INFRARED_ADMISSION_PLATFORM_NAMESPACES INFRARED_DENY_LOGGING INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT; do
   check defaults.yaml "$v handed to nobody by default" "$v" 0
 done
+# The install's own platform namespaces, which Argo CD may make while the
+# admission policies are on (the security review of 2026-11-21, F31): handed
+# on as JSON with the policies, and to nobody without them or when empty.
+check tenancy.yaml "no platform namespaces of the install's own handed on when none is listed" INFRARED_ADMISSION_PLATFORM_NAMESPACES 0
+helm template infrared "$chart" -n infrared --set tenancy.admissionPolicies.enabled=true \
+  --set-json 'tenancy.admissionPolicies.platformNamespaces=["private-access","chatwoot"]' >"$out/admission-namespaces.yaml"
+helm template infrared "$chart" -n infrared \
+  --set-json 'tenancy.admissionPolicies.platformNamespaces=["private-access"]' >"$out/admission-namespaces-off.yaml"
 # openv <render> <name>: the operator's variable, as the operator reads it.
 openv() {
   yq -N -r "select(.kind == \"Deployment\" and .metadata.name == \"infrared-operator\") | .spec.template.spec.containers[]
@@ -2318,6 +2326,10 @@ want_quotas='{"builds":{"concurrency":2,"memory":"4Gi"},"zones":{"cpu":"2","memo
 if [[ "$(openv tenancy INFRARED_TENANT_PODS)" == "$want_pods" ]] && [[ "$(openv tenancy INFRARED_TENANT_QUOTAS)" == "$want_quotas" ]]; then
   ok "tenants' pods and quotas handed to the operator as the JSON it reads"
 else bad "INFRARED_TENANT_PODS is '$(openv tenancy INFRARED_TENANT_PODS)', INFRARED_TENANT_QUOTAS '$(openv tenancy INFRARED_TENANT_QUOTAS)'"; fi
+if [[ "$(openv admission-namespaces INFRARED_ADMISSION_PLATFORM_NAMESPACES)" == '["private-access","chatwoot"]' ]] \
+  && [[ -z "$(openv admission-namespaces-off INFRARED_ADMISSION_PLATFORM_NAMESPACES)" ]]; then
+  ok "the install's own platform namespaces handed on as JSON with the admission policies alone"
+else bad "INFRARED_ADMISSION_PLATFORM_NAMESPACES is '$(openv admission-namespaces INFRARED_ADMISSION_PLATFORM_NAMESPACES)' with the policies, '$(openv admission-namespaces-off INFRARED_ADMISSION_PLATFORM_NAMESPACES)' without"; fi
 switches="$(openv tenancy INFRARED_ADMISSION_POLICIES),$(openv tenancy INFRARED_DENY_LOGGING),$(openv tenancy INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT)"
 if [[ "$switches" == true,true,true ]]; then
   ok "the admission policies, deny logging and Argo CD's default project handed to the operator"
@@ -2331,7 +2343,8 @@ else bad "INFRARED_TENANT_PODS is '$(openv tenancy-bare INFRARED_TENANT_PODS)', 
 if [[ "$(objects tenancy)" == "$(objects defaults)" ]]; then ok "none renders an object of its own"
 else bad "the tenancy renders objects of its own: $(diff <(objects defaults) <(objects tenancy) | tr '\n' ' ')"; fi
 for key in tenancy.tenantPods.placement.resources.limits.memory=1Gi tenancy.quotas.zones.gpus=1 tenancy.quotas.builds.concurrency=0 \
-  tenancy.admissionPolicies.on=true tenancy.argoCD.restrictDefault=true tenancy.tenantPods.placement.runtimeClassName=Not_A_Name; do
+  tenancy.admissionPolicies.on=true tenancy.argoCD.restrictDefault=true tenancy.tenantPods.placement.runtimeClassName=Not_A_Name \
+  'tenancy.admissionPolicies.platformNamespaces={Not_A_Namespace}'; do
   if helm template infrared "$chart" -n infrared --set "$key" >/dev/null 2>&1; then bad "the schema took $key"
   else ok "the schema refuses $key"; fi
 done

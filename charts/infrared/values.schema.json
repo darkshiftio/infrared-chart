@@ -1703,7 +1703,17 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES): ValidatingAdmissionPolicies that refuse, in the namespaces of every org but the platform org, what anyone but Infrared makes that would cross the tenancy. Needs Kubernetes 1.31 or later (CEL's IP and CIDR libraries in new expressions)."
+              "description": "Admission policies (ADR 0066 D6; INFRARED_ADMISSION_POLICIES): ValidatingAdmissionPolicies that refuse, in the namespaces of every org but the platform org, what anyone but Infrared makes that would cross the tenancy, and any namespace Argo CD would make but a zone's and a platform component's. Needs Kubernetes 1.31 or later (CEL's IP and CIDR libraries in new expressions)."
+            },
+            "platformNamespaces": {
+              "type": "array",
+              "uniqueItems": true,
+              "description": "The install's own platform namespaces that Argo CD may make, beside the gitops template's and the chart's (INFRARED_ADMISSION_PLATFORM_NAMESPACES, as JSON; with enabled).",
+              "items": {
+                "type": "string",
+                "maxLength": 63,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              }
             }
           }
         },

@@ -1033,6 +1033,43 @@ spec:
                       type: string
                     maxItems: 200
                     type: array
+                  reserved:
+                    description: |-
+                      Reserved are the attempts on the included key that have started and
+                      not yet ended, each holding its ceiling, which counts against the
+                      allowance beside what is spent (the security review of 2026-11-21,
+                      F24). When an attempt ends its cost is settled from its result, and
+                      one with no result is charged its ceiling.
+                    items:
+                      description: IncludedReservation is one attempt's hold on its
+                        org's included runs.
+                      properties:
+                        at:
+                          description: At is when it started.
+                          format: date-time
+                          type: string
+                        attempt:
+                          description: 'Attempt names the attempt in the org''s namespace:
+                            <run>/<step>#<attempt>.'
+                          maxLength: 320
+                          minLength: 1
+                          type: string
+                        ceilingUSD:
+                          description: |-
+                            CeilingUSD is the most the attempt may spend, in US dollars as a
+                            decimal: its step's or AgentRole's budget, within what the allowance
+                            had left when it started. The runner is given it as the step's budget.
+                          type: string
+                      required:
+                      - at
+                      - attempt
+                      - ceilingUSD
+                      type: object
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - attempt
+                    x-kubernetes-list-type: map
                   spentUSD:
                     description: |-
                       SpentUSD is the org's spend on the included key, a decimal in US

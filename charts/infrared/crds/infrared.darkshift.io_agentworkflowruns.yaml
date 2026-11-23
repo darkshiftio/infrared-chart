@@ -431,6 +431,12 @@ spec:
                     repo:
                       description: Repo is the Product repo, by name.
                       type: string
+                    reviewedCommit:
+                      description: |-
+                        ReviewedCommit is this repo's pull request head when the last human
+                        step before the merge passed, as AgentWorkflowRunStatus.ReviewedCommit
+                        is for a Change of one repo: the merge merges it alone.
+                      type: string
                   required:
                   - repo
                   type: object
@@ -447,6 +453,23 @@ spec:
                   so its own maxReturns times.
                 format: int32
                 type: integer
+              reviewRounds:
+                description: |-
+                  ReviewRounds counts how often the merge step sent the run back to its
+                  reviewers and gate because the branch moved after the gate passed.
+                format: int32
+                type: integer
+              reviewedCommit:
+                description: |-
+                  ReviewedCommit is the head of the run's pull request when the last
+                  human step before its merge passed: the commit the reviewers before it
+                  judged and the gate approved. The merge step merges that commit alone,
+                  and a branch that moved since (an agent step after the gate changed it,
+                  a conflict resolver's merge among them, or anyone pushed) sends the run
+                  back to its reviewers and the gate first (the security review of
+                  2026-11-21, F23). Empty until such a gate passes. A Change of several
+                  repos keeps each repo's in its ChangeRepoStatus.
+                type: string
               startedAt:
                 format: date-time
                 type: string

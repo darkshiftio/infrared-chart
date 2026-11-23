@@ -823,6 +823,37 @@ observability:
   # home's is infrared-platform. Empty: an install-wide Incident, shown on Settings'
   # install-wide panels. Rendered only when set.
   platformProduct: ""
+  # -- The metrics store and Alertmanager behind authentication (infrared-docs-internal
+  # docs/home-defense.md, step 5): one door, vmauth, which the gitops template makes, with
+  # a user for each caller outside the stack's own pipeline. Each stage includes the ones
+  # before it, and each is one values commit away from the one before:
+  #   off       nothing changes;
+  #   door      the template makes vmauth and its users, and Grafana reads through it
+  #             (INFRARED_METRICS_AUTH and INFRARED_METRICS_TOKEN_AUDIENCE, operator);
+  #   clients   Infrared's API and operator, and the operator's upgrade guard, read and write
+  #             through the door at url, each with its own ServiceAccount token of the
+  #             audience below, projected at /var/run/secrets/infrared.darkshift.io/metrics/token
+  #             (INFRARED_METRICS_URL and INFRARED_METRICS_TOKEN_FILE, api and operator);
+  #             metricsWriteURL, when set, is kept and gets the token too;
+  #   enforced  the stores, the vmagents, vmalert, Alertmanager, kube-state-metrics and the
+  #             VictoriaMetrics operator answer only the stack's own pods, the door and the
+  #             Kubernetes API's proxy.
+  # A token is checked against the cluster's service account issuer, which must publish its
+  # keys: GKE's and EKS's do, k3s's does not. Never carried into the gitops template's
+  # infrared Application, so a values commit turns it on and off.
+  metricsAuth:
+    # -- off, door, clients or enforced.
+    stage: "off"
+    # -- The door's address, where the API and the operator read and write from clients on.
+    url: "http://vmauth-victoria-metrics-k8s-stack.monitoring.svc:8427"
+    # -- The audience of the API's and the operator's tokens, which the door's users match.
+    audience: "infrared-metrics"
+  # -- node-exporter behind kube-rbac-proxy (INFRARED_NODE_EXPORTER_AUTH, operator; the same
+  # step): it answers on each node's port 9100 over TLS, and only to a token allowed to get
+  # its Service's subresource, which the template gives vmagent. Off: node-exporter answers
+  # anyone who reaches a node, as before.
+  nodeExporterAuth:
+    enabled: false
 
 # The telemetry plane (infrared-docs-internal ADR 0069 T1 and T3): the Infrared
 # whose VictoriaMetrics every install's series go to, and whose API an install

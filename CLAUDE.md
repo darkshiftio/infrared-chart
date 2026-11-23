@@ -115,6 +115,18 @@ The Helm chart for Infrared (`charts/infrared`), published to
   the gitops template copies into the release namespace; no template renders
   them. Under `objectStore` the media volume stays mounted, read-only, and its
   claim kept.
+- infrared-docs-internal `docs/home-defense.md` step 5, the metrics' door:
+  env `INFRARED_METRICS_AUTH` (`observability.metricsAuth.stage`) and
+  `INFRARED_METRICS_TOKEN_AUDIENCE` (`.audience`) on the operator, rendered
+  only when the stage is not `off`, and `INFRARED_NODE_EXPORTER_AUTH`
+  (`observability.nodeExporterAuth.enabled`) only when on. From `clients` on,
+  the API and the operator take `INFRARED_METRICS_URL` from
+  `observability.metricsAuth.url` and `INFRARED_METRICS_TOKEN_FILE`
+  (`/var/run/secrets/infrared.darkshift.io/metrics/token`), a projected
+  ServiceAccount token of the audience (volume `metrics-token`, 3600 s). The
+  chart renders nothing else for them: the gitops template makes the door,
+  its users and its NetworkPolicies, and the operator mounts the same token
+  into the upgrade guard's Job.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

@@ -456,8 +456,18 @@ tenancy:
     # namespace deleted by Argo CD. Needs Kubernetes 1.31 or later (CEL's IP
     # and CIDR libraries in new expressions). Off: no policy, as before, and
     # the operator removes its own. The gitops template's `infrared`
-    # Application carries it.
+    # Application carries it. With it on, Argo CD makes no namespace but a
+    # zone's under Pod Security restricted and a platform component's: the
+    # operator makes each org's zones itself (the security review of
+    # 2026-11-21, F31).
     enabled: false
+    # -- The install's own platform namespaces that Argo CD may make, beside
+    # those the gitops template and the chart make, which the operator knows
+    # (INFRARED_ADMISSION_PLATFORM_NAMESPACES, operator, as JSON; rendered
+    # only with enabled). A platform Application of the install's own that
+    # relies on CreateNamespace=true for a namespace not there yet is refused
+    # until its namespace is listed here, e.g. `[private-access]`.
+    platformNamespaces: []
   denyLogging:
     # -- Deny logging (ADR 0066 D10; INFRARED_DENY_LOGGING, operator). GKE
     # Dataplane V2 logs each connection a NetworkPolicy refuses in the

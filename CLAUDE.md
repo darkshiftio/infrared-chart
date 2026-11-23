@@ -76,7 +76,10 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `INFRARED_TENANT_QUOTAS` (`tenancy.quotas`, JSON `{"zones", "builds"}`),
   `INFRARED_ADMISSION_POLICIES`, `INFRARED_DENY_LOGGING` and
   `INFRARED_ARGOCD_RESTRICT_DEFAULT_PROJECT` on the operator, each rendered
-  only when set. The operator parses the JSON strictly, so a key the schema
+  only when set, and `INFRARED_ADMISSION_PLATFORM_NAMESPACES`
+  (`tenancy.admissionPolicies.platformNamespaces`, JSON, the install's own
+  platform namespaces Argo CD may make) only with the admission policies and
+  a non-empty list. The operator parses the JSON strictly, so a key the schema
   takes is a key the operator reads. The chart renders nothing else for them:
   the operator writes the zones' blocks, the quotas and the admission
   policies, and the ClusterRole's rules come from `make sync-operator`.

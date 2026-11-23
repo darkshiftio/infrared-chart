@@ -315,6 +315,19 @@ spec:
                   signIn.google.selfSignUp (infrared-docs-internal ADR 0057), changed by
                   a platform admin. Unset means none.
                 properties:
+                  customDomains:
+                    description: |-
+                      CustomDomains caps the org's own (external) Domains, the domains it
+                      proves it controls and serves its environments at: unset means no cap,
+                      and 0 means none, the free tier's on a hosted plane, where a custom
+                      domain is part of a paid plan. A Domain the org has already stays. The
+                      API refuses the Domain past it, saying what to do; a platform admin may
+                      add Domains past it. An install that sets no limit, a self-hosted one,
+                      caps nothing.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
                   newTeams:
                     description: |-
                       NewTeams caps the Teams the org may make besides the catalog's

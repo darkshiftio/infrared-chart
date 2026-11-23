@@ -114,13 +114,23 @@ installation:
   # with Cloudflare's Origin CA and external-dns, so each name moves onto the
   # tunnel when its record points there, and back. `publish` (with `beside`
   # only, off by default) has external-dns publish the edge's own names as
-  # proxied CNAMEs to the tunnel instead of the nodes' addresses.
+  # proxied CNAMEs to the tunnel instead of the nodes' addresses. `hostnames`
+  # (empty by default, at most 100 lower-case DNS names, no wildcard) are the
+  # other names a record sends to the tunnel, each served on the edge by a
+  # listener of its own that the gitops template does not render: names a
+  # gitops repo outside it serves there, and a zone's own addresses and custom
+  # hostnames once their records, or the custom hostnames' fallback origin,
+  # point at the tunnel. cloudflared gives each a route of its own, which
+  # reaches Envoy by that name, and answers 404 for a name listed nowhere
+  # (infrared-docs-internal ADR 0090): list a name before its record moves.
   # Written to the Installation's `spec.tunnel`. Empty: the edge is on the
   # nodes' own ports, as before.
   tunnel: {}
   #   id: 6ff42ae2-765d-4adf-8112-31c55c1551ef
   #   mode: beside       # or only, the default
   #   publish: false     # with mode beside: external-dns points the edge's names at the tunnel
+  #   hostnames:         # the other names on the tunnel, each by a route of its own
+  #     - support.example.com
   # A seed for the Installation's `spec.observability.telemetry` (infrared-docs-
   # internal ADR 0044; ADR 0069 T5): the telemetry plane this install writes its
   # numbers to, and the platform label every series carries. The Installation is

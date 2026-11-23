@@ -196,6 +196,17 @@
             "publish": {
               "type": "boolean",
               "description": "With mode beside, external-dns publishes the edge's names as proxied CNAMEs to <id>.cfargotunnel.com instead of the nodes' addresses. Off by default; it takes mode beside."
+            },
+            "hostnames": {
+              "type": "array",
+              "maxItems": 100,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\\.)+[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+              },
+              "description": "The other names a record sends to the tunnel, each served on the edge by a listener of its own that the gitops template does not render (names a gitops repo outside it serves, and a zone's own addresses and custom hostnames once they move onto the tunnel): cloudflared gives each a route of its own to Envoy by that name, and answers 404 for a name listed nowhere (infrared-docs-internal ADR 0090). Lower-case DNS names with no wildcard, each once, at most 100; empty by default, in either mode."
             }
           },
           "anyOf": [

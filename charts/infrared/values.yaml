@@ -548,9 +548,9 @@ codeIndex:
     # build of darkshiftio/infrared-codeindex main by the kaniko CronJob on
     # infrared-cp-google (darkshiftio/gitops components/infrared-builds), tagged
     # with the platform release it first ships in.
-    tag: v0.1.35-rc.18
+    tag: v0.1.45-rc.2
     # -- Its digest, sha256:...; empty pins by the tag alone.
-    digest: sha256:4c2839e15af3808cb4306de235dab7b25bbf22327565c98846817496ac4c6f23
+    digest: sha256:7d3b2732a3e5a97bd61ac0f236149c378995ea936aecef0d243efb850650184f
 
 image:
   # -- Registry prefix shared by every component image. Empty: the cloud's

@@ -1118,6 +1118,15 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "sharedEndpoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "public": {
+              "type": "boolean"
+            }
+          }
+        },
         "image": {
           "$ref": "#/$defs/image"
         },

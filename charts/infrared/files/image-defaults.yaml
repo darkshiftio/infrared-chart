@@ -15,5 +15,5 @@ runner:
   tag: v0.1.0-alpha.146
   digest: sha256:bce4b9e127a18df1b585c05eeafe21ec4750d6546408839ed245b65d2f449d53
 code-index:
-  tag: v0.1.35-rc.18
-  digest: sha256:4c2839e15af3808cb4306de235dab7b25bbf22327565c98846817496ac4c6f23
+  tag: v0.1.45-rc.2
+  digest: sha256:7d3b2732a3e5a97bd61ac0f236149c378995ea936aecef0d243efb850650184f

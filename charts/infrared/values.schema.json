@@ -2018,6 +2018,17 @@
             }
           }
         },
+        "mcpToolsListed": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "A role must list the MCP tools it uses (the security review of 2026-11-21, F28; the incident response's Fix plan, C15).",
+          "properties": {
+            "required": {
+              "type": "boolean",
+              "description": "INFRARED_MCP_TOOLS_LISTED_REQUIRED on the operator, rendered only when true: every agent step's spec.json carries mcpToolsListedRequired, and the runner gives a role that names an MCP server and lists none of its tools none of them. Off: such a role gets every tool the server offers, as before."
+            }
+          }
+        },
         "giteaStepsUser": {
           "type": "object",
           "additionalProperties": false,

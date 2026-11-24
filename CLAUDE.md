@@ -109,6 +109,12 @@ The Helm chart for Infrared (`charts/infrared`), published to
   in the shape of `infrared-api-tokens`), and infrared-api reads it from the
   Fix plan's C3 and C7 on; no template renders it, and the operator's and the
   API's Secret rules already cover it.
+- The incident response's Fix plan, C15's second half (F28), a role lists
+  the MCP tools it uses: env `INFRARED_MCP_TOOLS_LISTED_REQUIRED`
+  (`runner.mcpToolsListed.required`) on the operator, rendered only when
+  true. The operator puts `mcpToolsListedRequired` in every step's
+  `spec.json`, and the runner leaves out a server the role lists none of the
+  tools of; the chart renders nothing else for it.
 - The incident response's Fix plan, C20, each org's own Gitea user for its
   agent steps: env `INFRARED_GITEA_STEPS_USER` and `INFRARED_GITEA_ADMIN_SECRET`
   (`infrared-gitea-admin`, the API's same Secret) on the operator, rendered

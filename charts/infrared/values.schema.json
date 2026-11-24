@@ -2007,6 +2007,17 @@
             }
           }
         },
+        "stepMCPCredentials": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Each agent step that gets Infrared's MCP server carries a credential of its own (the incident response's Fix plan, C34).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "INFRARED_STEP_MCP_CREDENTIALS on the operator, rendered only when true: a token minted for the step's attempt, in place of the shared access token, recorded in the Secret infrared-step-tokens as limited to the run's org and to reading, and revoked when the attempt ends. Honoured from the Fix plan's C3 and C7. Off: the shared access token, as before."
+            }
+          }
+        },
         "actors": {
           "type": "object",
           "additionalProperties": false,

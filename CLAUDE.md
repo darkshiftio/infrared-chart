@@ -101,6 +101,14 @@ The Helm chart for Infrared (`charts/infrared`), published to
   (`managementCluster.egressAddresses`, comma-separated), each rendered only
   when set. The operator writes the runners' FQDN network policies; the chart
   renders none.
+- The incident response's Fix plan, C34, each agent step's own MCP
+  credential: env `INFRARED_STEP_MCP_CREDENTIALS`
+  (`runner.stepMCPCredentials.enabled`) on the operator, rendered only when
+  true. The operator writes the Secret `infrared-step-tokens` in the release
+  namespace itself (each step token's hex SHA-256 and its record, kind `step`,
+  in the shape of `infrared-api-tokens`), and infrared-api reads it from the
+  Fix plan's C3 and C7 on; no template renders it, and the operator's and the
+  API's Secret rules already cover it.
 - infrared-docs-internal ADR 0087, the stores' layout and the media store:
   env `INFRARED_STORES_ORG_LAYOUT` (`stores.orgLayout.enabled`) and
   `INFRARED_STORES_POLICIES` (`stores.policies.enabled`, which needs the

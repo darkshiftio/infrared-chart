@@ -463,6 +463,13 @@ spec:
             - name: INFRARED_BEDROCK
               value: "true"
             {{- end }}
+            {{- if .Values.runner.stepMCPCredentials.enabled }}
+            # Each agent step that gets Infrared's MCP server carries a token of
+            # its own, limited to its run's org and to reading, in place of the
+            # shared access token (runner.stepMCPCredentials, the Fix plan's C34).
+            - name: INFRARED_STEP_MCP_CREDENTIALS
+              value: "true"
+            {{- end }}
             {{- if .Values.runner.actors.enabled }}
             # Agent steps as Agent Substrate actors for each org placed on them
             # (runner.actors, infrared-docs-internal ADR 0089). An actor reaches

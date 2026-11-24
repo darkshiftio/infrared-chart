@@ -234,13 +234,18 @@ helm template infrared "$chart" -n infrared \
   --set "observability.platformProduct=infrared-platform,telemetry.plane=https://plane.example.com/" >"$out/telemetry.yaml"
 # ...and no plane at all.
 helm template infrared "$chart" -n infrared --set telemetry.plane= >"$out/no-plane.yaml"
+# The callers' own names (workspace TODO 745): a plane of record's public write
+# address and where callers outside the install reach its API, each with a
+# trailing slash.
+helm template infrared "$chart" -n infrared \
+  --set "telemetry.publicURL=https://telemetry.example.com/,api.callersURL=https://hooks.example.com/" >"$out/callers.yaml"
 # The tools agent steps copy in, from an install's own images, as a mirror names them.
 mirror_go='registry.example.com/golang:1.26.10@sha256:0000000000000000000000000000000000000000000000000000000000000031'
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane"
+ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -251,7 +256,7 @@ envs() {
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
     test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
-    code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane; do envs "$f"; done
+    code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -677,17 +682,27 @@ check defaults.env "the metrics store keeps the template's own size by default" 
 has metrics-storage.env "the metrics store's size reaches the operator" 'INFRARED_METRICS_STORAGE="40Gi"'
 # Install telemetry (ADR 0069): the seed reaches the operator only when set, the
 # Product the install's own Incidents open on reaches the API only when set, and
-# the plane the API registers with is the home unless the install names another,
-# a trailing slash trimmed, or none.
+# the plane the API registers with is the home at the plane's own name unless the
+# install names another, a trailing slash trimmed, or none, when the API's own
+# default is the same address.
 check defaults.env "no telemetry seed by default" '^INFRARED_TELEMETRY_(URL|PLATFORM)=' 0
 has telemetry.env "the seed's write path reaches the operator" 'INFRARED_TELEMETRY_URL="https://infrared.example.com/api/v1/telemetry/write"'
 has telemetry.env "the seed's platform reaches the operator" 'INFRARED_TELEMETRY_PLATFORM="demo-mac"'
 check defaults.env "no platform Product by default: an install-wide Incident" '^INFRARED_PLATFORM_PRODUCT=' 0
 has telemetry.env "the platform Product reaches the API" 'INFRARED_PLATFORM_PRODUCT="infrared-platform"'
-has defaults.env "the API registers with the home's plane by default" 'INFRARED_TELEMETRY_PLANE="https://infrared.internal.darkshift.io"'
+has defaults.env "the API registers with the home's plane by default, at its own name" 'INFRARED_TELEMETRY_PLANE="https://telemetry.darkshift.io"'
+check defaults.env "the home's old public name is no default" 'infrared\.internal\.darkshift\.io' 0
 has telemetry.env "a plane of the install's own, its trailing slash trimmed" 'INFRARED_TELEMETRY_PLANE="https://plane.example.com"'
-check no-plane.env "no plane: the API registers nowhere" '^INFRARED_TELEMETRY_PLANE=' 0
+check no-plane.env "no plane: none is handed to the API, whose own default is the same address" '^INFRARED_TELEMETRY_PLANE=' 0
 check defaults.yaml "the platform Product and the plane are the API's alone" '^            - name: INFRARED_(PLATFORM_PRODUCT|TELEMETRY_PLANE)$' 1
+# The callers' own names (workspace TODO 745): a plane of record's public write
+# address and the callers' address reach the API alone, each only when set, a
+# trailing slash trimmed.
+check defaults.env "no public write address and no callers' address by default" '^INFRARED_(TELEMETRY_PUBLIC_URL|CALLERS_URL)=' 0
+has callers.env "the public write address reaches the API, its trailing slash trimmed" 'INFRARED_TELEMETRY_PUBLIC_URL="https://telemetry.example.com"'
+has callers.env "the callers' address reaches the API, its trailing slash trimmed" 'INFRARED_CALLERS_URL="https://hooks.example.com"'
+check callers.yaml "the public write address and the callers' address are the API's alone" \
+  '^            - name: INFRARED_(TELEMETRY_PUBLIC_URL|CALLERS_URL)$' 2
 # The API deletes the install's telemetry token on PUT /v1/telemetry, that one
 # Secret by name and nothing else: the only delete the API has on Secrets.
 api_secret_rules="$(yq -N -r 'select(.kind == "ClusterRole" and .metadata.name == "infrared-api") | [.rules[] | select((.resources | join(",")) == "secrets") | ((.resourceNames // []) | join(",")) + ":" + (.verbs | join(","))] | join(" ")' "$out/defaults.yaml" | { grep -v '^$' || true; })"
@@ -1923,6 +1938,10 @@ refuse "a directory interval that is not a Go duration fails" "at '/api/director
   --set api.directory.interval=two-minutes
 refuse "a client address header that is not a header name fails" "at '/api/clientAddressHeader'" \
   --set-string 'api.clientAddressHeader=CF Connecting IP'
+refuse "a callers' address over plain http fails" "at '/api/callersURL'" --set api.callersURL=http://hooks.example.com
+refuse "a callers' address with a path fails" "at '/api/callersURL'" --set api.callersURL=https://hooks.example.com/api
+refuse "a public write address with a path fails" "at '/telemetry/publicURL'" \
+  --set telemetry.publicURL=https://telemetry.example.com/api
 # The edge's proof (api.clientAddressProof.enabled, workspace TODO 473, F4;
 # ADR 0066 D2): off by default, nothing gets it; on, with the client address
 # header, the API and the operator get the same Secret, <fullname>-edge-proof,

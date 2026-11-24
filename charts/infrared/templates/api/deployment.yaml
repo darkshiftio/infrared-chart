@@ -268,8 +268,23 @@ spec:
             {{- with .Values.telemetry.plane }}
             # The telemetry plane this install registers with and writes to
             # (telemetry.plane, ADR 0069 T1 and T3): the home unless the install
-            # names another; empty, it registers nowhere.
+            # names another; empty, the API's own default, the same address.
             - name: INFRARED_TELEMETRY_PLANE
+              value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
+            {{- with .Values.telemetry.publicURL }}
+            # On a plane of record, the base of every write path it hands out
+            # (telemetry.publicURL, workspace TODO 745); unset, the address each
+            # request came to.
+            - name: INFRARED_TELEMETRY_PUBLIC_URL
+              value: {{ trimSuffix "/" . | quote }}
+            {{- end }}
+            {{- with $c.callersURL }}
+            # Where callers outside the install reach its API: the base of the
+            # Slack app's request URLs and a new GitHub App's webhook URL
+            # (api.callersURL, workspace TODO 745); unset, the address each
+            # request came to.
+            - name: INFRARED_CALLERS_URL
               value: {{ trimSuffix "/" . | quote }}
             {{- end }}
             {{- /* The chat with the install's support desk (supportChat, workspace TODO

@@ -2129,6 +2129,11 @@
           "type": "string",
           "pattern": "^$|^https://[^/\\s?#@]+/?$|^http://(localhost|127\\.0\\.0\\.1)(:[0-9]+)?/?$",
           "description": "INFRARED_TELEMETRY_PUBLIC_URL: on a plane of record, its public write address, https and no path (plain http for localhost alone), a trailing slash trimmed: the base of every write path it hands out. Empty means the address each request came to."
+        },
+        "installsMax": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "INFRARED_TELEMETRY_INSTALLS_MAX: on a plane, how many installs it registers; past it a new install's registration answers 503. 0 renders nothing, and the API's own default, 1000, applies."
         }
       }
     },

@@ -875,6 +875,12 @@ telemetry:
   # to one it can reach. The home sets https://telemetry.darkshift.io. Empty: the
   # address each request came to.
   publicURL: ""
+  # -- On a plane, how many installs it registers (INFRARED_TELEMETRY_INSTALLS_MAX, api;
+  # infrared-docs-internal security brief 2026-11-21, F11): past it, a new install's
+  # registration answers 503 with Retry-After, while a known one still rotates its token.
+  # About 450 bytes each in the Secret infrared-telemetry-tokens. 0: not rendered, and the
+  # API's own default, the same 1000, applies.
+  installsMax: 1000
 
 # The chat with the install's support desk (workspace TODO 668): infrared-api's
 # get-support-chat hands a signed-in person what the desk's website widget,

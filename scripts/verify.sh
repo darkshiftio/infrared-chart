@@ -2356,6 +2356,32 @@ for set in runner.permissions=open 'runner.networkPolicy.egressByName.hosts={10.
 done
 check defaults.yaml "the operator may write runners' FQDN network policies (generated RBAC)" 'fqdnnetworkpolicies' 1
 
+step "each agent step's own keys for its agent and e2e hosts (runner.stepSecret.required; the security review of 2026-11-21, F27; the Fix plan's C19, second half)"
+# Off by default: nothing handed to the operator, which then gives no step a key,
+# and the hosts serve their first caller, as before. On: one variable, on the
+# operator alone, and no object of its own: the operator writes each runner Job's
+# Secret <run>-<step>-hosts in the org's namespace itself.
+helm template infrared "$chart" -n infrared --include-crds --set runner.stepSecret.required=true >"$out/step-secret.yaml"
+if helm lint --strict "$chart" "${install[@]}" --set runner.stepSecret.required=true >"$out/lint.log" 2>&1; then
+  ok "lint install with each step's own host keys"
+else cat "$out/lint.log"; bad "lint install with each step's own host keys"; fi
+for f in defaults install ghcr ghcr-adopted gitea code-index actors; do
+  check "$f.yaml" "$f: no step gets host keys by default (no INFRARED_STEP_SECRET_REQUIRED)" 'INFRARED_STEP_SECRET_REQUIRED' 0
+done
+if [[ "$(opvar step-secret INFRARED_STEP_SECRET_REQUIRED)" == true ]]; then ok "true handed to the operator (INFRARED_STEP_SECRET_REQUIRED)"
+else bad "INFRARED_STEP_SECRET_REQUIRED is '$(opvar step-secret INFRARED_STEP_SECRET_REQUIRED)', want true"; fi
+check step-secret.yaml "INFRARED_STEP_SECRET_REQUIRED on the operator alone" 'name: INFRARED_STEP_SECRET_REQUIRED$' 1
+if [[ "$(objects step-secret)" == "$(objects defaults)" ]]; then ok "it renders no object of its own: the operator writes each step's keys"
+else bad "runner.stepSecret.required renders objects of its own: $(diff <(objects defaults) <(objects step-secret) | tr '\n' ' ')"; fi
+check step-secret.yaml "no template renders a step's host keys" '^  name: .*-hosts$' 0
+for set in runner.stepSecret.enabled=true runner.stepSecret=true; do
+  if helm template infrared "$chart" -n infrared --set "$set" >/dev/null 2>&1; then bad "the schema took $set"
+  else ok "the schema refuses $set"; fi
+done
+if helm template infrared "$chart" -n infrared --set-string runner.stepSecret.required=yes >/dev/null 2>&1; then
+  bad "the schema took runner.stepSecret.required as a string"
+else ok "the schema refuses runner.stepSecret.required as a string"; fi
+
 step "the rest of the tenancy (tenancy.tenantPods, quotas, admissionPolicies, denyLogging, argoCD; ADR 0066 D4, D5, D6, D10)"
 # Off by default: nothing handed to the operator. On: one variable each,
 # tenants' pods and quotas as the JSON the operator reads, and no object of

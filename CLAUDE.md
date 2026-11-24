@@ -101,6 +101,12 @@ The Helm chart for Infrared (`charts/infrared`), published to
   (`managementCluster.egressAddresses`, comma-separated), each rendered only
   when set. The operator writes the runners' FQDN network policies; the chart
   renders none.
+- The incident response's Fix plan, C19's second half, each agent step's
+  own keys for its agent and e2e hosts: env `INFRARED_STEP_SECRET_REQUIRED`
+  (`runner.stepSecret.required`) on the operator, rendered only when true.
+  The operator writes each runner Job's Secret `<run>-<step>-hosts` in the
+  org's namespace itself and gives each key to the runner and its one host;
+  no template renders it, and the operator's Secret rules already cover it.
 - The incident response's Fix plan, C34, each agent step's own MCP
   credential: env `INFRARED_STEP_MCP_CREDENTIALS`
   (`runner.stepMCPCredentials.enabled`) on the operator, rendered only when

@@ -404,6 +404,15 @@ spec:
             - name: INFRARED_GITEA_URL
               value: {{ include "infrared.giteaURL" . | quote }}
             {{- end }}
+            {{- if and .Values.gitea.enabled .Values.runner.giteaStepsUser.enabled }}
+            # Each org's own Gitea user for its agent steps, on a team that holds
+            # its Product repositories and never its gitops repository, made as
+            # Gitea's site admin (runner.giteaStepsUser, the Fix plan's C20).
+            - name: INFRARED_GITEA_STEPS_USER
+              value: "true"
+            - name: INFRARED_GITEA_ADMIN_SECRET
+              value: "infrared-gitea-admin"
+            {{- end }}
             {{- if .Values.oidc.enabled }}
             # Infrared as the OpenID Connect provider of the install's own tools
             # (oidc.enabled, ADR 0053): with Grafana's address, the gitops

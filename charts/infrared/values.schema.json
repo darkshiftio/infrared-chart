@@ -2029,6 +2029,28 @@
             }
           }
         },
+        "mcpToolsListed": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "A role must list the MCP tools it uses (the security review of 2026-11-21, F28; the incident response's Fix plan, C15).",
+          "properties": {
+            "required": {
+              "type": "boolean",
+              "description": "INFRARED_MCP_TOOLS_LISTED_REQUIRED on the operator, rendered only when true: every agent step's spec.json carries mcpToolsListedRequired, and the runner gives a role that names an MCP server and lists none of its tools none of them. Off: such a role gets every tool the server offers, as before."
+            }
+          }
+        },
+        "giteaStepsUser": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Each org on the chart's Gitea gets a second Gitea user for its agent steps, on a team that holds the org's Product repositories and never its gitops repository (the incident response's Fix plan, C20).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "INFRARED_GITEA_STEPS_USER and INFRARED_GITEA_ADMIN_SECRET on the operator, rendered only when true and gitea.enabled: the operator makes the user as Gitea's site admin, checks it reaches no gitops repository, and only then mints each step's Gitea token as that user instead of the org's bot. Off: the bot's, as before."
+            }
+          }
+        },
         "actors": {
           "type": "object",
           "additionalProperties": false,

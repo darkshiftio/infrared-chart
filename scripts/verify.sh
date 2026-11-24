@@ -235,12 +235,12 @@ helm template infrared "$chart" -n infrared \
   --set "installation.telemetry.url=https://infrared.example.com/api/v1/telemetry/write,installation.telemetry.platform=demo-mac" \
   --set "observability.platformProduct=infrared-platform,telemetry.plane=https://plane.example.com/" >"$out/telemetry.yaml"
 # ...and no plane at all.
-helm template infrared "$chart" -n infrared --set telemetry.plane= >"$out/no-plane.yaml"
+helm template infrared "$chart" -n infrared --set telemetry.plane= --set telemetry.installsMax=0 >"$out/no-plane.yaml"
 # The callers' own names (workspace TODO 745): a plane of record's public write
 # address and where callers outside the install reach its API, each with a
 # trailing slash.
 helm template infrared "$chart" -n infrared \
-  --set "telemetry.publicURL=https://telemetry.example.com/,api.callersURL=https://hooks.example.com/" >"$out/callers.yaml"
+  --set "telemetry.publicURL=https://telemetry.example.com/,api.callersURL=https://hooks.example.com/,telemetry.installsMax=250" >"$out/callers.yaml"
 # The tools agent steps copy in, from an install's own images, as a mirror names them.
 mirror_go='registry.example.com/golang:1.26.10@sha256:0000000000000000000000000000000000000000000000000000000000000031'
 mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000032'
@@ -701,6 +701,9 @@ check defaults.yaml "the platform Product and the plane are the API's alone" '^ 
 # address and the callers' address reach the API alone, each only when set, a
 # trailing slash trimmed.
 check defaults.env "no public write address and no callers' address by default" '^INFRARED_(TELEMETRY_PUBLIC_URL|CALLERS_URL)=' 0
+has defaults.env "the plane registers at most 1000 installs by default" 'INFRARED_TELEMETRY_INSTALLS_MAX="1000"'
+has callers.env "an install's own cap on registered installs reaches the API" 'INFRARED_TELEMETRY_INSTALLS_MAX="250"'
+check no-plane.env "installsMax 0: no cap handed to the API, whose own default is the same" '^INFRARED_TELEMETRY_INSTALLS_MAX=' 0
 has callers.env "the public write address reaches the API, its trailing slash trimmed" 'INFRARED_TELEMETRY_PUBLIC_URL="https://telemetry.example.com"'
 has callers.env "the callers' address reaches the API, its trailing slash trimmed" 'INFRARED_CALLERS_URL="https://hooks.example.com"'
 check callers.yaml "the public write address and the callers' address are the API's alone" \

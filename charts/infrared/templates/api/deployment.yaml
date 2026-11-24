@@ -279,6 +279,12 @@ spec:
             - name: INFRARED_TELEMETRY_PUBLIC_URL
               value: {{ trimSuffix "/" . | quote }}
             {{- end }}
+            {{- with .Values.telemetry.installsMax }}
+            # On a plane, how many installs it registers (telemetry.installsMax,
+            # F11); unset, the API's own default, 1000.
+            - name: INFRARED_TELEMETRY_INSTALLS_MAX
+              value: {{ int . | quote }}
+            {{- end }}
             {{- with $c.callersURL }}
             # Where callers outside the install reach its API: the base of the
             # Slack app's request URLs and a new GitHub App's webhook URL

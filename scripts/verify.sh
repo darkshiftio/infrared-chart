@@ -191,6 +191,10 @@ helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"
 # C34), with the code index, where steps get Infrared's MCP server at all.
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" \
   --set runner.stepMCPCredentials.enabled=true >"$out/step-mcp-credentials.yaml"
+# A role lists the MCP tools it uses (runner.mcpToolsListed.required, the Fix
+# plan's C15), with the code index, where steps get Infrared's MCP server at all.
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" \
+  --set runner.mcpToolsListed.required=true >"$out/mcp-tools-listed.yaml"
 # An org's agent steps as Agent Substrate actors (runner.actors, infrared-docs-internal
 # ADR 0089): its hosts the runners' egress hosts, or its own, and an agent image given.
 helm template infrared "$chart" -n infrared --set runner.actors.enabled=true >"$out/actors.yaml"
@@ -251,7 +255,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
+ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, mcp-tools-listed, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -260,7 +264,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock step-mcp-credentials actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock step-mcp-credentials mcp-tools-listed actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers mcp-shared-public; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -1054,6 +1058,23 @@ has step-mcp-credentials.env "runner.stepMCPCredentials: steps reach the MCP ser
 for f in defaults code-index step-mcp-credentials; do
   check "$f.yaml" "$f: the chart renders no infrared-step-tokens, which the operator alone writes" '^  name: infrared-step-tokens$' 0
 done
+# C15's second half (F28): a role lists the MCP tools it uses. Off, the default,
+# the chart renders no INFRARED_MCP_TOOLS_LISTED_REQUIRED, so no step's spec.json
+# carries mcpToolsListedRequired and a role that lists none of a server's tools
+# gets every one, as before; true renders it, on the operator alone, and nothing
+# else changes: the steps' way to infrared-mcp is as it was.
+for f in defaults install code-index code-index-adopted step-mcp-credentials; do
+  check "$f.env" "$f: a role that lists no MCP tools gets them all, as before (no INFRARED_MCP_TOOLS_LISTED_REQUIRED)" \
+    '^INFRARED_MCP_TOOLS_LISTED_REQUIRED=' 0
+done
+has mcp-tools-listed.env "runner.mcpToolsListed.required: a role lists the MCP tools it uses" 'INFRARED_MCP_TOOLS_LISTED_REQUIRED="true"'
+if [[ "$(objn mcp-tools-listed Deployment infrared-operator '^            - name: INFRARED_MCP_TOOLS_LISTED_REQUIRED$')" == 1 ]]; then
+  ok "runner.mcpToolsListed.required: INFRARED_MCP_TOOLS_LISTED_REQUIRED on the operator alone"
+else bad "runner.mcpToolsListed.required: INFRARED_MCP_TOOLS_LISTED_REQUIRED is not on the operator"; fi
+check mcp-tools-listed.yaml "runner.mcpToolsListed.required: on no other Deployment" '^ +- name: INFRARED_MCP_TOOLS_LISTED_REQUIRED$' 1
+has mcp-tools-listed.env "runner.mcpToolsListed.required: steps reach the MCP server's in-cluster listener as before" \
+  'INFRARED_MCP_URL="http://infrared-mcp.infrared.svc.cluster.local:8081/mcp"'
+check mcp-tools-listed.env "runner.mcpToolsListed.required: steps carry the shared MCP access token as before" '^INFRARED_STEP_MCP_CREDENTIALS=' 0
 
 # lines <object text> <whole lines...>: true when every line is in the object.
 lines() { local o="$1" l; shift; for l in "$@"; do grep -qxF -- "$l" <<<"$o" || { echo "  missing: $l"; return 1; }; done; }
@@ -1366,6 +1387,9 @@ refuse "mcp.sharedEndpoint.public takes true or false alone" "/mcp/sharedEndpoin
 refuse "runner.stepMCPCredentials.enabled takes true or false alone" "/runner/stepMCPCredentials/enabled': got string, want boolean" \
   --set-string runner.stepMCPCredentials.enabled=yes
 refuse "runner.stepMCPCredentials takes enabled alone" "additional properties 'perStep' not allowed" --set runner.stepMCPCredentials.perStep=true
+refuse "runner.mcpToolsListed.required takes true or false alone" "/runner/mcpToolsListed/required': got string, want boolean" \
+  --set-string runner.mcpToolsListed.required=yes
+refuse "runner.mcpToolsListed takes required alone" "additional properties 'enabled' not allowed" --set runner.mcpToolsListed.enabled=true
 refuse "operator.supportResearch without operator.supportDesk fails" "operator.supportResearch needs operator.supportDesk" \
   --set operator.supportResearch=true
 refuse "operator.supportFixes without operator.supportResearch fails" "operator.supportFixes needs operator.supportResearch" \

@@ -109,6 +109,12 @@ The Helm chart for Infrared (`charts/infrared`), published to
   in the shape of `infrared-api-tokens`), and infrared-api reads it from the
   Fix plan's C3 and C7 on; no template renders it, and the operator's and the
   API's Secret rules already cover it.
+- The incident response's Fix plan, C15's second half (F28), a role lists
+  the MCP tools it uses: env `INFRARED_MCP_TOOLS_LISTED_REQUIRED`
+  (`runner.mcpToolsListed.required`) on the operator, rendered only when
+  true. The operator puts `mcpToolsListedRequired` in every step's
+  `spec.json`, and the runner leaves out a server the role lists none of the
+  tools of; the chart renders nothing else for it.
 - infrared-docs-internal ADR 0087, the stores' layout and the media store:
   env `INFRARED_STORES_ORG_LAYOUT` (`stores.orgLayout.enabled`) and
   `INFRARED_STORES_POLICIES` (`stores.policies.enabled`, which needs the

@@ -71,6 +71,13 @@ spec:
               value: "/var/run/infrared/api-token/token"
             - name: INFRARED_MCP_TOKEN_FILE
               value: "/var/run/infrared/mcp-access/token"
+            {{- if dig "sharedEndpoint" "public" false $c }}
+            # The shared-token /mcp on the public listener too (C33): off unless
+            # mcp.sharedEndpoint.public, so the install's public name serves no
+            # /mcp that the access token above opens.
+            - name: INFRARED_MCP_PUBLIC_SHARED
+              value: "on"
+            {{- end }}
             {{- if and .Values.oidc.enabled .Values.oidc.mcpURL }}
             # The code tools for people signed in through Infrared (oidc.mcpURL,
             # ADR 0053), at its path on the public listener, which the UI's /mcp

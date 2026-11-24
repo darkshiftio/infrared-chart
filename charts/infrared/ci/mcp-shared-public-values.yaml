@@ -1,0 +1,6 @@
+# CI: the shared-token /mcp back on infrared-mcp's public listener (C33), which
+# renders INFRARED_MCP_PUBLIC_SHARED=on; by default the chart renders nothing and
+# infrared-mcp keeps it off.
+mcp:
+  sharedEndpoint:
+    public: true

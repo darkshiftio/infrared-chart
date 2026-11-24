@@ -58,7 +58,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml ci/storage-layout-values.yaml ci/media-object-store-values.yaml ci/security-evidence-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml ci/storage-layout-values.yaml ci/media-object-store-values.yaml ci/security-evidence-values.yaml ci/mcp-shared-public-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -90,6 +90,8 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/adopted-values.yaml" >
 # The MCP Secrets under names of a person's own choosing.
 helm template infrared "$chart" -n infrared --set mcp.existingSecret=ci-mcp-token,mcp.access.existingSecret=ci-mcp-access \
   >"$out/mcp-existing.yaml"
+# The shared-token /mcp back on infrared-mcp's public listener (C33).
+helm template infrared "$chart" -n infrared -f "$chart/ci/mcp-shared-public-values.yaml" >"$out/mcp-shared-public.yaml"
 # The API restarting in place, for a shape with no room for a second API pod.
 helm template infrared "$chart" -n infrared --set api.strategy.type=Recreate >"$out/api-recreate.yaml"
 # Flags (ADR 0058) as a plane's values file sets them, and its int again from
@@ -245,7 +247,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
+ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -256,7 +258,7 @@ envs() {
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
     test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
-    code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers; do envs "$f"; done
+    code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers mcp-shared-public; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
 secret() {
   awk -v s="$2" -v k="$3" '
@@ -1013,6 +1015,20 @@ for c in "defaults infrared-mcp infrared-mcp-token infrared-mcp-access" \
 done
 check mcp-existing.yaml "mcp-existing: the chart renders neither MCP Secret nor infrared-api-tokens" \
   '^  name: (infrared-mcp-token|infrared-mcp-access|infrared-api-tokens|ci-mcp-token|ci-mcp-access)$' 0
+# C33: the shared-token /mcp stays off infrared-mcp's public listener, which the
+# UI's /mcp route and so the install's public name reach, unless
+# mcp.sharedEndpoint.public: by default the chart renders no
+# INFRARED_MCP_PUBLIC_SHARED and infrared-mcp keeps it off; true renders it on,
+# for infrared-mcp alone. The in-cluster code listener (INFRARED_MCP_CODE_LISTEN)
+# is never turned off.
+for f in defaults code-index; do
+  check "$f.yaml" "$f: the shared-token /mcp off the public listener (no INFRARED_MCP_PUBLIC_SHARED)" 'INFRARED_MCP_PUBLIC_SHARED' 0
+  check "$f.yaml" "$f: infrared-mcp's code listener for steps stays on" '^ +- name: INFRARED_MCP_CODE_LISTEN$' 0
+done
+has mcp-shared-public.env "mcp.sharedEndpoint.public: the shared-token /mcp on the public listener" 'INFRARED_MCP_PUBLIC_SHARED="on"'
+if [[ "$(objn mcp-shared-public Deployment infrared-mcp '^            - name: INFRARED_MCP_PUBLIC_SHARED$')" == 1 ]]; then
+  ok "mcp.sharedEndpoint.public: INFRARED_MCP_PUBLIC_SHARED on infrared-mcp alone"
+else bad "mcp.sharedEndpoint.public: INFRARED_MCP_PUBLIC_SHARED is not on infrared-mcp"; fi
 
 # lines <object text> <whole lines...>: true when every line is in the object.
 lines() { local o="$1" l; shift; for l in "$@"; do grep -qxF -- "$l" <<<"$o" || { echo "  missing: $l"; return 1; }; done; }
@@ -1321,6 +1337,7 @@ check license-existing.yaml "as the Secret's name" '^              value: "ci-li
 refuse "license.key with license.existingSecret fails" "license.key and license.existingSecret are two places for the licence" \
   --set-file "license.key=$out/ci-license" --set license.existingSecret=ci-license
 refuse "a license.key that is not a licence fails" "license.key is not an Infrared licence" --set license.key=not-a-licence
+refuse "mcp.sharedEndpoint.public takes true or false alone" "/mcp/sharedEndpoint/public': got string, want boolean" --set-string mcp.sharedEndpoint.public=yes
 refuse "operator.supportResearch without operator.supportDesk fails" "operator.supportResearch needs operator.supportDesk" \
   --set operator.supportResearch=true
 refuse "operator.supportFixes without operator.supportResearch fails" "operator.supportFixes needs operator.supportResearch" \

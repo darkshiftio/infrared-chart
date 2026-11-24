@@ -1352,6 +1352,16 @@ mcp:
     token: ""
     # -- Name of an existing Secret with key `token`; when set, the chart renders no access Secret.
     existingSecret: ""
+  sharedEndpoint:
+    # -- Serve the shared-token /mcp (the access token above) on infrared-mcp's
+    # public listener, the one the UI's /mcp route and so the install's public
+    # name reach (INFRARED_MCP_PUBLIC_SHARED=on, rendered only when true). False,
+    # the default, takes it off the public listener, where /mcp then answers 404
+    # (C33): whoever holds that one token reads as infrared-mcp does. /mcp/code
+    # for people signed in (oidc.mcpURL) and the in-cluster code listener on
+    # 8081, which agent steps reach, stay. An infrared-mcp image from before
+    # C33 serves the public /mcp whatever this says.
+    public: false
   image:
     repository: infrared-mcp
     tag: v0.1.0-alpha.146

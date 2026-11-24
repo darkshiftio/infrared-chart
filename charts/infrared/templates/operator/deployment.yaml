@@ -470,6 +470,12 @@ spec:
             - name: INFRARED_STEP_MCP_CREDENTIALS
               value: "true"
             {{- end }}
+            {{- if .Values.runner.mcpToolsListed.required }}
+            # A role that names an MCP server and lists none of its tools gets
+            # none of them (runner.mcpToolsListed.required, the Fix plan's C15).
+            - name: INFRARED_MCP_TOOLS_LISTED_REQUIRED
+              value: "true"
+            {{- end }}
             {{- if .Values.runner.actors.enabled }}
             # Agent steps as Agent Substrate actors for each org placed on them
             # (runner.actors, infrared-docs-internal ADR 0089). An actor reaches

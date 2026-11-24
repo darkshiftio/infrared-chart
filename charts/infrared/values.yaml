@@ -948,6 +948,15 @@ runner:
     # runs without them, so it goes on with them, at 0.2.0. False: every such step carries the shared
     # access token, as before.
     enabled: false
+  mcpToolsListed:
+    # -- A role must list the MCP tools it uses (INFRARED_MCP_TOOLS_LISTED_REQUIRED, operator, rendered only when
+    # true; the security review of 2026-11-21, F28; the incident response's Fix plan, C15): every agent step's
+    # spec.json carries mcpToolsListedRequired, and the runner gives a role that names an MCP server in mcpServers and
+    # lists none of its tools in allowedTools none of them, saying why in the step's log. A role that lists some of a
+    # server's tools gets those alone, and one that allows the whole server (mcp__<name>__*) all of them, as before;
+    # which steps get a server is unchanged. False: such a role gets every tool the server offers, as before, and the
+    # step's log warns. 0.2.0 turns it on by default.
+    required: false
   actors:
     # -- Agent steps as Agent Substrate actors (INFRARED_AGENT_ACTORS, operator, as JSON; infrared-docs-internal
     # ADR 0089, Proposed): each step of an org placed on actors (spec.agentSteps.placement, for the Products it

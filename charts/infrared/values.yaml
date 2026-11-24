@@ -937,6 +937,17 @@ runner:
     # org's `modelProvider` is ignored. Until the operator reads rollout flags (ADR 0061 decision 9);
     # retired once Bedrock is generally available.
     enabled: false
+  stepMCPCredentials:
+    # -- Each agent step that gets Infrared's MCP server carries a credential of its own
+    # (INFRARED_STEP_MCP_CREDENTIALS, operator, rendered only when true; the incident response's Fix plan,
+    # C34): a token the operator mints for the step's attempt, in place of the shared access token
+    # (mcp.access), recorded in the Secret infrared-step-tokens in the release namespace, which the
+    # operator alone writes, as limited to the run's org and to reading, and revoked when the attempt
+    # ends. Which steps get the server is unchanged. infrared-api and infrared-mcp honour such a token
+    # from the Fix plan's C3 and C7: with older ones, a step that carries its own gets no MCP tools and
+    # runs without them, so it goes on with them, at 0.2.0. False: every such step carries the shared
+    # access token, as before.
+    enabled: false
   actors:
     # -- Agent steps as Agent Substrate actors (INFRARED_AGENT_ACTORS, operator, as JSON; infrared-docs-internal
     # ADR 0089, Proposed): each step of an org placed on actors (spec.agentSteps.placement, for the Products it

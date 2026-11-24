@@ -187,6 +187,10 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/security-evidence-valu
 helm template infrared "$chart" -n infrared --set security.evidence.images.syft=registry.example.org/anchore/syft:v1.56.0-debug@sha256:1111111111111111111111111111111111111111111111111111111111111111 >"$out/security-evidence-off.yaml"
 # Agent steps on Amazon Bedrock for the orgs that ask (runner.bedrock.enabled).
 helm template infrared "$chart" -n infrared --set runner.bedrock.enabled=true >"$out/bedrock.yaml"
+# Each agent step's own MCP credential (runner.stepMCPCredentials, the Fix plan's
+# C34), with the code index, where steps get Infrared's MCP server at all.
+helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" \
+  --set runner.stepMCPCredentials.enabled=true >"$out/step-mcp-credentials.yaml"
 # An org's agent steps as Agent Substrate actors (runner.actors, infrared-docs-internal
 # ADR 0089): its hosts the runners' egress hosts, or its own, and an agent image given.
 helm template infrared "$chart" -n infrared --set runner.actors.enabled=true >"$out/actors.yaml"
@@ -247,7 +251,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
+ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -256,7 +260,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock step-mcp-credentials actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers mcp-shared-public; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -1032,6 +1036,24 @@ has mcp-shared-public.env "mcp.sharedEndpoint.public: the shared-token /mcp on t
 if [[ "$(objn mcp-shared-public Deployment infrared-mcp '^            - name: INFRARED_MCP_PUBLIC_SHARED$')" == 1 ]]; then
   ok "mcp.sharedEndpoint.public: INFRARED_MCP_PUBLIC_SHARED on infrared-mcp alone"
 else bad "mcp.sharedEndpoint.public: INFRARED_MCP_PUBLIC_SHARED is not on infrared-mcp"; fi
+# C34: each agent step's own MCP credential. Off, the default, the chart renders
+# no INFRARED_STEP_MCP_CREDENTIALS and every step that gets Infrared's MCP server
+# carries the shared access token, as before; true renders it, on the operator
+# alone. The operator writes infrared-step-tokens itself: no template renders it,
+# and steps' way to infrared-mcp is as it was.
+for f in defaults install code-index code-index-adopted; do
+  check "$f.env" "$f: steps carry the shared MCP access token (no INFRARED_STEP_MCP_CREDENTIALS)" '^INFRARED_STEP_MCP_CREDENTIALS=' 0
+done
+has step-mcp-credentials.env "runner.stepMCPCredentials: each step's own MCP credential" 'INFRARED_STEP_MCP_CREDENTIALS="true"'
+if [[ "$(objn step-mcp-credentials Deployment infrared-operator '^            - name: INFRARED_STEP_MCP_CREDENTIALS$')" == 1 ]]; then
+  ok "runner.stepMCPCredentials: INFRARED_STEP_MCP_CREDENTIALS on the operator alone"
+else bad "runner.stepMCPCredentials: INFRARED_STEP_MCP_CREDENTIALS is not on the operator"; fi
+check step-mcp-credentials.yaml "runner.stepMCPCredentials: on no other Deployment" '^ +- name: INFRARED_STEP_MCP_CREDENTIALS$' 1
+has step-mcp-credentials.env "runner.stepMCPCredentials: steps reach the MCP server's in-cluster listener as before" \
+  'INFRARED_MCP_URL="http://infrared-mcp.infrared.svc.cluster.local:8081/mcp"'
+for f in defaults code-index step-mcp-credentials; do
+  check "$f.yaml" "$f: the chart renders no infrared-step-tokens, which the operator alone writes" '^  name: infrared-step-tokens$' 0
+done
 
 # lines <object text> <whole lines...>: true when every line is in the object.
 lines() { local o="$1" l; shift; for l in "$@"; do grep -qxF -- "$l" <<<"$o" || { echo "  missing: $l"; return 1; }; done; }
@@ -1341,6 +1363,9 @@ refuse "license.key with license.existingSecret fails" "license.key and license.
   --set-file "license.key=$out/ci-license" --set license.existingSecret=ci-license
 refuse "a license.key that is not a licence fails" "license.key is not an Infrared licence" --set license.key=not-a-licence
 refuse "mcp.sharedEndpoint.public takes true or false alone" "/mcp/sharedEndpoint/public': got string, want boolean" --set-string mcp.sharedEndpoint.public=yes
+refuse "runner.stepMCPCredentials.enabled takes true or false alone" "/runner/stepMCPCredentials/enabled': got string, want boolean" \
+  --set-string runner.stepMCPCredentials.enabled=yes
+refuse "runner.stepMCPCredentials takes enabled alone" "additional properties 'perStep' not allowed" --set runner.stepMCPCredentials.perStep=true
 refuse "operator.supportResearch without operator.supportDesk fails" "operator.supportResearch needs operator.supportDesk" \
   --set operator.supportResearch=true
 refuse "operator.supportFixes without operator.supportResearch fails" "operator.supportFixes needs operator.supportResearch" \

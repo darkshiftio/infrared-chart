@@ -957,6 +957,18 @@ runner:
     # which steps get a server is unchanged. False: such a role gets every tool the server offers, as before, and the
     # step's log warns. 0.2.0 turns it on by default.
     required: false
+  giteaStepsUser:
+    # -- Each org on the chart's Gitea gets a second Gitea user for its agent steps
+    # (INFRARED_GITEA_STEPS_USER and INFRARED_GITEA_ADMIN_SECRET, operator, rendered only when true and
+    # gitea.enabled; the incident response's Fix plan, C20): the operator makes it as Gitea's site admin
+    # (infrared-gitea-admin), restricted, with its own team holding write on the org's Product
+    # repositories and nothing on its gitops repository, checks that signed in as the user, and only then
+    # mints each step's Gitea token as that user instead of the org's bot. Its name and password are in
+    # the Secret gitea-steps in the org's namespace, which the operator alone writes. Without
+    # gitea.enabled it renders nothing: there is no Gitea of the chart's to move. False: every step's
+    # Gitea token is the org's bot's, as before; one minted as the steps user while it was true is
+    # revoked as that user when its step ends.
+    enabled: false
   actors:
     # -- Agent steps as Agent Substrate actors (INFRARED_AGENT_ACTORS, operator, as JSON; infrared-docs-internal
     # ADR 0089, Proposed): each step of an org placed on actors (spec.agentSteps.placement, for the Products it

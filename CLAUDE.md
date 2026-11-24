@@ -115,6 +115,12 @@ The Helm chart for Infrared (`charts/infrared`), published to
   true. The operator puts `mcpToolsListedRequired` in every step's
   `spec.json`, and the runner leaves out a server the role lists none of the
   tools of; the chart renders nothing else for it.
+- The incident response's Fix plan, C20, each org's own Gitea user for its
+  agent steps: env `INFRARED_GITEA_STEPS_USER` and `INFRARED_GITEA_ADMIN_SECRET`
+  (`infrared-gitea-admin`, the API's same Secret) on the operator, rendered
+  only when `runner.giteaStepsUser.enabled` and `gitea.enabled`. The operator
+  writes each org's Secret `gitea-steps` and the Gitea user and team itself;
+  no template renders them.
 - infrared-docs-internal ADR 0087, the stores' layout and the media store:
   env `INFRARED_STORES_ORG_LAYOUT` (`stores.orgLayout.enabled`) and
   `INFRARED_STORES_POLICIES` (`stores.policies.enabled`, which needs the

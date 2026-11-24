@@ -195,6 +195,11 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "
 # plan's C15), with the code index, where steps get Infrared's MCP server at all.
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/code-index-values.yaml" \
   --set runner.mcpToolsListed.required=true >"$out/mcp-tools-listed.yaml"
+# Each org's own Gitea user for its agent steps (runner.giteaStepsUser, the Fix
+# plan's C20): with the chart's Gitea, and without it, where it renders nothing.
+helm template infrared "$chart" -n infrared "${install[@]}" "${gitea[@]}" --set runner.giteaStepsUser.enabled=true \
+  >"$out/gitea-steps-user.yaml"
+helm template infrared "$chart" -n infrared "${install[@]}" --set runner.giteaStepsUser.enabled=true >"$out/gitea-steps-user-nogitea.yaml"
 # An org's agent steps as Agent Substrate actors (runner.actors, infrared-docs-internal
 # ADR 0089): its hosts the runners' egress hosts, or its own, and an agent image given.
 helm template infrared "$chart" -n infrared --set runner.actors.enabled=true >"$out/actors.yaml"
@@ -255,7 +260,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, mcp-tools-listed, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
+ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, mcp-tools-listed, gitea-steps-user, gitea-steps-user-nogitea, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -264,7 +269,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock step-mcp-credentials mcp-tools-listed actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock step-mcp-credentials mcp-tools-listed gitea-steps-user gitea-steps-user-nogitea actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers mcp-shared-public; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -1075,6 +1080,29 @@ check mcp-tools-listed.yaml "runner.mcpToolsListed.required: on no other Deploym
 has mcp-tools-listed.env "runner.mcpToolsListed.required: steps reach the MCP server's in-cluster listener as before" \
   'INFRARED_MCP_URL="http://infrared-mcp.infrared.svc.cluster.local:8081/mcp"'
 check mcp-tools-listed.env "runner.mcpToolsListed.required: steps carry the shared MCP access token as before" '^INFRARED_STEP_MCP_CREDENTIALS=' 0
+# Each org's own Gitea user for its agent steps (runner.giteaStepsUser, the Fix
+# plan's C20): off, no INFRARED_GITEA_STEPS_USER, and the API alone reads Gitea's
+# site admin, as before; true with the chart's Gitea, the switch and the admin
+# Secret's name on the operator, and nothing else changed; true without Gitea,
+# nothing. The operator writes each org's gitea-steps itself: no template renders it.
+for f in defaults install gitea gitea-adopted gitea-steps-user-nogitea; do
+  check "$f.env" "$f: steps' Gitea tokens are the bot's (no INFRARED_GITEA_STEPS_USER)" '^INFRARED_GITEA_STEPS_USER=' 0
+done
+has gitea-steps-user.env "runner.giteaStepsUser: each org's own Gitea user for its agent steps" 'INFRARED_GITEA_STEPS_USER="true"'
+if [[ "$(objn gitea-steps-user Deployment infrared-operator '^            - name: INFRARED_GITEA_(STEPS_USER|ADMIN_SECRET)$')" == 2 ]]; then
+  ok "runner.giteaStepsUser: INFRARED_GITEA_STEPS_USER and INFRARED_GITEA_ADMIN_SECRET on the operator"
+else bad "runner.giteaStepsUser: INFRARED_GITEA_STEPS_USER and INFRARED_GITEA_ADMIN_SECRET are not both on the operator"; fi
+check gitea-steps-user.yaml "runner.giteaStepsUser: on no other Deployment" '^ +- name: INFRARED_GITEA_STEPS_USER$' 1
+has gitea-steps-user.env "runner.giteaStepsUser: the operator and the API read Gitea's site admin from infrared-gitea-admin" \
+  'INFRARED_GITEA_ADMIN_SECRET="infrared-gitea-admin"' 2
+if diff "$out/gitea.yaml" "$out/gitea-steps-user.yaml" | grep -E '^[<>]' |
+    grep -vxE '> +(# .*|- name: INFRARED_GITEA_(STEPS_USER|ADMIN_SECRET)|value: "(true|infrared-gitea-admin)")' | grep -q .; then
+  diff "$out/gitea.yaml" "$out/gitea-steps-user.yaml" || true; bad "runner.giteaStepsUser changes more than the operator's two variables"
+else ok "runner.giteaStepsUser: the operator's two variables, and nothing else, added to the Gitea render"; fi
+check gitea-steps-user-nogitea.env "runner.giteaStepsUser without Gitea: nothing of Gitea handed on" '^INFRARED_GITEA_' 0
+for f in gitea gitea-steps-user; do
+  check "$f.yaml" "$f: the chart renders no gitea-steps, which the operator alone writes" '^  name: gitea-steps$' 0
+done
 
 # lines <object text> <whole lines...>: true when every line is in the object.
 lines() { local o="$1" l; shift; for l in "$@"; do grep -qxF -- "$l" <<<"$o" || { echo "  missing: $l"; return 1; }; done; }
@@ -1390,6 +1418,9 @@ refuse "runner.stepMCPCredentials takes enabled alone" "additional properties 'p
 refuse "runner.mcpToolsListed.required takes true or false alone" "/runner/mcpToolsListed/required': got string, want boolean" \
   --set-string runner.mcpToolsListed.required=yes
 refuse "runner.mcpToolsListed takes required alone" "additional properties 'enabled' not allowed" --set runner.mcpToolsListed.enabled=true
+refuse "runner.giteaStepsUser.enabled takes true or false alone" "/runner/giteaStepsUser/enabled': got string, want boolean" \
+  --set-string runner.giteaStepsUser.enabled=yes
+refuse "runner.giteaStepsUser takes enabled alone" "additional properties 'perOrg' not allowed" --set runner.giteaStepsUser.perOrg=true
 refuse "operator.supportResearch without operator.supportDesk fails" "operator.supportResearch needs operator.supportDesk" \
   --set operator.supportResearch=true
 refuse "operator.supportFixes without operator.supportResearch fails" "operator.supportFixes needs operator.supportResearch" \

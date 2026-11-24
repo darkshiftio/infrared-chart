@@ -2029,6 +2029,17 @@
             }
           }
         },
+        "giteaStepsUser": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Each org on the chart's Gitea gets a second Gitea user for its agent steps, on a team that holds the org's Product repositories and never its gitops repository (the incident response's Fix plan, C20).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "INFRARED_GITEA_STEPS_USER and INFRARED_GITEA_ADMIN_SECRET on the operator, rendered only when true and gitea.enabled: the operator makes the user as Gitea's site admin, checks it reaches no gitops repository, and only then mints each step's Gitea token as that user instead of the org's bot. Off: the bot's, as before."
+            }
+          }
+        },
         "actors": {
           "type": "object",
           "additionalProperties": false,

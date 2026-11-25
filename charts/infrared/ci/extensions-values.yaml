@@ -1,7 +1,10 @@
 # CI: two extensions. The UI proxies /ext/back-office/{v1,ui}/ and
-# /ext/field-notes/{api,ui}/ to their upstreams after Infrared sign-in, mounts
-# the rendered ConfigMap for bin/start-nginx and reads the proxy secret from an
-# existing Secret. infrared-ui's start-nginx test uses this render as its
+# /ext/field-notes/{api,ui}/ to their upstreams after Infrared sign-in and
+# mounts the rendered ConfigMap for bin/start-nginx. Back Office sends its own
+# proxy secret (proxySecret, from the Secret infrared-ext-proxy-back-office);
+# field-notes, with none of its own yet, the shared one (the deprecated
+# ui.extensionsProxySecret), as an install has it while it moves its
+# extensions one by one. infrared-ui's start-nginx test uses this render as its
 # fixture.
 managementCluster:
   name: ci-mgmt
@@ -11,6 +14,8 @@ ui:
       title: Back Office
       icon: book
       upstream: back-office.back-office.svc.cluster.local:8080
+      proxySecret:
+        existingSecret: infrared-ext-proxy-back-office
     - id: field-notes
       title: Field notes
       upstream: field-notes.tools.svc.cluster.local:9090

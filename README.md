@@ -825,15 +825,16 @@ ui:
       icon: book              # puzzle (default), book, wallet, receipt, users, key, landmark, scroll, life-buoy
       upstream: back-office.back-office.svc.cluster.local:8080   # FQDN:port
       paths: [v1, ui]         # the default
-  extensionsProxySecret:
-    existingSecret: infrared-ext-proxy   # key `secret`
+      proxySecret:
+        existingSecret: infrared-ext-proxy-back-office   # key `secret`, its own
 ```
 
 With extensions set, the chart renders ConfigMap `<fullname>-ui-extensions`
 (`extensions.json`, `http.conf`, `server.conf`), mounts it read-only at
-`/etc/infrared-ui/extensions/`, sets `INFRARED_EXT_PROXY_SECRET` from the
-Secret, and annotates the pods with the ConfigMap's checksum so they roll when
-it changes. The UI's nginx then:
+`/etc/infrared-ui/extensions/`, sets each extension's proxy secret from its
+Secret (`INFRARED_EXT_PROXY_SECRET_<ID>`, the id in capitals with `-` as `_`),
+and annotates the pods with the ConfigMap's checksum so they roll when it
+changes. The UI's nginx then:
 
 - serves `/extensions.json`: `id`, `title`, `icon` and `entry` of each
   extension, nothing else (`[]` without extensions);
@@ -841,17 +842,48 @@ it changes. The UI's nginx then:
   once the API's `GET /v1/auth/check` accepts the session cookie. Only a
   GitHub login passes: a GitHub sign-in's, or the one a person signed in with
   Google has linked (ADR 0042). It goes upstream as `X-Infrared-Github`,
-  together with `X-Infrared-Proxy-Secret`; the browser's `Cookie` and
-  `Authorization` do not, and the upstream's `Set-Cookie` never reaches the
-  browser;
+  together with `X-Infrared-Proxy-Secret`, that extension's own; the browser's
+  `Cookie` and `Authorization` do not, and the upstream's `Set-Cookie` never
+  reaches the browser;
 - answers 404 for anything else under `/ext/<id>/`, and 502 while an upstream
   is down or does not resolve.
 
 `upstream` is a fully qualified name, because nginx's resolver ignores search
-domains. The Secret's value is 32 or more of `A-Z a-z 0-9 _ -` (one trailing
-newline is ignored), and the UI refuses to start without one. The UI reads it
-only at start, so restart the UI Deployment after rotating it; the extension
-checks the same value.
+domains. Each proxy secret's value is 32 or more of `A-Z a-z 0-9 _ -` (one
+trailing newline is ignored), and the UI refuses to start without one, or when
+two extensions' values are the same. The UI reads them only at start, so
+restart the UI Deployment after rotating one; the extension checks the same
+value. Make the Secret before the values name it: the kubelet does not start a
+UI pod whose Secret is missing, so its rollout waits, the old pod serving.
+
+**One proxy secret per extension** (the incident response's Fix plan, C30).
+Each extension's `proxySecret` names a Secret in the release namespace that no
+other extension names, so whoever reads one extension's copy cannot present a
+login to another. The render fails when two extensions name the same Secret
+and key, and when one names the shared one's. It needs an infrared-ui whose
+`bin/start-nginx` fills in an extension's own secret; an older one refuses to
+start with it, and the rollout waits with the old pod serving.
+
+`ui.extensionsProxySecret` is the one secret every extension shared before:
+deprecated, and dropped in a later release. An extension without a
+`proxySecret` still gets it (`INFRARED_EXT_PROXY_SECRET`), and with every
+extension on it the chart renders exactly what it rendered before. To move an
+extension to its own without a moment of 401:
+
+1. Make its Secret, a new random value, never printed:
+
+   ```bash
+   openssl rand -hex 32 | kubectl --context <cluster> -n infrared create secret generic infrared-ext-proxy-<id> \
+     --from-file=secret=/dev/stdin --dry-run=client -o yaml | kubectl --context <cluster> apply --server-side -f -
+   ```
+
+2. Have the extension accept both values: the new one as its proxy secret and
+   the one the UI sends now beside it (Infrared's own extensions take it as
+   `<APP>_PROXY_SECRET_PREVIOUS`). An extension that takes one value answers
+   401 from step 3 until it has the new one.
+3. Name the Secret in the extension's `proxySecret`; the UI rolls and sends it.
+4. Take the old value away from the extension. Once no extension is left on
+   it, drop `ui.extensionsProxySecret` from the values and delete its Secret.
 
 An extension may put a count on its rail item with `badge`, such as how many
 Support conversations need a person (infrared-docs-internal ADR 0020, its
@@ -1051,8 +1083,8 @@ only after the pin to a chart with `api.flags` is Synced.
 | `<c>.serviceAccount.annotations` | `{}` | ServiceAccount annotations |
 | `<c>.service.port` | operator 8081, api/mcp 8080, ui 80 | Service port |
 | `ui.service.type` | `ClusterIP` | Type of the primary Service |
-| `ui.extensions` | `[]` | Extensions in the UI's rail, proxied at `/ext/<id>/<path>/` after sign-in: `id`, `title`, `icon`, `upstream` (FQDN:port), `paths` (default `[v1, ui]`), `entry` (default `/ext/<id>/ui/entry.js`), `badge` (optional: `path`, `field`, `label`, a count on the rail item while the rollout flag `extensionBadges` is on; and `alert`, optional: `field`, `label`, `labelOne`, a banner from the same answer while `extensionBanners` is on too). See "Extensions" |
-| `ui.extensionsProxySecret.existingSecret` / `.key` | `""` / `secret` | Secret whose value the UI sends to every extension upstream as `X-Infrared-Proxy-Secret` (`INFRARED_EXT_PROXY_SECRET`); required when `ui.extensions` is set |
+| `ui.extensions` | `[]` | Extensions in the UI's rail, proxied at `/ext/<id>/<path>/` after sign-in: `id`, `title`, `icon`, `upstream` (FQDN:port), `paths` (default `[v1, ui]`), `entry` (default `/ext/<id>/ui/entry.js`), `proxySecret` (`existingSecret` and `key`, default `secret`: the extension's own proxy secret, which the UI sends it alone as `X-Infrared-Proxy-Secret`, `INFRARED_EXT_PROXY_SECRET_<ID>`), `badge` (optional: `path`, `field`, `label`, a count on the rail item while the rollout flag `extensionBadges` is on; and `alert`, optional: `field`, `label`, `labelOne`, a banner from the same answer while `extensionBanners` is on too). See "Extensions" |
+| `ui.extensionsProxySecret.existingSecret` / `.key` | `""` / `secret` | Deprecated: the Secret whose value the UI sends as `X-Infrared-Proxy-Secret` to every extension without a `proxySecret` of its own (`INFRARED_EXT_PROXY_SECRET`); required while one has none. See "Extensions" |
 | `<c>.podAnnotations`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints` | empty | Scheduling |
 | `<c>.podSecurityContext` / `<c>.containerSecurityContext` | unset | Per-component override of the shared security contexts |
 | `operator.moveIssueToHydratedRepo` | `false` | Move a Change to the Product repo its hydration names (`INFRARED_MOVE_ISSUE_TO_HYDRATED_REPO`, operator): an issue opened without a repo on a Product of several repos is transferred (GitHub) or copied with the original closed (Gitea) to the repo the work is in, before triage; off, hydration's repo is only recorded and a person moves the Change |

@@ -39,7 +39,7 @@ cases=(
   "defaults"
   "digests -f $ci/digests-values.yaml"
   "ecr -f $ci/ecr-values.yaml"
-  "extensions -f $ci/extensions-values.yaml"
+  "extensions-shared -f $ci/extensions-shared-values.yaml"
   "ghcr -f $ci/ghcr-values.yaml"
   "install -f $ci/ghcr-values.yaml -f $ci/install-values.yaml $secrets"
   "adopted -f $ci/ghcr-values.yaml -f $ci/adopted-values.yaml -f $ci/stores-adopted-values.yaml"

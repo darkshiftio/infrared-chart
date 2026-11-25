@@ -163,7 +163,20 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.27: cloudflared beside the
+  # to install from a branch of the template. Here v0.1.39: the builder's buildpacks
+  # lifecycle 0.21.30, upstream's, past kpack's 0.21.14, whose launcher, built with
+  # Go 1.26.5, every image carried, and a last builder group with procfile alone for
+  # images of files and a start command (#87, #88; infrared-docs-internal ADR 0093,
+  # workspace TODO 807); v0.1.28 to v0.1.38 before it, the incident response's
+  # template work, live at infrared-cp-google first: a cloudflared route for each
+  # name and 404 for the rest (#73), SeaweedFS's uploads and downloads capped and
+  # its GOMEMLIMIT (#74, #75), vmagent on the platform's namespaces (#76), the
+  # tunnel target under both external-dns prefixes (#77), the metrics' door and
+  # node-exporter's proxy (#78, #83, #84), three syncs of Argo CD history (#79),
+  # refused connections logged in monitoring (#81), tenants' pods on the install's
+  # ports alone (#50), registry pull users that only read and storage_reader (#80,
+  # #82), the briefly-firing alerts quieted (#85) and the fence admitting the API's
+  # Storage tab to SeaweedFS (#86); v0.1.27 before them, cloudflared beside the
   # edge on the nodes' own ports (installation.tunnel.mode beside, .publish) and
   # Infrared's own name kept off the edge (installation.previews.signInPrivate)
   # (#72; infrared-docs-internal ADR 0090, workspace TODO 745); v0.1.26 before it,
@@ -196,7 +209,7 @@ gitops:
   # held or pinned to a later tag; otherwise it keeps its spec.template.version
   # until that is patched. A tag, never a commit, so the API can tell a later pin
   # from an older one.
-  templateVersion: v0.1.27
+  templateVersion: v0.1.39
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

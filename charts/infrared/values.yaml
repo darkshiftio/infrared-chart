@@ -1279,13 +1279,17 @@ api:
   extraArgs: []
   extraEnv: []
   # The API serves every page's reads: at 50m it waited on CPU up to 23% of the time while builds
-  # and agent steps ran beside it (workspace TODO 359).
+  # and agent steps ran beside it (workspace TODO 359). Its memory on the home in the week to
+  # 2026-11-25: 183 MiB at the median and 327 MiB at p99, with bursts past the old 512Mi limit,
+  # which killed it three times (workspace TODO 821). The request is what it uses there; the limit
+  # leaves its peak room to double, and the API sets Go's soft limit to 90 percent of it
+  # (MEMORY_LIMIT, from the downward API).
   resources:
     requests:
       cpu: 250m
-      memory: 128Mi
+      memory: 256Mi
     limits:
-      memory: 512Mi
+      memory: 1Gi
   serviceAccount:
     annotations: {}
   service:

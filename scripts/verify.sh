@@ -792,10 +792,13 @@ else bad "the operator's memory is not a 512Mi request and a 1Gi limit"; fi
 if [[ "$(objn defaults Deployment infrared-api '^              memory: 256Mi$|^              memory: 1Gi$')" == 2 ]]; then
   ok "the API requests 256Mi of memory and is limited to 1Gi"
 else bad "the API's memory is not a 256Mi request and a 1Gi limit"; fi
-if [[ "$(obj defaults Deployment infrared-api | grep -A4 -E '^            - name: MEMORY_LIMIT$' |
-  grep -cE '^                resourceFieldRef:$|^                  containerName: api$|^                  resource: limits\.memory$')" == 3 ]]; then
-  ok "the API reads its container's memory limit (MEMORY_LIMIT, from the downward API)"
-else bad "the API gets no MEMORY_LIMIT from its container's limits.memory"; fi
+# The divisor is spelled out: given none, the API server stores "0", and Argo CD, applying
+# server-side, reads it as drift, so the Application never reads Synced and the upgrade guard
+# waits until its timeout (0.2.0-rc.3).
+if [[ "$(obj defaults Deployment infrared-api | grep -A5 -E '^            - name: MEMORY_LIMIT$' |
+  grep -cE '^                resourceFieldRef:$|^                  containerName: api$|^                  resource: limits\.memory$|^                  divisor: "1"$')" == 4 ]]; then
+  ok "the API reads its container's memory limit (MEMORY_LIMIT, from the downward API, divisor 1)"
+else bad "the API gets no MEMORY_LIMIT from its container's limits.memory with divisor \"1\""; fi
 # api.strategy Recreate renders no rollingUpdate block: the API server refuses one beside it.
 if [[ "$(objn defaults Deployment infrared-api '^    type: RollingUpdate$|^      maxSurge: 1$|^      maxUnavailable: 0$')" == 3 ]]; then
   ok "the API rolls out by default with one pod surged and none unavailable"

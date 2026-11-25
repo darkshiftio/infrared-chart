@@ -113,12 +113,15 @@ spec:
             # The container's memory limit in bytes: the API sets Go's soft
             # limit to 90 percent of it, so it collects garbage before the
             # kernel kills the pod (workspace TODO 821). GOMEMLIMIT in
-            # api.extraEnv wins.
+            # api.extraEnv wins. The divisor is spelled out: given none, the
+            # API server stores "0", which Argo CD, applying server-side, reads
+            # as drift, so the Application never read Synced (0.2.0-rc.3).
             - name: MEMORY_LIMIT
               valueFrom:
                 resourceFieldRef:
                   containerName: api
                   resource: limits.memory
+                  divisor: "1"
             {{- with .Values.license.existingSecret }}
             # The Secret the install's licence is in (license.existingSecret);
             # unset, infrared-license.

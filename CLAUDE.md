@@ -154,9 +154,10 @@ The Helm chart for Infrared (`charts/infrared`), published to
   its users and its NetworkPolicies, and the operator mounts the same token
   into the upgrade guard's Job.
 - Workspace TODO 821, the API's memory: env `MEMORY_LIMIT` on the API, always
-  rendered, its container's `limits.memory` in bytes from the downward API.
-  The API sets Go's soft limit to 90 percent of it; `GOMEMLIMIT` in
-  `api.extraEnv` wins.
+  rendered, its container's `limits.memory` in bytes from the downward API,
+  with `divisor: "1"` spelled out: given none, the API server stores "0",
+  which Argo CD, applying server-side, reads as drift. The API sets Go's soft
+  limit to 90 percent of it; `GOMEMLIMIT` in `api.extraEnv` wins.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

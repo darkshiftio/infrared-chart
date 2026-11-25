@@ -321,6 +321,64 @@ observability.metricsURL before.
 {{- end }}
 
 {{/*
+The proxy secret the UI sends each extension as X-Infrared-Proxy-Secret, as
+JSON: "placeholders" maps an extension's id to the placeholder its locations
+carry, which the UI's start-nginx fills in, and "env" lists the UI's variables
+it fills them from, each from a Secret's key (the incident response's Fix plan,
+C30; workspace TODO 796).
+- An extension with a proxySecret of its own gets "__EXT_PROXY_SECRET_<ID>__"
+  and INFRARED_EXT_PROXY_SECRET_<ID>: its id in capitals with '-' as '_', one
+  to one, since an id holds no '_'.
+- One without falls back to the shared ui.extensionsProxySecret (deprecated):
+  "__EXT_PROXY_SECRET__" and INFRARED_EXT_PROXY_SECRET, once, first, as the
+  chart rendered every extension before each could have its own.
+The render fails for an extension with neither, for two extensions naming the
+same Secret and key, and for an extension's own naming the shared one's.
+*/}}
+{{- define "infrared.uiExtensionSecrets" -}}
+{{- $shared := .Values.ui.extensionsProxySecret | default dict }}
+{{- $sharedName := $shared.existingSecret | default "" }}
+{{- $sharedKey := $shared.key | default "secret" }}
+{{- $placeholders := dict }}
+{{- $own := list }}
+{{- $owners := dict }}
+{{- $sharedFor := list }}
+{{- range .Values.ui.extensions }}
+{{- $id := .id }}
+{{- with .proxySecret }}
+{{- $name := .existingSecret }}
+{{- $key := .key | default "secret" }}
+{{- $ref := printf "%s/%s" $name $key }}
+{{- if and $sharedName (eq $ref (printf "%s/%s" $sharedName $sharedKey)) }}
+{{- fail (printf "ui.extensions: the proxySecret of %q is the shared ui.extensionsProxySecret's (Secret %q, key %q): give it a Secret of its own" $id $name $key) }}
+{{- end }}
+{{- with get $owners $ref }}
+{{- fail (printf "ui.extensions: %q and %q name the same proxy secret (Secret %q, key %q): each extension's is its own" . $id $name $key) }}
+{{- end }}
+{{- $_ := set $owners $ref $id }}
+{{- $suffix := $id | replace "-" "_" | upper }}
+{{- $_ := set $placeholders $id (printf "__EXT_PROXY_SECRET_%s__" $suffix) }}
+{{- $own = append $own (dict "name" (printf "INFRARED_EXT_PROXY_SECRET_%s" $suffix) "secret" $name "key" $key "comment" (printf "Sent to %s alone as X-Infrared-Proxy-Secret." $id)) }}
+{{- else }}
+{{- if not $sharedName }}
+{{- fail (printf "ui.extensions: %q has no proxy secret: name a Secret of its own in its proxySecret.existingSecret (or, until each extension has its own, the shared ui.extensionsProxySecret.existingSecret)" $id) }}
+{{- end }}
+{{- $sharedFor = append $sharedFor $id }}
+{{- $_ := set $placeholders $id "__EXT_PROXY_SECRET__" }}
+{{- end }}
+{{- end }}
+{{- $env := list }}
+{{- with $sharedFor }}
+{{- $comment := "Sent to every extension upstream as X-Infrared-Proxy-Secret." }}
+{{- if $own }}
+{{- $comment = printf "Sent as X-Infrared-Proxy-Secret to the extensions without one of their own: %s." (join ", " $sharedFor) }}
+{{- end }}
+{{- $env = append $env (dict "name" "INFRARED_EXT_PROXY_SECRET" "secret" $sharedName "key" $sharedKey "comment" $comment) }}
+{{- end }}
+{{- toJson (dict "placeholders" $placeholders "env" (concat $env $own)) }}
+{{- end }}
+
+{{/*
 Pod-level settings shared by every component: pull secrets, security,
 scheduling. Call with (dict "root" $ "c" .Values.api "component" "api"); an
 optional "volumes" list is added after the shared /tmp volume.

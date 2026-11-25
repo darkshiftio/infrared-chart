@@ -58,7 +58,7 @@ install_gcs=(-f "$chart/ci/ghcr-values.yaml" -f "$chart/ci/install-values.yaml"
   --set backup.postgres.archive=false)
 
 step "helm lint"
-for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml ci/storage-layout-values.yaml ci/media-object-store-values.yaml ci/security-evidence-values.yaml ci/mcp-shared-public-values.yaml; do
+for v in "" ci/digests-values.yaml ci/adopted-values.yaml ci/ecr-values.yaml ci/extensions-values.yaml ci/extensions-shared-values.yaml ci/extensions-own-values.yaml ci/ghcr-values.yaml ci/stores-adopted-values.yaml ci/registry-token-values.yaml ci/aws-values.yaml ci/flags-values.yaml ci/client-address-proof-values.yaml ci/storage-layout-values.yaml ci/media-object-store-values.yaml ci/security-evidence-values.yaml ci/mcp-shared-public-values.yaml; do
   if helm lint --strict "$chart" ${v:+-f "$chart/$v"} >"$out/lint.log" 2>&1; then
     ok "lint ${v:-defaults}"
   else
@@ -101,6 +101,12 @@ helm template infrared "$chart" -n infrared -f "$chart/ci/flags-values.yaml" --s
 helm template other "$chart" -n ir-test >"$out/other.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ecr-values.yaml" >"$out/ecr.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-values.yaml" >"$out/extensions.yaml"
+# Every extension on the one secret they shared before each had its own (C30),
+# every extension on its own, and that with the shared Secret still named.
+helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-shared-values.yaml" >"$out/extensions-shared.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-own-values.yaml" >"$out/extensions-own.yaml"
+helm template infrared "$chart" -n infrared -f "$chart/ci/extensions-own-values.yaml" \
+  --set ui.extensionsProxySecret.existingSecret=infrared-ext-proxy >"$out/extensions-own-leftover.yaml"
 helm template infrared "$chart" -n infrared -f "$chart/ci/ghcr-values.yaml" >"$out/ghcr.yaml"
 # A Google install: the registry token, and after Argo CD adopts the release.
 helm template infrared "$chart" -n infrared -f "$chart/ci/registry-token-values.yaml" >"$out/registry-token.yaml"
@@ -260,7 +266,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, mcp-tools-listed, gitea-steps-user, gitea-steps-user-nogitea, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
+ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, extensions-shared, extensions-own, extensions-own-leftover, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, mcp-tools-listed, gitea-steps-user, gitea-steps-user-nogitea, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -1316,6 +1322,18 @@ else bad "the Job infrared-gitea-restore, its Role, or Gitea's replicas are wron
 check restore.yaml "the chart renders no identity Secret" '^  name: infrared-backup-identity$' 0
 
 # Extensions: off by default; with ui.extensions, the UI proxies only the declared paths.
+# ext_env <render>: the UI's proxy secret variables, NAME=<Secret>/<key>, in order.
+ext_env() {
+  yq -o json -I0 'select(.kind == "Deployment" and .metadata.name == "infrared-ui") | .spec.template.spec.containers[0].env[]
+    | select(.name | test("^INFRARED_EXT_PROXY_SECRET")) | .name + "=" + .valueFrom.secretKeyRef.name + "/" + .valueFrom.secretKeyRef.key' \
+    "$out/$1.yaml" | tr -d '"' | tr '\n' ' ' | sed 's/ $//'
+}
+# ext_server <render> <id>: the proxy secret placeholder of each of that extension's locations, in order.
+ext_server() {
+  yq 'select(.kind == "ConfigMap" and .metadata.name == "infrared-ui-extensions") | .data["server.conf"]' "$out/$1.yaml" |
+    awk -v id="$2" '/^location \^~ \/ext\// {in_ext = index($3, "/ext/" id "/") == 1} in_ext && /X-Infrared-Proxy-Secret/ {gsub(/[";]/, "", $3); print $3}' |
+    tr '\n' ' ' | sed 's/ $//'
+}
 check defaults.yaml "no extensions by default: no ConfigMap of theirs" '^  name: infrared-ui-extensions$' 0
 check defaults.yaml "no extensions by default: no mount" 'infrared-ui/extensions' 0
 check defaults.yaml "no extensions by default: no proxy secret env" 'INFRARED_EXT_PROXY_SECRET' 0
@@ -1334,14 +1352,49 @@ check extensions.yaml "declared paths only for field-notes" '^    location \^~ /
 check extensions.yaml "everything else under /ext/<id>/ is 404" '^    location \^~ /ext/(back-office|field-notes)/ \{$' 2
 check extensions.yaml "every proxied location asks /_ext_auth first" '^      auth_request /_ext_auth;$' 4
 check extensions.yaml "login from the auth response" '^      proxy_set_header X-Infrared-Github [$]ext_github;$' 4
-check extensions.yaml "proxy secret placeholder" '^      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET__";$' 4
+check extensions.yaml "back-office's locations send its own proxy secret" \
+  '^      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET_BACK_OFFICE__";$' 2
+check extensions.yaml "field-notes', with none of its own, the shared one" '^      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET__";$' 2
+check extensions.yaml "every proxied location sends one proxy secret" '^      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET[A-Z_]*__";$' 4
+if [[ "$(ext_server extensions back-office)" == "__EXT_PROXY_SECRET_BACK_OFFICE__ __EXT_PROXY_SECRET_BACK_OFFICE__" &&
+      "$(ext_server extensions field-notes)" == "__EXT_PROXY_SECRET__ __EXT_PROXY_SECRET__" ]]; then
+  ok "each extension's locations, and no other's, carry its placeholder"
+else bad "an extension's location carries another's proxy secret"; fi
 check extensions.yaml "browser cookies never reach an extension" '^      proxy_set_header Cookie "";$' 4
 check extensions.yaml "browser Authorization never reaches an extension" '^      proxy_set_header Authorization "";$' 4
 check extensions.yaml "an extension's Set-Cookie never reaches the browser" '^      proxy_hide_header Set-Cookie;$' 4
 check extensions.yaml "the /api/ proxy headers are repeated" '^      proxy_set_header (Host|X-Forwarded-Proto|X-Forwarded-Host|X-Forwarded-For|X-Forwarded-Prefix|Connection) ' 24
 check extensions.yaml "no add_header, so the server's security headers apply" '^ +add_header ' 0
 check extensions.yaml "UI mounts the ConfigMap read-only" '^            - mountPath: /etc/infrared-ui/extensions$' 1
-check extensions.yaml "UI reads the proxy secret from the existing Secret" '^                  name: "infrared-ext-proxy"$' 1
+check extensions.yaml "UI reads the shared proxy secret from its Secret" '^                  name: "infrared-ext-proxy"$' 1
+check extensions.yaml "...and back-office's own from its own" '^                  name: "infrared-ext-proxy-back-office"$' 1
+if [[ "$(ext_env extensions)" == "INFRARED_EXT_PROXY_SECRET=infrared-ext-proxy/secret INFRARED_EXT_PROXY_SECRET_BACK_OFFICE=infrared-ext-proxy-back-office/secret" ]]; then
+  ok "the UI's proxy secrets: the shared one, then back-office's own, each from its Secret's key"
+else bad "the UI's proxy secrets are $(ext_env extensions)"; fi
+check extensions.yaml "the shared one is said to go to the extensions without their own" \
+  '^            # Sent as X-Infrared-Proxy-Secret to the extensions without one of their own: field-notes\.$' 1
+if [[ "$(yq 'select(.kind == "ConfigMap" and .metadata.name == "infrared-ui-extensions") | .data["extensions.json"]' "$out/extensions.yaml" |
+      grep -cE 'EXT_PROXY|proxySecret|infrared-ext-proxy' || true)" == 0 ]]; then
+  ok "extensions.json names no proxy secret, placeholder or Secret"
+else bad "extensions.json names a proxy secret, its placeholder or its Secret"; fi
+# Every extension on the shared secret renders what the chart rendered before
+# each could have its own (scripts/compare-render.sh proves it byte for byte).
+check extensions-shared.yaml "with the shared secret alone, every location sends it" \
+  '^      proxy_set_header X-Infrared-Proxy-Secret "__EXT_PROXY_SECRET__";$' 4
+if [[ "$(ext_env extensions-shared)" == "INFRARED_EXT_PROXY_SECRET=infrared-ext-proxy/secret" ]]; then
+  ok "...and the UI reads it alone, as before"
+else bad "with the shared secret alone, the UI's proxy secrets are $(ext_env extensions-shared)"; fi
+check extensions-shared.yaml "...said to go to every extension, as before" '^            # Sent to every extension upstream as X-Infrared-Proxy-Secret\.$' 1
+# Every extension on its own: no shared secret, in the env or in a location,
+# even while ui.extensionsProxySecret still names one.
+for f in extensions-own extensions-own-leftover; do
+  if [[ "$(ext_env "$f")" == "INFRARED_EXT_PROXY_SECRET_BACK_OFFICE=infrared-ext-proxy-back-office/secret INFRARED_EXT_PROXY_SECRET_FIELD_NOTES=field-notes-proxy/value" &&
+        "$(ext_server "$f" back-office)" == "__EXT_PROXY_SECRET_BACK_OFFICE__ __EXT_PROXY_SECRET_BACK_OFFICE__" &&
+        "$(ext_server "$f" field-notes)" == "__EXT_PROXY_SECRET_FIELD_NOTES__ __EXT_PROXY_SECRET_FIELD_NOTES__" ]]; then
+    ok "$f: each extension's own secret alone, from its Secret's key"
+  else bad "$f: the UI's proxy secrets are $(ext_env "$f")"; fi
+  check "$f.yaml" "$f: no shared proxy secret anywhere" '"__EXT_PROXY_SECRET__"|- name: INFRARED_EXT_PROXY_SECRET$' 0
+done
 check extensions.yaml "UI rolls when the ConfigMap changes" '^        checksum/extensions: [0-9a-f]{64}$' 1
 # A badge (ADR 0020, its update of 2026-11-15): extensions.json carries it as
 # set, its label trimmed, for the UI to ask through the extension's own
@@ -1427,7 +1480,25 @@ refuse "operator.supportFixes without operator.supportResearch fails" "operator.
   --set operator.supportDesk=true,operator.supportFixes=true
 
 ext='ui.extensions[0].id=back-office,ui.extensions[0].title=Back Office,ui.extensions[0].upstream=back-office.back-office.svc.cluster.local:8080'
-refuse "extensions without a proxy Secret fail" "ui.extensionsProxySecret.existingSecret must name" --set "$ext"
+refuse "an extension with no proxy secret fails" '"back-office" has no proxy secret: name a Secret of its own' --set "$ext"
+# Each extension's proxy secret is its own (C30): never another's, never the shared one.
+second='ui.extensions[1].id=field-notes,ui.extensions[1].title=Field notes,ui.extensions[1].upstream=field-notes.tools.svc.cluster.local:9090'
+refuse "two extensions naming one Secret's key fail" \
+  '"back-office" and "field-notes" name the same proxy secret (Secret "same-proxy", key "secret")' \
+  --set "$ext,$second,ui.extensions[0].proxySecret.existingSecret=same-proxy,ui.extensions[1].proxySecret.existingSecret=same-proxy"
+refuse "an extension's own naming the shared Secret's key fails" \
+  'the proxySecret of "back-office" is the shared ui.extensionsProxySecret'"'"'s (Secret "infrared-ext-proxy", key "secret")' \
+  --set "$ext,ui.extensions[0].proxySecret.existingSecret=infrared-ext-proxy,ui.extensionsProxySecret.existingSecret=infrared-ext-proxy"
+refuse "with one extension on its own, another without fails while no shared one is named" '"field-notes" has no proxy secret' \
+  --set "$ext,$second,ui.extensions[0].proxySecret.existingSecret=infrared-ext-proxy-back-office"
+refuse "a proxySecret without existingSecret fails" "at '/ui/extensions/0/proxySecret': missing property 'existingSecret'" \
+  --set "$ext,ui.extensions[0].proxySecret.key=secret"
+refuse "a proxySecret naming no Secret fails" "/ui/extensions/0/proxySecret/existingSecret" \
+  --set "$ext,ui.extensions[0].proxySecret.existingSecret=Not_A_Secret"
+refuse "a proxySecret key a Secret cannot hold fails" "/ui/extensions/0/proxySecret/key" \
+  --set "$ext,ui.extensions[0].proxySecret.existingSecret=x" --set-string "ui.extensions[0].proxySecret.key=a/b"
+refuse "a proxySecret's unknown key fails" "at '/ui/extensions/0/proxySecret': additional properties 'value' not allowed" \
+  --set "$ext,ui.extensions[0].proxySecret.existingSecret=x,ui.extensions[0].proxySecret.value=x"
 refuse "a bucket key with Google Cloud Storage fails" "Google Cloud Storage (backup.endpoint https://storage.googleapis.com) takes none" \
   "${install_gcs[@]}" "${backup_key[@]}"
 refuse "Barman's archive with Google Cloud Storage fails" "backup.postgres.archive is not offered with Google Cloud Storage yet" \
@@ -2686,7 +2757,7 @@ for set in observability.metricsAuth.stage=on observability.metricsAuth.stage=tr
 done
 
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic metrics-door metrics-clients metrics-enforced metrics-clients-write metrics-clients-actors node-exporter-auth; do
+for f in defaults digests adopted other ecr extensions extensions-shared extensions-own ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic metrics-door metrics-clients metrics-enforced metrics-clients-write metrics-clients-actors node-exporter-auth; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

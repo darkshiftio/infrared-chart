@@ -1026,6 +1026,29 @@
                 "pattern": "^(/ext/[a-z][a-z0-9-]{1,30}/ui(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)+)?$",
                 "description": "Absolute path of the remote module under /ext/<id>/ui/; empty means /ext/<id>/ui/entry.js."
               },
+              "proxySecret": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "The extension's own proxy secret: a Secret in the release namespace whose value the UI sends to this extension alone as X-Infrared-Proxy-Secret (INFRARED_EXT_PROXY_SECRET_<ID>; 32 or more of A-Z a-z 0-9 _ -). Without one, the extension gets the shared ui.extensionsProxySecret (deprecated). Each extension names a Secret and key no other extension names, and never the shared one's.",
+                "properties": {
+                  "existingSecret": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 253,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$",
+                    "description": "Name of the Secret, e.g. infrared-ext-proxy-back-office."
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[-._a-zA-Z0-9]+$",
+                    "description": "Key in that Secret; default secret."
+                  }
+                },
+                "required": [
+                  "existingSecret"
+                ]
+              },
               "badge": {
                 "type": "object",
                 "additionalProperties": false,
@@ -1098,7 +1121,7 @@
           "properties": {
             "existingSecret": {
               "type": "string",
-              "description": "Secret whose value the UI sends to extension upstreams as X-Infrared-Proxy-Secret; required when extensions is not empty."
+              "description": "Deprecated: one Secret whose value the UI sends as X-Infrared-Proxy-Secret to every extension without a proxySecret of its own; required while one has none. Give each extension its own instead (ui.extensions[].proxySecret)."
             },
             "key": {
               "type": "string",

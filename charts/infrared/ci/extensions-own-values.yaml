@@ -1,0 +1,22 @@
+# CI: two extensions, each on a proxy secret of its own (proxySecret), as an
+# install has them once every extension moved off the shared one: Back Office
+# from its Secret's default key, field-notes from another key. The UI reads
+# no shared secret, even while ui.extensionsProxySecret still names one.
+managementCluster:
+  name: ci-mgmt
+ui:
+  extensions:
+    - id: back-office
+      title: Back Office
+      icon: book
+      upstream: back-office.back-office.svc.cluster.local:8080
+      proxySecret:
+        existingSecret: infrared-ext-proxy-back-office
+    - id: field-notes
+      title: Field notes
+      upstream: field-notes.tools.svc.cluster.local:9090
+      paths: [api, ui]
+      entry: /ext/field-notes/ui/assets/remote.js
+      proxySecret:
+        existingSecret: field-notes-proxy
+        key: value

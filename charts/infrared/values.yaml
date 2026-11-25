@@ -1365,7 +1365,9 @@ ui:
   # /ext/<id>/<path>/, one location per declared path, to signed-in GitHub users only.
   # Anything else under /ext/<id>/ is 404. Empty (the default) leaves the slot off: no
   # ConfigMap, mount or env. `upstream` is an FQDN and port, because nginx's resolver
-  # ignores search domains.
+  # ignores search domains. Each extension gets a proxy secret of its own, which the
+  # UI sends it alone as X-Infrared-Proxy-Secret, so no extension's copy lets anyone
+  # present a login to another (the incident response's Fix plan, C30).
   extensions: []
   # - id: back-office
   #   title: Back Office
@@ -1373,6 +1375,9 @@ ui:
   #   upstream: back-office.back-office.svc.cluster.local:8080
   #   paths: [v1, ui]       # optional, default [v1, ui]
   #   entry: ""             # optional, default /ext/<id>/ui/entry.js
+  #   proxySecret:          # the extension's own proxy secret (INFRARED_EXT_PROXY_SECRET_<ID>): a Secret in
+  #     existingSecret: infrared-ext-proxy-back-office   # this namespace no other extension names; without
+  #     key: secret         # one, the shared extensionsProxySecret below. key is optional, default secret
   #   badge:                # optional: a count on its rail item while the rollout flag extensionBadges is on
   #     path: /ext/back-office/v1/summary   # a GET under one of its paths, sent as the person once a minute
   #     field: due          # the answer's top-level field, a whole number; 0 or anything else shows no count
@@ -1382,9 +1387,10 @@ ui:
   #       label: invoices overdue in Back Office     # read after the count ("3 invoices overdue in Back Office")
   #       labelOne: invoice overdue in Back Office   # optional: the label when the count is 1; default label
   extensionsProxySecret:
-    # -- Name of an existing Secret whose value the UI sends to every extension upstream as
-    # X-Infrared-Proxy-Secret (INFRARED_EXT_PROXY_SECRET; 32 or more of A-Z a-z 0-9 _ -).
-    # Required when `extensions` is not empty.
+    # -- Deprecated: name of an existing Secret whose value the UI sends as
+    # X-Infrared-Proxy-Secret to every extension without a proxySecret of its own
+    # (INFRARED_EXT_PROXY_SECRET; 32 or more of A-Z a-z 0-9 _ -). Required while an
+    # extension has none; give each its own instead. A later release drops it.
     existingSecret: ""
     # -- Key in that Secret.
     key: secret

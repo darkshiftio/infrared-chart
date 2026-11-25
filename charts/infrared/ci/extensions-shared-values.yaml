@@ -1,0 +1,21 @@
+# CI: two extensions on the one proxy secret every extension shared before each
+# had its own (ui.extensionsProxySecret, deprecated). It must render what the
+# chart rendered before ui.extensions[].proxySecret, byte for byte
+# (scripts/compare-render.sh), so an install that sets nothing new sees no
+# change. infrared-ui's start-nginx test uses this render as its fixture of a
+# chart from before.
+managementCluster:
+  name: ci-mgmt
+ui:
+  extensions:
+    - id: back-office
+      title: Back Office
+      icon: book
+      upstream: back-office.back-office.svc.cluster.local:8080
+    - id: field-notes
+      title: Field notes
+      upstream: field-notes.tools.svc.cluster.local:9090
+      paths: [api, ui]
+      entry: /ext/field-notes/ui/assets/remote.js
+  extensionsProxySecret:
+    existingSecret: infrared-ext-proxy

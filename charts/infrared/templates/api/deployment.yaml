@@ -110,6 +110,15 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            # The container's memory limit in bytes: the API sets Go's soft
+            # limit to 90 percent of it, so it collects garbage before the
+            # kernel kills the pod (workspace TODO 821). GOMEMLIMIT in
+            # api.extraEnv wins.
+            - name: MEMORY_LIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: api
+                  resource: limits.memory
             {{- with .Values.license.existingSecret }}
             # The Secret the install's licence is in (license.existingSecret);
             # unset, infrared-license.

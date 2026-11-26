@@ -257,12 +257,19 @@ spec:
             - name: INFRARED_GITEA_ADMIN_SECRET
               value: "infrared-gitea-admin"
             {{- end }}
+            # Go's soft memory limit, 90 percent of the container's limit
+            # below, so the collector works before the kernel kills the pod
+            # (workspace TODO 823). The operator's image reads no MEMORY_LIMIT,
+            # so the value is set here: change the two together.
+            - name: GOMEMLIMIT
+              value: "920MiB"
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
           resources:
             requests:
               cpu: 50m
               memory: 128Mi
+            # GOMEMLIMIT above is 90 percent of it.
             limits:
               memory: 1Gi
           volumeMounts:

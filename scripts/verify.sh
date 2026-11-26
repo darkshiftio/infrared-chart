@@ -1230,6 +1230,15 @@ if lines "$rj" '      serviceAccountName: infrared-restore' "          image: $o
     '                  name: infrared-platform-tokens' '                  key: backup-access-key-id'; then
   ok "infrared-restore: the operator's restore mode, the identity from a Secret made before the install, read by its group alone"
 else bad "the Job infrared-restore is wrong"; fi
+# The restore container tells Go its memory (workspace TODO 823): GOMEMLIMIT at 90 percent of its
+# 1Gi limit, set in the template since the operator's image reads no MEMORY_LIMIT, so the collector
+# works before the kernel kills the pod.
+restore_box="$(awk '/^        - name: restore$/ {p = 1} p' <<<"$rj")"
+if [[ "$(grep -A1 -E '^            - name: GOMEMLIMIT$' <<<"$restore_box" | grep -cxF '              value: "920MiB"')" == 1 ]] \
+    && lines "$restore_box" '            limits:' '              memory: 1Gi' \
+    && [[ "$(grep -c 'GOMEMLIMIT$' <<<"$rj")" == 1 ]]; then
+  ok "infrared-restore's container sets Go's soft limit, GOMEMLIMIT 920MiB, 90 percent of its 1Gi limit"
+else bad "infrared-restore's container has no GOMEMLIMIT of 920MiB under its 1Gi limit"; fi
 # The Postgres step (agreed with the operator's restore mode): a native sidecar
 # from the platform's Postgres image shares the memory-backed emptyDir
 # postgres-restore at /restore/postgres with the restore container, as the

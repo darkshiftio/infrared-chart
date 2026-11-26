@@ -158,6 +158,10 @@ The Helm chart for Infrared (`charts/infrared`), published to
   with `divisor: "1"` spelled out: given none, the API server stores "0",
   which Argo CD, applying server-side, reads as drift. The API sets Go's soft
   limit to 90 percent of it; `GOMEMLIMIT` in `api.extraEnv` wins.
+- Workspace TODO 823, the restore's memory: env `GOMEMLIMIT` on the Job
+  `infrared-restore`'s container `restore`, `920MiB`, 90 percent of its 1Gi
+  limit, set in the template because the operator's image reads no
+  `MEMORY_LIMIT`: a change to the limit changes it too.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

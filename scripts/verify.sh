@@ -552,7 +552,7 @@ if helm template infrared "$chart" -n infrared -f "$chart/ci/previews-values.yam
   ok "a values file setting every documented field of installation.previews renders"
   envs previews
   has previews.env "every field of installation.previews reaches the operator, as JSON" \
-    'INFRARED_PREVIEWS="{\"acmeEmail\":\"alerts@example.com\",\"cloudflareTokenKey\":\"cloudflare-api-token\",\"cloudflareTokenSecret\":\"infrared-platform-tokens\",\"customHostnames\":true,\"domain\":\"tenants.example.net\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"ingressHost\":\"edge.tenants.example.net\",\"ingressIP\":\"203.0.113.7\",\"managedRoots\":[\"example.com\"],\"signInPrivate\":true,\"signInURL\":\"https://infrared.example.com\"}"'
+    'INFRARED_PREVIEWS="{\"acmeEmail\":\"alerts@example.com\",\"cloudflareTokenKey\":\"cloudflare-api-token\",\"cloudflareTokenSecret\":\"infrared-platform-tokens\",\"customHostnames\":true,\"domain\":\"tenants.example.net\",\"domainTokenKey\":\"cloudflare-domain-api-token\",\"ingressHost\":\"edge.tenants.example.net\",\"ingressIP\":\"203.0.113.7\",\"managedRoots\":[\"example.com\"],\"orgLabelPacksMax\":90,\"orgLabels\":true,\"signInPrivate\":true,\"signInURL\":\"https://infrared.example.com\"}"'
 else
   cat "$out/previews.err"; bad "a values file setting every documented field of installation.previews renders"
 fi
@@ -1613,6 +1613,9 @@ refuse "publish with mode only fails" "at '/installation/tunnel/mode': value mus
 refuse "a private sign-in that is no bool fails" "at '/installation/previews/signInPrivate'" \
   --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
   --set-string installation.previews.signInPrivate=yes
+refuse "org labels that are no bool fail" "at '/installation/previews/orgLabels'" \
+  --set installation.previews.domain=preview.example.com,installation.previews.signInURL=https://infrared.example.com \
+  --set-string installation.previews.orgLabels=yes
 # The tunnel's hostnames (ADR 0090): lower-case DNS names with no wildcard,
 # each once, at most 100, as the CRD takes them.
 refuse "a tunnel hostname in capitals fails" "at '/installation/tunnel/hostnames/0'" \

@@ -148,6 +148,15 @@
               },
               "description": "The key of infrared-platform-tokens that holds a Cloudflare token for domain's zone alone, when it is not the sign-in URL host's zone (infrared-docs-internal ADR 0063): cloudflare-domain-api-token, from platformTokens.cloudflareDomainApiToken. A Gateway edge then takes the certificate and DNS records of *.<domain> with it. A Secret's key: letters, digits, '-', '_' and '.', neither . nor starting with ..; empty: cloudflare-api-token serves both names."
             },
+            "orgLabels": {
+              "type": "boolean",
+              "description": "On a hosted plane, every org's zones answer under a label of the org's own, <zone>.<org label>.<domain> (infrared-docs-internal ADR 0097): the operator gives each org a label, orders its wildcard certificate at Cloudflare with the domain's token and names it on the edge's certificate. Off by default."
+            },
+            "orgLabelPacksMax": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "With orgLabels, the count of advanced certificate packs on the domain's Cloudflare zone at which the operator orders no more; 0 or absent is 90."
+            },
             "signInPrivate": {
               "type": "boolean",
               "description": "Keep Infrared's own name, signInURL's host, off a Gateway edge (infrared-docs-internal ADR 0090): no listener, route, cloudflared route or certificate name for it, so nothing publishes it, and the install's own private ingress serves it; signInURL stays the issuer and the preview sign-in's address. Off by default."

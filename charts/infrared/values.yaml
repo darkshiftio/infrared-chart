@@ -93,7 +93,11 @@ installation:
   # Infrared's own name, signInURL's host, off a Gateway edge: no listener,
   # route, tunnel route or certificate name for it, so nothing publishes it,
   # and the install's own private ingress, such as a VPN's proxy, serves it;
-  # infrared-docs-internal ADR 0090; off by default). Written to the
+  # infrared-docs-internal ADR 0090; off by default), and `orgLabels` (true gives
+  # every org's zones a label of the org's own, `<zone>.<org label>.<domain>`,
+  # with `orgLabelPacksMax`, the count of certificate packs at which no more
+  # are ordered, 90 when unset; infrared-docs-internal ADR 0097; off by
+  # default). Written to the
   # Installation's `spec.previews`. Empty leaves previews to a person, as
   # before.
   previews: {}

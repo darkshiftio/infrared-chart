@@ -26,6 +26,10 @@ spec:
     - jsonPath: .status.namespace
       name: Namespace
       type: string
+    - jsonPath: .status.addressLabel
+      name: Address label
+      priority: 1
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -127,6 +131,19 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              addressLabel:
+                description: |-
+                  AddressLabel is the label the org asks for under the previews domain,
+                  where the Installation's spec.previews.orgLabels is on: its zones then
+                  answer at <zone>.<addressLabel>.<domain> (infrared-docs-internal ADR
+                  0097). A DNS label, lower case, 3 to 32 characters, one org's alone
+                  across the install. Empty, the operator generates one. The label in
+                  effect is status.addressLabel: a label another org holds, or a
+                  reserved one, is refused there (the condition AddressLabelReady).
+                maxLength: 32
+                minLength: 3
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
               agentSteps:
                 description: |-
                   AgentSteps says where the org's agentRole steps run: as runner Jobs in
@@ -961,6 +978,90 @@ spec:
                 required:
                 - atespace
                 type: object
+              addressCertificate:
+                description: |-
+                  AddressCertificate is the edge certificate for the names under the
+                  label being readied (PendingAddressLabel, else AddressLabel), where
+                  Cloudflare fronts the previews domain.
+                properties:
+                  failures:
+                    description: |-
+                      Failures counts the calls to Cloudflare for the pack that failed in a
+                      row; RetryAfter is when the next one is made, later after each.
+                    format: int32
+                    type: integer
+                  host:
+                    description: Host is the name the pack covers, *.<label>.<domain>.
+                    type: string
+                  id:
+                    description: ID is the pack's id at Cloudflare.
+                    type: string
+                  retryAfter:
+                    format: date-time
+                    type: string
+                  status:
+                    description: |-
+                      Status is the pack's, in Cloudflare's words: initializing,
+                      pending_validation, ..., active.
+                    type: string
+                required:
+                - host
+                type: object
+              addressLabel:
+                description: |-
+                  AddressLabel is the org's label under the previews domain
+                  (infrared-docs-internal ADR 0097): spec.addressLabel when it is set
+                  and free, otherwise one the operator generated, which it keeps. Empty
+                  where the Installation's spec.previews.orgLabels was never on, and for
+                  the platform org. The org's zones answer under it once the condition
+                  AddressLabelReady is True (AddressLabelInEffect).
+                type: string
+              addressLabelServedAt:
+                description: |-
+                  AddressLabelServedAt is when the org's zones first answered under a
+                  label of its own, and its one move from their one-label addresses was
+                  recorded.
+                format: date-time
+                type: string
+              addressLabelSince:
+                description: |-
+                  AddressLabelSince is when the org took AddressLabel: of two orgs that
+                  came to hold one label, the earlier keeps it.
+                format: date-time
+                type: string
+              addressMoves:
+                description: |-
+                  AddressMoves are the addresses the org's zones had and left, each of
+                  which redirects to the zone's address until its move's redirectUntil:
+                  the one-label addresses from before the org's first label, and the
+                  addresses under a label it left. A move is dropped once it is over.
+                items:
+                  description: |-
+                    OrgAddressMove is one move of an org's addresses: under its first label,
+                    or from a label it left to the next.
+                  properties:
+                    fromLabel:
+                      description: |-
+                        FromLabel is the label the addresses were under; empty for the
+                        one-label addresses, <zone>.<domain>, from before the org's first.
+                      type: string
+                    hosts:
+                      description: |-
+                        Hosts are the addresses the org's zones had when they moved. Each
+                        redirects to the zone's address until RedirectUntil.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: set
+                    redirectUntil:
+                      description: RedirectUntil is when the old addresses stop redirecting.
+                      format: date-time
+                      type: string
+                  required:
+                  - redirectUntil
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -1020,6 +1121,14 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              formerAddressLabels:
+                description: |-
+                  FormerAddressLabels are the labels the org held before AddressLabel.
+                  No other org is given one.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               includedRuns:
                 description: |-
                   IncludedRuns is what a self-service org spent of the install's included
@@ -1082,6 +1191,12 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              pendingAddressLabel:
+                description: |-
+                  PendingAddressLabel is the label that replaces AddressLabel once the
+                  names under it serve: spec.addressLabel, accepted, while its
+                  certificate is issued. Empty otherwise.
+                type: string
               securityEvidence:
                 description: |-
                   SecurityEvidence is the trust root of the org's security evidence: the

@@ -446,6 +446,27 @@ spec:
                     items:
                       type: string
                     type: array
+                  orgLabelPacksMax:
+                    description: |-
+                      OrgLabelPacksMax is the count of Advanced Certificate Manager packs on
+                      Domain's Cloudflare zone at which the operator orders no more for the
+                      orgs' labels: Cloudflare caps them by zone, and an org's label is a
+                      tenant's input. 0 means 90. An org whose pack is not ordered keeps its
+                      one-label addresses, and its condition says why.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  orgLabels:
+                    description: |-
+                      OrgLabels puts every org's environments under a label of the org's own
+                      (infrared-docs-internal ADR 0097): zone z of an org whose label is acme
+                      answers at https://<z>.acme.<domain>, and no longer at
+                      https://<z>.<domain>. The operator gives each Organization its label
+                      (status.addressLabel), orders the Cloudflare certificate for
+                      *.<label>.<domain> with CloudflareTokenSecret's token when there is
+                      one, and moves the org's addresses once the name serves. False, the
+                      default, keeps every address and every rendered file as before.
+                    type: boolean
                   signInPrivate:
                     description: |-
                       SignInPrivate keeps Infrared's own name, SignInURL's host, off a
@@ -942,6 +963,37 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              orgLabels:
+                description: |-
+                  OrgLabels is what spec.previews.orgLabels has given out
+                  (infrared-docs-internal ADR 0097). Nil while it is off.
+                properties:
+                  certificatePacks:
+                    description: |-
+                      CertificatePacks is the count of Advanced Certificate Manager packs on
+                      the previews domain's Cloudflare zone when the operator last ordered
+                      or read one: Cloudflare caps them by zone. Nil where no pack is ordered.
+                    format: int32
+                    type: integer
+                  labels:
+                    description: |-
+                      Labels are the Organizations' labels, sorted: each one's label, the
+                      one it is moving to, and a label it left while the addresses under it
+                      still redirect. A Gateway edge's own certificate takes
+                      *.<label>.<domain> for each, so Envoy can answer for a name under it.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  releasedLabels:
+                    description: |-
+                      ReleasedLabels are the labels of Organizations since deleted, the
+                      ones they had before among them. No org is given one again.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
               phase:
                 description: InstallationPhase is the setup wizard step the install
                   is waiting on.

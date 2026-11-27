@@ -18,3 +18,5 @@ installation:
     acmeEmail: alerts@example.com
     domainTokenKey: cloudflare-domain-api-token
     signInPrivate: true
+    orgLabels: true
+    orgLabelPacksMax: 90

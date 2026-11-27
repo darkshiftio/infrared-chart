@@ -214,6 +214,12 @@ spec:
             - name: INFRARED_FOLLOW_UPS
               value: "true"
             {{- end }}
+            {{- if .Values.operator.readOrgRepos }}
+            # A step that plans or builds a Change reads the org's other
+            # Products' repos, with a read-only credential of its own.
+            - name: INFRARED_READ_ORG_REPOS
+              value: "true"
+            {{- end }}
             {{- if .Values.operator.declinedOutcomes }}
             # A request the org's policy forbids ends Declined, never
             # dead-lettered, and its issue is closed as not planned (ADR 0076).

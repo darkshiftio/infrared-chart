@@ -162,7 +162,9 @@ spec:
                   (ADR 0076, item 11): a request asked in the simple view. The run's
                   human triage step passes by itself when it is reached, as moving the
                   issue to Todo (agent) passes it, decided by RequestedBy. Empty leaves
-                  triage to a person.
+                  triage to a person. Where the install files follow-ups and the plan
+                  left some of the request for later, triage waits for that person all
+                  the same.
                 enum:
                 - agent
                 type: string
@@ -737,6 +739,13 @@ spec:
                         type: object
                       maxItems: 12
                       type: array
+                    followUpsFiled:
+                      description: |-
+                        FollowUpsFiled says this install files FollowUps as issues once the
+                        plan is approved and starts them one at a time: its follow-ups were on
+                        (the chart's operator.followUps) when the step's result was read, and
+                        the plan left some. False where they are only listed.
+                      type: boolean
                     lostAttempts:
                       description: |-
                         LostAttempts counts the attempts whose AgentVM was Lost: a pool's lease

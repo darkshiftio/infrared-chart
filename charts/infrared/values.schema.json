@@ -569,6 +569,10 @@
           "type": "boolean",
           "description": "File what a Change's plan leaves for later as issues labelled infrared:follow-up once its triage is approved, and start them one at a time as each Change merges (INFRARED_FOLLOW_UPS). Off by default: the follow-ups stay on the step and nothing is filed."
         },
+        "readOrgRepos": {
+          "type": "boolean",
+          "description": "Let a step that plans or builds a Change read the repos of the org's other Products, with a read-only credential apart from its own token, and see the names of their variables and secrets, never the values (INFRARED_READ_ORG_REPOS). Off by default: a step reads its own Product alone."
+        },
         "previewFallback": {
           "type": "boolean",
           "description": "Replace a zone snapshot of a sign-in or error page, or one mostly one colour, with a card drawn from the Product's assets (INFRARED_PREVIEW_FALLBACK)."

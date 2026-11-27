@@ -124,6 +124,16 @@ spec:
                 x-kubernetes-list-map-keys:
                 - connector
                 x-kubernetes-list-type: map
+              orgLimit:
+                description: |-
+                  OrgLimit is how many self-service orgs the person may own, set by a
+                  platform admin for this person alone (workspace TODO 806); later from
+                  their plan. Unset is the install's (InstallationSelfSignUp.Orgs); 0
+                  means no limit.
+                format: int32
+                maximum: 1000
+                minimum: 0
+                type: integer
             required:
             - google
             type: object
@@ -157,6 +167,76 @@ spec:
                     type: boolean
                 required:
                 - checkedAt
+                type: object
+              includedRuns:
+                description: |-
+                  IncludedRuns is what the person spent of the install's included agent
+                  runs (infrared-docs-internal ADR 0059) across every self-service org
+                  they own: the allowance is the person's, not each org's (the
+                  workspace's TODO 806). The operator writes it; it stays when an org is
+                  deleted.
+                properties:
+                  countedOrgs:
+                    description: |-
+                      CountedOrgs are the UIDs of the person's orgs whose own spend, from
+                      before the allowance was the person's (Organization
+                      status.includedRuns), is counted in SpentUSD: each once, so an org
+                      deleted after keeps its share of the person's spend.
+                    items:
+                      type: string
+                    maxItems: 100
+                    type: array
+                    x-kubernetes-list-type: set
+                  jobs:
+                    description: |-
+                      Jobs are the UIDs of the latest attempts counted, so an attempt read
+                      twice is counted once; the oldest drop off past MaxIncludedJobs.
+                    items:
+                      type: string
+                    maxItems: 200
+                    type: array
+                  reserved:
+                    description: |-
+                      Reserved are the attempts on the included key that have started and
+                      not yet ended, each holding its ceiling, which counts against the
+                      allowance beside what is spent (the security review of 2026-11-21,
+                      F24). When an attempt ends its cost is settled from its result, and
+                      one with no result is charged its ceiling.
+                    items:
+                      description: IncludedReservation is one attempt's hold on its
+                        org's included runs.
+                      properties:
+                        at:
+                          description: At is when it started.
+                          format: date-time
+                          type: string
+                        attempt:
+                          description: 'Attempt names the attempt in the org''s namespace:
+                            <run>/<step>#<attempt>.'
+                          maxLength: 320
+                          minLength: 1
+                          type: string
+                        ceilingUSD:
+                          description: |-
+                            CeilingUSD is the most the attempt may spend, in US dollars as a
+                            decimal: its step's or AgentRole's budget, within what the allowance
+                            had left when it started. The runner is given it as the step's budget.
+                          type: string
+                      required:
+                      - at
+                      - attempt
+                      - ceilingUSD
+                      type: object
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - attempt
+                    x-kubernetes-list-type: map
+                  spentUSD:
+                    description: |-
+                      SpentUSD is the org's spend on the included key, a decimal in US
+                      dollars, each attempt's cost added once.
+                    type: string
                 type: object
               lastSignInAt:
                 description: LastSignInAt is the person's last Sign in with Google.

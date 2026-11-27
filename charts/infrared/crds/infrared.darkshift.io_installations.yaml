@@ -285,14 +285,16 @@ spec:
                   includedRuns:
                     description: |-
                       IncludedRuns gives each self-service org agent runs on a key the
-                      install holds, up to an allowance, until the org sets its own key
-                      (infrared-docs-internal ADR 0059). Absent, or an allowance of 0, is off.
+                      install holds, up to an allowance per person who owns such orgs, until
+                      the org sets its own key (infrared-docs-internal ADR 0059; the
+                      workspace's TODO 806). Absent, or an allowance of 0, is off.
                     properties:
                       perOrgUSD:
                         description: |-
-                          PerOrgUSD is each self-service org's allowance of model spend on the
-                          install's key, in US dollars as a decimal ("5.00"), once per org. Empty
-                          or 0 is off.
+                          PerOrgUSD is the allowance of model spend on the install's key, in US
+                          dollars as a decimal ("5.00"), once per person: every self-service org
+                          a person owns draws on the one allowance (workspace TODO 806; the name
+                          is from when it was each org's). Empty or 0 is off.
                         pattern: ^([0-9]{1,6}(\.[0-9]{1,2})?)?$
                         type: string
                     type: object
@@ -571,6 +573,16 @@ spec:
                               NewTeams is how many Teams the org a sign-up makes may make besides
                               the catalog's default Teams (Organization.spec.limits.newTeams):
                               unset means no limit, and 0 the default Teams alone.
+                            format: int32
+                            maximum: 1000
+                            minimum: 0
+                            type: integer
+                          orgs:
+                            description: |-
+                              Orgs is how many self-service orgs one person may own: the org their
+                              first sign-in makes and those they make after it (workspace TODO 806).
+                              Unset is DefaultOrgsPerPerson, the free tier's one org; 0 means no
+                              limit. A platform admin raises it for one person in User.spec.orgLimit.
                             format: int32
                             maximum: 1000
                             minimum: 0

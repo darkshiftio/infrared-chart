@@ -2078,6 +2078,10 @@ if operator_can users get list watch && operator_can gitconnectors get list watc
    operator_can organizations/status get update patch; then
   ok "the operator may read Users and GitConnectors and write Organizations' status, for the GitHub team sync"
 else bad "the operator's ClusterRole cannot read users or gitconnectors, or write organizations/status (run hack/sync-operator.sh)"; fi
+# Included agent runs are counted per person, on the owner's User (workspace TODO 806).
+if operator_can users/status get update patch; then
+  ok "the operator may write Users' status, where a person's included runs are counted"
+else bad "the operator's ClusterRole cannot write users/status (run hack/sync-operator.sh)"; fi
 # The API writes the new kinds and their status, and the Secret
 # infrared-git-connectors, with the rules it had: every Infrared kind, and
 # Secrets with no delete. The backup reads every Infrared kind.

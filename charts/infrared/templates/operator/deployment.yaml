@@ -93,11 +93,12 @@ spec:
             {{- if include "infrared.installConformance" . }}
             # Install conformance (conformance.installs.enabled, ADR 0100): the
             # operator starts install suites' runs, each driven by a drill Job
-            # on this cluster in these two images.
+            # on this cluster in these two images: the platform's own ir
+            # (cli.image) and the one it copies kubectl and helm from.
             - name: INFRARED_CONFORMANCE_INSTALLS
               value: "true"
             - name: INFRARED_CONFORMANCE_DRILL_IMAGE
-              value: {{ include "infrared.drillImage" . | quote }}
+              value: {{ include "infrared.cliImage" . | quote }}
             - name: INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE
               value: {{ .Values.conformance.drill.toolsImage | quote }}
             {{- end }}

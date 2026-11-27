@@ -2805,10 +2805,11 @@ step "install conformance and the private edge (conformance.installs.enabled, in
 # The drill's images alone hand nothing on. The refusals follow, each with its
 # reason, and none prints a credential.
 fixed_secrets=(--set "setup.token=ci-setup,session.key=ci-session,mcp.token=ci-mcp,mcp.access.token=ci-mcp-access")
-# The drill's image is shaped as the components' are, and the platform release
-# pins its tag and digest (item 1.9): rendered as theirs, under the registry.
+# The drill runs the platform's own ir, cli.image, shaped as the components'
+# images are, whose tag and digest the platform release pins (item 1.9):
+# rendered as theirs, under the registry.
 drill_digest=sha256:0000000000000000000000000000000000000000000000000000000000000051
-drill_pin=(--set conformance.drill.image.tag=v0.2.0-rc.14 --set "conformance.drill.image.digest=$drill_digest")
+drill_pin=(--set cli.image.tag=v0.2.0-rc.14 --set "cli.image.digest=$drill_digest")
 drill_image="us-central1-docker.pkg.dev/darkshift-preprod/infrared/infrared-cli:v0.2.0-rc.14@$drill_digest"
 tools_image="$(yq '.conformance.drill.toolsImage' "$chart/values.yaml")"
 helm template infrared "$chart" -n infrared "${fixed_secrets[@]}" >"$out/conformance-off.yaml"
@@ -2862,13 +2863,13 @@ if [[ "$tools_image" == "$(yq '.registryToken.image' "$chart/values.yaml")" ]]; 
 else bad "conformance.drill.toolsImage is not registryToken.image: change them together"; fi
 has install-conformance-ghcr.env "the drill's image is under image.registry, as the components' images are" \
   "INFRARED_CONFORMANCE_DRILL_IMAGE=\"ghcr.io/darkshiftio/infrared-cli:v0.2.0-rc.14@$drill_digest\""
-# The platform release pins the drill's image as it pins the components': the
-# platform Product's component cli (repo infrared-cli, valuesKey
-# conformance.drill) at infrared-core.conformance.drill.image.tag and .digest in
-# the umbrella chart's values (infrared-docs-internal ADR 0100, item 1.9). An
-# umbrella shaped as the operator scaffolds and releases it, wrapping this chart
-# as packaged: its values pass the schema, and with the switch on the drill runs
-# the release's own ir image.
+# The platform release pins cli.image as it pins the components' images: the
+# platform Product's component cli (repo infrared-cli, its values key its name)
+# at infrared-core.cli.image.tag and .digest in the umbrella chart's values
+# (infrared-docs-internal ADR 0100, item 1.9). An umbrella shaped as the
+# operator scaffolds and releases it, wrapping this chart as packaged: its
+# values pass the schema, and with the switch on the drill runs the release's
+# own ir image.
 umbrella_drill="$out/umbrella-drill"
 rm -rf "$umbrella_drill"
 mkdir -p "$umbrella_drill/charts"
@@ -2896,33 +2897,22 @@ infrared-core:
     image:
       tag: v0.2.0-rc.15
       digest: sha256:0000000000000000000000000000000000000000000000000000000000000061
-  conformance:
-    drill:
-      image:
-        tag: v0.2.0-rc.15
-        digest: sha256:0000000000000000000000000000000000000000000000000000000000000062
+  cli:
+    image:
+      tag: v0.2.0-rc.15
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000062
 EOF
 if helm template infrared "$umbrella_drill" -n infrared >"$out/umbrella-drill.yaml" 2>"$out/umbrella-drill.log"; then
-  ok "the umbrella's values with the drill's pin, as the platform release writes them, pass the schema"
-else cat "$out/umbrella-drill.log"; bad "the umbrella's values with the drill's pin fail the render"; fi
+  ok "the umbrella's values with cli.image's pin, as the platform release writes them, pass the schema"
+else cat "$out/umbrella-drill.log"; bad "the umbrella's values with cli.image's pin fail the render"; fi
 envs umbrella-drill
-check umbrella-drill.env "under the umbrella, the drill's pin alone hands nothing on" '^INFRARED_CONFORMANCE_' 0
+check umbrella-drill.env "under the umbrella, cli.image's pin alone hands nothing on" '^INFRARED_CONFORMANCE_' 0
 if helm template infrared "$umbrella_drill" -n infrared --set infrared-core.conformance.installs.enabled=true \
   >"$out/umbrella-drill-on.yaml" 2>"$out/umbrella-drill.log"; then
   envs umbrella-drill-on
   has umbrella-drill-on.env "under the umbrella the drill runs the release's ir image, by its tag and digest" \
     'INFRARED_CONFORMANCE_DRILL_IMAGE="us-central1-docker.pkg.dev/darkshift-preprod/infrared/infrared-cli:v0.2.0-rc.15@sha256:0000000000000000000000000000000000000000000000000000000000000062"'
 else cat "$out/umbrella-drill.log"; bad "the umbrella with install conformance on fails the render"; fi
-# A pin under a key the chart does not read is refused, never ignored: one
-# literal key conformance.drill, as a release that wrote the component's values
-# key whole, not as a path, would write it.
-printf 'infrared-core:\n  conformance.drill:\n    image:\n      tag: v0.2.0-rc.15\n      digest: %s\n' \
-  sha256:0000000000000000000000000000000000000000000000000000000000000062 >"$out/umbrella-drill-literal.yaml"
-if helm template infrared "$umbrella_drill" -n infrared -f "$out/umbrella-drill-literal.yaml" >/dev/null 2>"$out/umbrella-drill.log"; then
-  bad "a pin under one literal key conformance.drill rendered: the drill would run no image"
-elif grep -qF "additional properties 'conformance.drill' not allowed" "$out/umbrella-drill.log"; then
-  ok "a pin under one literal key conformance.drill is refused, not ignored"
-else cat "$out/umbrella-drill.log"; bad "a pin under one literal key conformance.drill fails otherwise"; fi
 check defaults.env "no private edge by default" '^INFRARED_PRIVATE_EDGE=' 0
 check install.env "no private edge on a Gateway edge unless installation.privateEdge is set" '^INFRARED_PRIVATE_EDGE=' 0
 if [[ "$(added private-edge-off private-edge)" == 'INFRARED_PRIVATE_EDGE="true"' ]]; then
@@ -2968,19 +2958,19 @@ if operator_may batch jobs create get list watch delete && operator_may '' confi
    operator_may infrared.darkshift.io clusters create get delete; then
   ok "the operator may run an install run's drill: Jobs, ConfigMaps, Secrets, pods' logs, the Installation, CloudAccounts and Clusters"
 else bad "the operator's ClusterRole lacks what an install run needs (run hack/sync-operator.sh)"; fi
-refuse "install conformance without the drill image's tag or digest fails" \
-  "conformance.installs.enabled needs conformance.drill.image.tag or conformance.drill.image.digest, the platform's own ir image" \
+refuse "install conformance without cli.image's tag or digest fails" \
+  "conformance.installs.enabled needs cli.image.tag or cli.image.digest, the platform's own ir image" \
   --set conformance.installs.enabled=true
 refuse "install conformance without the drill's tools image fails" \
   "conformance.installs.enabled needs conformance.drill.toolsImage, the image the drill copies kubectl and helm from" \
   --set conformance.installs.enabled=true "${drill_pin[@]}" --set conformance.drill.toolsImage=
 refuse "conformance.installs.enabled as a string fails" "at '/conformance/installs/enabled'" --set-string conformance.installs.enabled=true
-refuse "a drill image as one string, alpha.290's shape, fails" "at '/conformance/drill/image'" --set "conformance.drill.image=$drill_image"
-refuse "a drill image's digest that is no sha256 fails" "at '/conformance/drill/image/digest'" \
-  --set conformance.drill.image.digest=v0.2.0-rc.14
-refuse "a drill image with no repository fails" "at '/conformance/drill/image/repository'" --set conformance.drill.image.repository=
-refuse "a key of the drill's image the chart does not read fails" "at '/conformance/drill/image'" \
-  --set conformance.drill.image.registry=ghcr.io/darkshiftio
+refuse "conformance.drill.image, where alpha.290 kept the drill's image, fails" \
+  "at '/conformance/drill': additional properties 'image' not allowed" --set "conformance.drill.image=$drill_image"
+refuse "a cli.image digest that is no sha256 fails" "at '/cli/image/digest'" --set cli.image.digest=v0.2.0-rc.14
+refuse "a cli.image with no repository fails" "at '/cli/image/repository'" --set cli.image.repository=
+refuse "a key of cli.image the chart does not read fails" "at '/cli/image'" --set cli.image.registry=ghcr.io/darkshiftio
+refuse "a key of cli the chart does not read fails" "at '/cli'" --set cli.enabled=true
 refuse "a tools image not pinned by digest fails" "at '/conformance/drill/toolsImage'" --set conformance.drill.toolsImage=alpine/k8s:1.37.0
 refuse "a key of conformance the operator does not read fails" "at '/conformance/installs'" --set conformance.installs.schedule=24h
 refuse "installation.privateEdge as a string fails" "at '/installation/privateEdge'" --set-string installation.privateEdge=true

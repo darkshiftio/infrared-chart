@@ -1604,7 +1604,7 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "Start install suites' runs (INFRARED_CONFORMANCE_INSTALLS, rendered only when true, with INFRARED_CONFORMANCE_DRILL_IMAGE and INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE). Needs conformance.drill.image's tag or digest, and conformance.drill.toolsImage: the render fails without them. Off by default: an install suite schedules nothing, and a run started by hand is Refused."
+              "description": "Start install suites' runs (INFRARED_CONFORMANCE_INSTALLS, rendered only when true, with INFRARED_CONFORMANCE_DRILL_IMAGE and INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE). Needs cli.image's tag or digest, and conformance.drill.toolsImage: the render fails without them. Off by default: an install suite schedules nothing, and a run started by hand is Refused."
             }
           }
         },
@@ -1612,16 +1612,22 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "image": {
-              "$ref": "#/$defs/image",
-              "description": "INFRARED_CONFORMANCE_DRILL_IMAGE: the platform's own ir image (repository infrared-cli), which each install run's drill Job runs as ir drill, rendered as the components' images are; no tag or digest here, the platform release pins both."
-            },
             "toolsImage": {
               "type": "string",
               "pattern": "^$|^[^@\\s]+@sha256:[0-9a-f]{64}$",
               "description": "INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE: the image the drill's init container copies kubectl and helm from, pinned by digest; alpine/k8s 1.37.0 by default, as registryToken.image."
             }
           }
+        }
+      }
+    },
+    "cli": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The platform's own ir (darkshiftio/infrared-cli), whose image install conformance's drill runs: INFRARED_CONFORMANCE_DRILL_IMAGE, with conformance.installs.enabled. No tag or digest here: the platform release pins both.",
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/image"
         }
       }
     },

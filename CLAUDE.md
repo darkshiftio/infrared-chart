@@ -162,6 +162,11 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `infrared-restore`'s container `restore`, `920MiB`, 90 percent of its 1Gi
   limit, set in the template because the operator's image reads no
   `MEMORY_LIMIT`: a change to the limit changes it too.
+- Catalog v0.55.0, a plan's follow-ups: env `INFRARED_FOLLOW_UPS`
+  (`operator.followUps`) on the operator, rendered only when set. The chart
+  renders nothing else for it: the operator files the issues and starts them,
+  and `status.steps[].followUps` comes with the CRDs from `make sync-operator`.
+  It does nothing until the pinned runner image reports follow-ups.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

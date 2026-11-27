@@ -208,6 +208,12 @@ spec:
             - name: INFRARED_PREVIEW_FALLBACK
               value: "true"
             {{- end }}
+            {{- if .Values.operator.followUps }}
+            # What a Change's plan leaves for later is filed as issues once its
+            # triage is approved, and started one at a time.
+            - name: INFRARED_FOLLOW_UPS
+              value: "true"
+            {{- end }}
             {{- if .Values.operator.declinedOutcomes }}
             # A request the org's policy forbids ends Declined, never
             # dead-lettered, and its issue is closed as not planned (ADR 0076).

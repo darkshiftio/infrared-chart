@@ -1173,6 +1173,15 @@ operator:
   # logo and name, marked generated with the reason. Off keeps every screenshot as it was taken.
   # Until the operator reads rollout flags (ADR 0061 decision 9).
   previewFallback: false
+  # -- File what a Change's plan leaves for later (INFRARED_FOLLOW_UPS, operator; catalog v0.55.0):
+  # once the Change's triage is approved, each follow-up its planning step returned
+  # (status.steps[].followUps) is opened as an issue on the Change's repo, in order, labelled
+  # infrared:follow-up and recorded on the triage step as evidence; when the Change merges, the
+  # first one still open gets needs-hydration, one at a time (on Gitea, which sends Infrared no
+  # events, the operator starts that run itself). Filing never stops the Change. A step reports
+  # follow-ups only on a runner image that carries them. Off, the follow-ups stay on the step and
+  # nothing is filed or started. Until the operator reads rollout flags (ADR 0061 decision 9).
+  followUps: false
   # -- End a request the org's policy forbids as Declined (INFRARED_DECLINED_OUTCOMES, operator;
   # infrared-docs-internal ADR 0076, item 8): a step whose agent answers DECLINE (hydration, the
   # policy and security reviewers) ends itself and the run Failed, with a finish time and the

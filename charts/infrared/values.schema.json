@@ -565,6 +565,10 @@
           "type": "boolean",
           "description": "Deliver a platform Product to an external zone, its production outside this install (INFRARED_EXTERNAL_ZONES, ADR 0067 D6)."
         },
+        "followUps": {
+          "type": "boolean",
+          "description": "File what a Change's plan leaves for later as issues labelled infrared:follow-up once its triage is approved, and start them one at a time as each Change merges (INFRARED_FOLLOW_UPS). Off by default: the follow-ups stay on the step and nothing is filed."
+        },
         "previewFallback": {
           "type": "boolean",
           "description": "Replace a zone snapshot of a sign-in or error page, or one mostly one colour, with a card drawn from the Product's assets (INFRARED_PREVIEW_FALLBACK)."

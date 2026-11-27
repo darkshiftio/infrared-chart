@@ -183,10 +183,11 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.44: the private edge, with no
-  # tunnel and no public name (installation.privateEdge; #94, infrared-docs-internal
-  # ADR 0100 D2), which renders only from an operator that hands the template
-  # PrivateEdge (infrared-operator api/v0.158.0 on); v0.1.40 to v0.1.43 before it,
+  # to install from a branch of the template. Here v0.1.45: install conformance's own
+  # alerts, none investigated (#95), on v0.1.44's private edge, with no tunnel and no
+  # public name (installation.privateEdge; #94, infrared-docs-internal ADR 0100 D2),
+  # which renders only from an operator that hands the template PrivateEdge
+  # (infrared-operator api/v0.158.0 on); v0.1.40 to v0.1.43 before it,
   # Pod Security restricted for SeaweedFS, Substrate and Cloudflare's origin issuer
   # (#90) and for monitoring's agents, operator and backup (#91), the orgs' label
   # wildcards on the edge's certificate (#92, ADR 0097) and the alerts
@@ -237,7 +238,7 @@ gitops:
   # held or pinned to a later tag; otherwise it keeps its spec.template.version
   # until that is patched. A tag, never a commit, so the API can tell a later pin
   # from an older one.
-  templateVersion: v0.1.44
+  templateVersion: v0.1.45
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the

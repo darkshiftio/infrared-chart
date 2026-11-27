@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# compare-render.sh <ref> [--include-crds]
+# compare-render.sh <ref> [--include-crds] [--as-this-version]
 # =============================================================================
 # Proves that a change to the chart renders today's objects unchanged. It renders
 # the chart at <ref> and in this tree with the same values, in the cases
@@ -8,23 +8,42 @@
 # each render is the same byte for byte. The generated Secrets are given fixed
 # values, so both renders are deterministic. CRDs are compared only with
 # --include-crds, since `make sync-operator` changes them on purpose.
+# --as-this-version gives <ref>'s Chart.yaml this tree's version first, for a
+# change that is a new chart version and renders nothing else new: every label
+# and variable that names the version then matches, and any other difference
+# still fails.
 #
 #   scripts/compare-render.sh origin/main
 #   scripts/compare-render.sh origin/feat/one-install --include-crds
+#   scripts/compare-render.sh v0.1.0-alpha.290 --include-crds --as-this-version
 #
 # Needs: git, helm. A <ref> with dependencies gets `helm dependency build`.
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-ref="${1:?usage: scripts/compare-render.sh <ref> [--include-crds]}"
+usage="usage: scripts/compare-render.sh <ref> [--include-crds] [--as-this-version]"
+ref="${1:?$usage}"
+shift
 crds=()
-[[ "${2:-}" == --include-crds ]] && crds=(--include-crds)
+as_this=0
+for a in "$@"; do
+  case "$a" in
+    --include-crds) crds=(--include-crds) ;;
+    --as-this-version) as_this=1 ;;
+    *) echo "$usage" >&2; exit 2 ;;
+  esac
+done
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/ref"
 git archive --format=tar "$ref" charts | tar -x -C "$work/ref"
+if (( as_this )); then
+  version="$(awk '/^version:/{print $2}' charts/infrared/Chart.yaml)"
+  awk -v v="$version" '/^version:/ {print "version: " v; next} {print}' "$work/ref/charts/infrared/Chart.yaml" >"$work/Chart.yaml"
+  mv "$work/Chart.yaml" "$work/ref/charts/infrared/Chart.yaml"
+fi
 [[ -f "$work/ref/charts/infrared/Chart.lock" ]] && helm dependency build "$work/ref/charts/infrared" >/dev/null
 hack/deps.sh >/dev/null
 
@@ -61,5 +80,5 @@ for c in "${cases[@]}"; do
     fail=1
   fi
 done
-if (( fail )); then echo "compare-render: FAILED against $ref ($(git rev-parse --short "$ref"))" >&2; exit 1; fi
-echo "compare-render: ${#cases[@]} renders the same byte for byte as $ref ($(git rev-parse --short "$ref"))${crds[*]+, CRDs included}"
+if (( fail )); then echo "compare-render: FAILED against $ref ($(git rev-parse --short "$ref^{commit}"))" >&2; exit 1; fi
+echo "compare-render: ${#cases[@]} renders the same byte for byte as $ref ($(git rev-parse --short "$ref^{commit}"))${crds[*]+, CRDs included}$( ((as_this)) && echo ", its version set to $version")"

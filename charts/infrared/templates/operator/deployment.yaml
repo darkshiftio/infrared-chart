@@ -97,7 +97,7 @@ spec:
             - name: INFRARED_CONFORMANCE_INSTALLS
               value: "true"
             - name: INFRARED_CONFORMANCE_DRILL_IMAGE
-              value: {{ .Values.conformance.drill.image | quote }}
+              value: {{ include "infrared.drillImage" . | quote }}
             - name: INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE
               value: {{ .Values.conformance.drill.toolsImage | quote }}
             {{- end }}

@@ -561,12 +561,13 @@ render without it.
 Install conformance (conformance.installs.enabled, INFRARED_CONFORMANCE_INSTALLS;
 infrared-docs-internal ADR 0100 D10): "true" when on, else empty. The operator
 starts an install run only with both of the drill's images, so with the switch
-on the render fails without either, saying why in one line.
+on the render fails without either, saying why in one line: the drill's image
+needs its tag or its digest, which the platform release pins.
 */}}
 {{- define "infrared.installConformance" -}}
 {{- if .Values.conformance.installs.enabled }}
-{{- if not .Values.conformance.drill.image }}
-{{- fail "conformance.installs.enabled needs conformance.drill.image, the platform's own ir image each install run's drill runs (the platform release pins it): without it the operator starts no install run" }}
+{{- if not (or .Values.conformance.drill.image.tag .Values.conformance.drill.image.digest) }}
+{{- fail "conformance.installs.enabled needs conformance.drill.image.tag or conformance.drill.image.digest, the platform's own ir image each install run's drill runs (the platform release pins both): without it the operator starts no install run" }}
 {{- end }}
 {{- if not .Values.conformance.drill.toolsImage }}
 {{- fail "conformance.installs.enabled needs conformance.drill.toolsImage, the image the drill copies kubectl and helm from: without it the operator starts no install run" }}
@@ -578,6 +579,11 @@ on the render fails without either, saying why in one line.
 {{/* The operator's image, which also runs the restore's modes. */}}
 {{- define "infrared.operatorImage" -}}
 {{- include "infrared.image" (dict "root" . "image" .Values.operator.image) }}
+{{- end }}
+
+{{/* The drill's image, the platform's own ir (INFRARED_CONFORMANCE_DRILL_IMAGE), rendered as the components' are. */}}
+{{- define "infrared.drillImage" -}}
+{{- include "infrared.image" (dict "root" . "image" .Values.conformance.drill.image) }}
 {{- end }}
 
 

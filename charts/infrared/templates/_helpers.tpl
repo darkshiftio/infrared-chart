@@ -287,6 +287,40 @@ request for the API. The API and the operator make it; no template renders it.
 {{- end }}
 
 {{/*
+The private edge (installation.privateEdge, INFRARED_PRIVATE_EDGE;
+infrared-docs-internal ADR 0100 D2): "true" when on, else empty. A Gateway edge
+kept inside the cluster has no tunnel, no public name and no Cloudflare
+credential, so the render fails on anything that would give it one, or that the
+operator would not hand on with it, each saying why in one line. A credential
+counts as set as infrared-platform-tokens reads it: a token trimmed of
+whitespace, the tunnel's credentials file of one trailing newline.
+*/}}
+{{- define "infrared.privateEdge" -}}
+{{- if .Values.installation.privateEdge }}
+{{- $t := .Values.platformTokens }}
+{{- if ne .Values.installation.edge "gateway" }}
+{{- fail "installation.privateEdge needs installation.edge gateway: the private edge is a Gateway edge kept inside the cluster, and the operator hands it to the gitops template on no other edge" }}
+{{- end }}
+{{- if .Values.installation.tunnel }}
+{{- fail "installation.privateEdge takes no installation.tunnel: a private edge has no Cloudflare Tunnel and no public name, so nothing outside the cluster reaches it (infrared-docs-internal ADR 0100 D2)" }}
+{{- end }}
+{{- if dig "customHostnames" false (.Values.installation.previews | default dict) }}
+{{- fail "installation.privateEdge takes no installation.previews.customHostnames: a custom hostname reaches the edge through Cloudflare's proxy, which nothing does on a private edge" }}
+{{- end }}
+{{- if trim (default "" $t.cloudflareApiToken) }}
+{{- fail "installation.privateEdge takes no platformTokens.cloudflareApiToken: a private edge makes no DNS record and no origin certificate, and its install holds no Cloudflare credential (infrared-docs-internal ADR 0100 D2)" }}
+{{- end }}
+{{- if trim (default "" $t.cloudflareDomainApiToken) }}
+{{- fail "installation.privateEdge takes no platformTokens.cloudflareDomainApiToken: a private edge makes no DNS record and no certificate for the previews' domain, and its install holds no Cloudflare credential (infrared-docs-internal ADR 0100 D2)" }}
+{{- end }}
+{{- if trimSuffix "\n" (default "" $t.cloudflareTunnelCredentials) }}
+{{- fail "installation.privateEdge takes no platformTokens.cloudflareTunnelCredentials: a private edge runs no cloudflared, and its install holds no Cloudflare credential (infrared-docs-internal ADR 0100 D2)" }}
+{{- end }}
+{{- "true" }}
+{{- end }}
+{{- end }}
+
+{{/*
 The metrics' door (observability.metricsAuth; infrared-docs-internal
 docs/home-defense.md, step 5). metricsClients is "true" from the stage clients
 on, when the API and the operator read and write through the door at
@@ -520,6 +554,24 @@ render without it.
 {{- if .Values.restore.point }}{{ toJson (dict "point" .Values.restore.point) }}
 {{- else if .Values.restore.from }}{{ toJson (dict "from" .Values.restore.from) }}
 {{- else }}{{ "{}" }}{{ end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Install conformance (conformance.installs.enabled, INFRARED_CONFORMANCE_INSTALLS;
+infrared-docs-internal ADR 0100 D10): "true" when on, else empty. The operator
+starts an install run only with both of the drill's images, so with the switch
+on the render fails without either, saying why in one line.
+*/}}
+{{- define "infrared.installConformance" -}}
+{{- if .Values.conformance.installs.enabled }}
+{{- if not .Values.conformance.drill.image }}
+{{- fail "conformance.installs.enabled needs conformance.drill.image, the platform's own ir image each install run's drill runs (the platform release pins it): without it the operator starts no install run" }}
+{{- end }}
+{{- if not .Values.conformance.drill.toolsImage }}
+{{- fail "conformance.installs.enabled needs conformance.drill.toolsImage, the image the drill copies kubectl and helm from: without it the operator starts no install run" }}
+{{- end }}
+{{- "true" }}
 {{- end }}
 {{- end }}
 

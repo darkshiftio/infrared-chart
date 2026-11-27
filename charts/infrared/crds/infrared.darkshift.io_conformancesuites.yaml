@@ -57,6 +57,118 @@ spec:
             description: ConformanceSuiteSpec is a suite of templates proven on a
               schedule.
             properties:
+              install:
+                description: |-
+                  Install makes this an install suite (infrared-docs-internal ADR 0100):
+                  each run of a template installs Infrared on the cluster it builds, adds
+                  content, backs it up, loses the cluster, restores onto a second one and
+                  checks that the same install came back, timing every phase. The
+                  operator starts none while install conformance is off on this install
+                  (INFRARED_CONFORMANCE_INSTALLS). Empty: a template suite, as before.
+                properties:
+                  backup:
+                    description: |-
+                      Backup is the bucket a run's install backs up to, under the install's
+                      name.
+                    properties:
+                      bucket:
+                        description: |-
+                          Bucket is the Google Cloud Storage bucket of the runs' backups, which
+                          forgets what it holds on its own after a few days.
+                        minLength: 1
+                        type: string
+                      impersonate:
+                        description: |-
+                          Impersonate is the Google service account the run reads and writes
+                          the bucket as.
+                        type: string
+                      region:
+                        description: Region is the bucket's region.
+                        type: string
+                    required:
+                    - bucket
+                    type: object
+                  chart:
+                    description: |-
+                      Chart is the umbrella chart ir install installs, an OCI reference such
+                      as oci://us-central1-docker.pkg.dev/darkshift-preprod/infrared/charts/infrared.
+                    minLength: 1
+                    type: string
+                  content:
+                    description: Content is what a run adds to its install before
+                      the backup.
+                    properties:
+                      historyFactor:
+                        description: |-
+                          HistoryFactor is the history a run seeds, as a multiple of the objects
+                          and bytes of the newest point of the install the operator runs, such as
+                          "1.25"; "0" seeds none.
+                        pattern: ^[0-9]{1,3}(\.[0-9]{1,3})?$
+                        type: string
+                      storesGiB:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: |-
+                          StoresGiB is the ballast a run writes into the stores: a number of GiB,
+                          or home for the size of the mirror of the install the operator runs.
+                        x-kubernetes-int-or-string: true
+                    type: object
+                  domain:
+                    description: |-
+                      Domain is where a run's install answers, https://<install>.<domain>: a
+                      name never published, no record and no certificate from outside.
+                    maxLength: 200
+                    pattern: ^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.)+[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$
+                    type: string
+                  loss:
+                    description: |-
+                      Loss is how the first cluster is lost: sequential, the only way, the
+                      second cluster built once the first's destroy is done.
+                    enum:
+                    - sequential
+                    type: string
+                  subchart:
+                    description: |-
+                      Subchart is the umbrella's subchart the install's values are for, such
+                      as infrared-core; empty: the chart's own.
+                    type: string
+                  templateVersion:
+                    description: |-
+                      TemplateVersion is the gitops template version the install renders:
+                      empty, the one this install's own gitops repo pins, resolved at each
+                      run's start and recorded in its status; or a tag, as while this install
+                      is older than the first template with the private edge.
+                    type: string
+                  valuesFrom:
+                    description: |-
+                      ValuesFrom is the ConfigMap that holds the install's two files,
+                      infrared-values.yaml and infrared.yaml, with the placeholders the
+                      operator fills for each run.
+                    properties:
+                      name:
+                        minLength: 1
+                        type: string
+                      namespace:
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
+                  version:
+                    default: self
+                    description: |-
+                      Version is the chart's version: self, the version of the install the
+                      operator runs, resolved at each run's start and recorded in its status,
+                      or a version.
+                    type: string
+                required:
+                - backup
+                - chart
+                - domain
+                - valuesFrom
+                type: object
               monthlyCapUSD:
                 description: |-
                   MonthlyCapUSD is what the suite's runs may cost in a calendar month
@@ -206,7 +318,9 @@ spec:
                   sweeper; default 4h.
                 type: string
               workload:
-                description: Workload is what each run deploys and smoke checks.
+                description: |-
+                  Workload is what each run of a template suite deploys and smoke
+                  checks; an install suite's runs ignore it.
                 properties:
                   expect:
                     description: Expect is text the page must contain.
@@ -228,8 +342,11 @@ spec:
             required:
             - monthlyCapUSD
             - templates
-            - workload
             type: object
+            x-kubernetes-validations:
+            - message: a template suite names its workload (spec.workload); spec.install
+                makes it an install suite, whose runs need none
+              rule: has(self.workload) || has(self.install)
           status:
             description: ConformanceSuiteStatus is what the suite has run and spent.
             properties:

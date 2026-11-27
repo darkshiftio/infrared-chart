@@ -196,6 +196,15 @@ spec:
                 type: object
               region:
                 type: string
+              register:
+                description: |-
+                  Register is whether Infrared registers the cluster once it connects: an
+                  Argo CD cluster Secret on the management cluster, and the cluster's
+                  app-of-apps in the gitops repo. Unset or true registers it, as before;
+                  false connects it without either, so nothing of the management
+                  cluster's deploys there (install conformance's clusters,
+                  infrared-docs-internal ADR 0100 D2). It cannot change.
+                type: boolean
               server:
                 description: Server is the API server URL Argo CD uses. Empty means
                   in-cluster.
@@ -236,6 +245,9 @@ spec:
             - message: owner cannot change
               rule: has(self.owner) == has(oldSelf.owner) && (!has(self.owner) ||
                 self.owner == oldSelf.owner)
+            - message: 'register cannot change: it is set when the Cluster is made'
+              rule: has(self.register) == has(oldSelf.register) && (!has(self.register)
+                || self.register == oldSelf.register)
           status:
             description: ClusterStatus is the observed state of a cluster.
             properties:

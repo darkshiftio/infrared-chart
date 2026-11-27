@@ -176,6 +176,21 @@ The Helm chart for Infrared (`charts/infrared`), published to
   step's read-only credentials and puts them in the step's own Secret, and no
   ClusterRole rule changed. It does nothing until the pinned runner image reads
   `INFRARED_READ_TOKENS`.
+- infrared-docs-internal ADR 0100, install conformance and the private edge:
+  env `INFRARED_CONFORMANCE_INSTALLS` (`conformance.installs.enabled`),
+  `INFRARED_CONFORMANCE_DRILL_IMAGE` (`conformance.drill.image`, which the
+  platform release pins) and `INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE`
+  (`conformance.drill.toolsImage`, `registryToken.image`'s alpine/k8s, held
+  equal) on the operator, all three only when enabled, and the render fails
+  enabled without either image; `INFRARED_PRIVATE_EDGE`
+  (`installation.privateEdge`) on the operator, rendered only when true, which
+  needs `installation.edge: gateway` and fails beside `installation.tunnel`,
+  `installation.previews.customHostnames` or a Cloudflare credential in
+  `platformTokens`, each refusal saying why in one line. The operator stops at
+  start on any value but `true` or empty (`false` too for the switch), so
+  neither is rendered off. The chart renders nothing else for them: the
+  operator makes each install run's drill Job, ConfigMap and Secrets in the
+  release namespace, and its ClusterRole's rules already cover them.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

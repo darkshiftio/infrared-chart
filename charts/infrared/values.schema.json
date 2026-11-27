@@ -249,6 +249,10 @@
             ]
           }
         },
+        "privateEdge": {
+          "type": "boolean",
+          "description": "spec.privateEdge (INFRARED_PRIVATE_EDGE, rendered only when true): a Gateway edge kept inside the cluster alone, with no Cloudflare Tunnel, no public name, no DNS record and no Cloudflare credential (infrared-docs-internal ADR 0100 D2), from gitops template v0.1.44. It needs edge gateway, and the render fails beside a tunnel, custom hostnames or a Cloudflare credential. Off by default."
+        },
         "telemetry": {
           "type": "object",
           "additionalProperties": false,
@@ -1586,6 +1590,39 @@
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9._/:-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$",
           "description": "The restore Job's Postgres sidecar, which restores each consumer database's dump: the image the gitops template's Postgres Cluster runs, as name:tag@sha256:digest."
+        }
+      }
+    },
+    "conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Install conformance (infrared-docs-internal ADR 0100): the operator's runs of the ConformanceSuites with spec.install. Template conformance reads none of it.",
+      "properties": {
+        "installs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Start install suites' runs (INFRARED_CONFORMANCE_INSTALLS, rendered only when true, with INFRARED_CONFORMANCE_DRILL_IMAGE and INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE). Needs conformance.drill.image and conformance.drill.toolsImage: the render fails without either. Off by default: an install suite schedules nothing, and a run started by hand is Refused."
+            }
+          }
+        },
+        "drill": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string",
+              "pattern": "^$|^[^@\\s]+@sha256:[0-9a-f]{64}$",
+              "description": "INFRARED_CONFORMANCE_DRILL_IMAGE: the platform's own ir image, which each install run's drill Job runs as ir drill, pinned by digest; empty here, the platform release pins it."
+            },
+            "toolsImage": {
+              "type": "string",
+              "pattern": "^$|^[^@\\s]+@sha256:[0-9a-f]{64}$",
+              "description": "INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE: the image the drill's init container copies kubectl and helm from, pinned by digest; alpine/k8s 1.37.0 by default, as registryToken.image."
+            }
+          }
         }
       }
     },

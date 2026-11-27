@@ -135,6 +135,22 @@ installation:
   #   publish: false     # with mode beside: external-dns points the edge's names at the tunnel
   #   hostnames:         # the other names on the tunnel, each by a route of its own
   #     - support.example.com
+  # -- Keep a Gateway edge inside the cluster alone (INFRARED_PRIVATE_EDGE,
+  # operator, rendered only when true; infrared-docs-internal ADR 0100 D2): no
+  # Cloudflare Tunnel, no public name and no DNS record, and so no Cloudflare
+  # credential, for an install nothing outside its cluster may reach, such as
+  # install conformance's throwaway one. The gitops template (v0.1.44 on)
+  # renders the edge as behind a tunnel without cloudflared: Envoy binds no
+  # node's ports, the edge's certificate comes from a certificate authority
+  # inside the cluster, and external-dns, external-dns-domain and Cloudflare's
+  # origin issuer are left out; a person reaches a name by a port-forward.
+  # Written to the Installation's `spec.privateEdge` while that is off. It
+  # needs `edge: gateway`, and the render fails beside a tunnel, custom
+  # hostnames (previews.customHostnames) or a Cloudflare credential
+  # (platformTokens.cloudflareApiToken, cloudflareDomainApiToken,
+  # cloudflareTunnelCredentials). Off: the edge as the rest of installation
+  # sets it.
+  privateEdge: false
   # A seed for the Installation's `spec.observability.telemetry` (infrared-docs-
   # internal ADR 0044; ADR 0069 T5): the telemetry plane this install writes its
   # numbers to, and the platform label every series carries. The Installation is
@@ -167,7 +183,16 @@ cloud: ""
 gitops:
   # -- Version of infrared-gitops-template the API asks the operator to render
   # (INFRARED_GITOPS_TEMPLATE_VERSION): a tag, or a full 40-character commit SHA
-  # to install from a branch of the template. Here v0.1.39: the builder's buildpacks
+  # to install from a branch of the template. Here v0.1.45: install conformance's own
+  # alerts, none investigated (#95), on v0.1.44's private edge, with no tunnel and no
+  # public name (installation.privateEdge; #94, infrared-docs-internal ADR 0100 D2),
+  # which renders only from an operator that hands the template PrivateEdge
+  # (infrared-operator api/v0.158.0 on); v0.1.40 to v0.1.43 before it,
+  # Pod Security restricted for SeaweedFS, Substrate and Cloudflare's origin issuer
+  # (#90) and for monitoring's agents, operator and backup (#91), the orgs' label
+  # wildcards on the edge's certificate (#92, ADR 0097) and the alerts
+  # InfraredConformanceRunStuck and InfraredTemplateConformanceStale (#93, workspace
+  # TODO 832); v0.1.39 before them, the builder's buildpacks
   # lifecycle 0.21.30, upstream's, past kpack's 0.21.14, whose launcher, built with
   # Go 1.26.5, every image carried, and a last builder group with procfile alone for
   # images of files and a start command (#87, #88; infrared-docs-internal ADR 0093,
@@ -213,7 +238,7 @@ gitops:
   # held or pinned to a later tag; otherwise it keeps its spec.template.version
   # until that is patched. A tag, never a commit, so the API can tell a later pin
   # from an older one.
-  templateVersion: v0.1.39
+  templateVersion: v0.1.45
   # -- The OCI repository of this chart, host and path with no oci://
   # (INFRARED_CHART_REPO, operator): the gitops template's `infrared` Application
   # pulls the chart from it, and the operator registers it with Argo CD, with the
@@ -360,6 +385,35 @@ restore:
   # pg_restore and the server share a major. Change it together with the
   # template's `components/postgres/cluster.yaml`.
   postgresImage: "ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:f89a40f4d74aa6e0900917eaf6299b125a6382eb02fd4ee5d46f55bcbf7e5726"
+
+# Install conformance (infrared-docs-internal ADR 0100): the operator runs the
+# ConformanceSuites with spec.install, each run of which builds a cluster in a
+# cloud account, installs Infrared there with ir, backs it up, loses the
+# cluster, restores onto a second one and checks the same install came back,
+# timing every phase. Each run spends: two clusters in turn, about $1.25 to $2.
+# Template conformance (ADR 0047) reads none of this.
+conformance:
+  installs:
+    # -- Start install suites' runs (INFRARED_CONFORMANCE_INSTALLS, operator,
+    # rendered only when true, with both drill images). Off: an install suite
+    # schedules nothing and says why in its status, and a run of one started
+    # by hand is Refused, nothing built. It needs conformance.drill.image and
+    # conformance.drill.toolsImage: the render fails without either. Until the
+    # operator reads rollout flags (ADR 0061 decision 9); the API's rollout
+    # flag installConformance shows the runs.
+    enabled: false
+  drill:
+    # -- The drill's image (INFRARED_CONFORMANCE_DRILL_IMAGE, operator, with
+    # installs.enabled): the platform's own ir image, whose entrypoint is ir,
+    # which each install run's drill Job on this cluster runs as `ir drill`,
+    # pinned by digest. Empty here: the platform release pins it, the image of
+    # the release under test.
+    image: ""
+    # -- The image the drill's init container copies kubectl and helm from
+    # (INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE, operator, with installs.enabled):
+    # alpine/k8s 1.37.0, by digest, registryToken.image's, which
+    # scripts/verify.sh holds equal: change them together.
+    toolsImage: "docker.io/alpine/k8s:1.37.0@sha256:b421c2e9419edb98db39b6ab641669f4db7bb2acf354f22450c6b7e7176d1ff4"
 
 components:
   # -- The gitops template's components the install leaves out, by name, e.g.
@@ -636,6 +690,7 @@ registryToken:
   # `us-central1-docker.pkg.dev`. The images and gitops.chartRepository must be on it.
   registry: ""
   # -- The Job's image: curl, jq, kubectl and the AWS CLI. alpine/k8s 1.37.0, by digest, as the gitops template's jobs.
+  # conformance.drill.toolsImage is the same, which scripts/verify.sh holds equal: change them together.
   image: "docker.io/alpine/k8s:1.37.0@sha256:b421c2e9419edb98db39b6ab641669f4db7bb2acf354f22450c6b7e7176d1ff4"
 
 # The install's own identity for the cloud accounts orgs add to Infrared

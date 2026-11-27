@@ -2797,8 +2797,144 @@ for set in observability.metricsAuth.stage=on observability.metricsAuth.stage=tr
   else ok "the schema refuses $set"; fi
 done
 
+step "install conformance and the private edge (conformance.installs.enabled, installation.privateEdge; infrared-docs-internal ADR 0100)"
+# Off by default: no variable, so an install that sets neither renders as
+# before. Each switch renders beside the same values with it off, the
+# generated Secrets fixed, and the two renders differ by exactly the operator's
+# variables it adds: install conformance its three, the private edge its one.
+# The drill's images alone hand nothing on. The refusals follow, each with its
+# reason, and none prints a credential.
+fixed_secrets=(--set "setup.token=ci-setup,session.key=ci-session,mcp.token=ci-mcp,mcp.access.token=ci-mcp-access")
+drill_image=us-central1-docker.pkg.dev/darkshift-preprod/infrared/infrared-cli:v0.2.0-rc.14@sha256:0000000000000000000000000000000000000000000000000000000000000051
+tools_image="$(yq '.conformance.drill.toolsImage' "$chart/values.yaml")"
+helm template infrared "$chart" -n infrared "${fixed_secrets[@]}" >"$out/conformance-off.yaml"
+helm template infrared "$chart" -n infrared "${fixed_secrets[@]}" --set conformance.installs.enabled=true \
+  --set "conformance.drill.image=$drill_image" >"$out/install-conformance.yaml"
+helm template infrared "$chart" -n infrared "${fixed_secrets[@]}" --set "conformance.drill.image=$drill_image" \
+  --set conformance.drill.toolsImage=registry.example.com/alpine/k8s:1.37.0@sha256:0000000000000000000000000000000000000000000000000000000000000052 \
+  >"$out/install-conformance-images.yaml"
+# A throwaway install's edge, as install conformance's values set it: a Gateway
+# edge with its previews under a name never published, then kept inside the
+# cluster; and what Argo CD renders once it adopts that install, whose
+# infrared Application carries installation.privateEdge (template v0.1.44).
+edge_gateway=(--set installation.edge=gateway --set installation.previews.domain=conf-irgke-1127-1600.conformance.darkshift.io
+  --set installation.previews.signInURL=https://conf-irgke-1127-1600.conformance.darkshift.io)
+private_edge=("${edge_gateway[@]}" --set installation.privateEdge=true)
+helm template infrared "$chart" -n infrared "${fixed_secrets[@]}" "${edge_gateway[@]}" >"$out/private-edge-off.yaml"
+helm template infrared "$chart" -n infrared "${fixed_secrets[@]}" "${private_edge[@]}" >"$out/private-edge.yaml"
+helm template infrared "$chart" -n infrared "${adopted[@]}" "${private_edge[@]}" >"$out/private-edge-adopted.yaml"
+envs private-edge-adopted
+if helm lint --strict "$chart" --set conformance.installs.enabled=true --set "conformance.drill.image=$drill_image" >"$out/lint.log" 2>&1; then
+  ok "lint with install conformance on"
+else cat "$out/lint.log"; bad "lint with install conformance on"; fi
+if helm lint --strict "$chart" "${private_edge[@]}" >"$out/lint.log" 2>&1; then ok "lint with the private edge"
+else cat "$out/lint.log"; bad "lint with the private edge"; fi
+# added <off> <on>: what <on> adds to <off>, comments aside, each variable as
+# NAME=value. A line <on> drops, or adds that is no variable, comes out as it
+# is, so it never matches.
+added() {
+  { diff "$out/$1.yaml" "$out/$2.yaml" || true; } | sed -n -e 's/^> //p' -e '/^< /p' | { grep -vE '^ +#' || true; } |
+    awk '/^ +- name: [A-Z0-9_]+$/ {n = $3; next}
+      n && /^ +value: / {sub(/^ +value: /, ""); print n "=" $0; n = ""; next}
+      {if (n) print "- name: " n; print; n = ""}'
+}
+check defaults.env "no install conformance by default" '^INFRARED_CONFORMANCE_' 0
+check install.env "no install conformance in an install's values that do not ask for it" '^INFRARED_CONFORMANCE_' 0
+if [[ "$(added conformance-off install-conformance)" == "INFRARED_CONFORMANCE_INSTALLS=\"true\"
+INFRARED_CONFORMANCE_DRILL_IMAGE=\"$drill_image\"
+INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE=\"$tools_image\"" ]]; then
+  ok "conformance.installs.enabled adds the switch and the drill's two images to the operator, and nothing else"
+else bad "conformance.installs.enabled adds otherwise: $(added conformance-off install-conformance | tr '\n' ' ')"; fi
+if cmp -s "$out/conformance-off.yaml" "$out/install-conformance-images.yaml"; then
+  ok "the drill's images alone hand nothing on: the render is the switch's off render byte for byte"
+else bad "the drill's images change the render without conformance.installs.enabled"; fi
+if [[ "$tools_image" == "$(yq '.registryToken.image' "$chart/values.yaml")" ]]; then
+  ok "the drill's tools image is registryToken.image's alpine/k8s, by the same digest"
+else bad "conformance.drill.toolsImage is not registryToken.image: change them together"; fi
+check defaults.env "no private edge by default" '^INFRARED_PRIVATE_EDGE=' 0
+check install.env "no private edge on a Gateway edge unless installation.privateEdge is set" '^INFRARED_PRIVATE_EDGE=' 0
+if [[ "$(added private-edge-off private-edge)" == 'INFRARED_PRIVATE_EDGE="true"' ]]; then
+  ok "installation.privateEdge adds INFRARED_PRIVATE_EDGE to the operator, and nothing else"
+else bad "installation.privateEdge adds otherwise: $(added private-edge-off private-edge | tr '\n' ' ')"; fi
+has private-edge-adopted.env "after adoption the operator still gets the private edge" 'INFRARED_PRIVATE_EDGE="true"'
+has private-edge-adopted.env "...beside its Gateway edge" 'INFRARED_EDGE="gateway"'
+# The CRDs, from the operator that reads them (infrared-operator api/v0.158.0):
+# the Installation's spec.privateEdge, the Cluster's spec.register, which
+# cannot change, the ConformanceSuite's spec.install with spec.workload
+# optional, and the run's new status.
+crd_at() { # crd_at <plural> <yq expression>: that expression of the CRD's schema, once
+  yq ea -N -o json -I0 "[select(.kind == \"CustomResourceDefinition\" and .metadata.name == \"$1.infrared.darkshift.io\")] | .[0]
+  | .spec.versions[0].schema.openAPIV3Schema | $2" "$out/defaults.yaml"; }
+if [[ "$(crd_at installations '.properties.spec.properties.privateEdge.type')" == '"boolean"' ]]; then
+  ok "the Installation CRD has spec.privateEdge, a bool"
+else bad "the Installation CRD lacks spec.privateEdge (run hack/sync-operator.sh)"; fi
+if [[ "$(crd_at clusters '.properties.spec.properties.register.type')" == '"boolean"' ]] &&
+   [[ "$(crd_at clusters '[.properties.spec["x-kubernetes-validations"][].message] | any_c(. == "register cannot change: it is set when the Cluster is made")')" == true ]]; then
+  ok "the Cluster CRD has spec.register, which cannot change"
+else bad "the Cluster CRD lacks spec.register or its rule (run hack/sync-operator.sh)"; fi
+if [[ "$(crd_at conformancesuites '.properties.spec.properties.install.properties | keys | sort')" == '["backup","chart","content","domain","loss","subchart","templateVersion","valuesFrom","version"]' ]] &&
+   [[ "$(crd_at conformancesuites '.properties.spec.required')" == '["monthlyCapUSD","templates"]' ]]; then
+  ok "the ConformanceSuite CRD has spec.install, and spec.workload is optional"
+else bad "the ConformanceSuite CRD lacks spec.install, or still requires spec.workload (run hack/sync-operator.sh)"; fi
+if [[ "$(crd_at conformanceruns '.properties.status.properties | keys | [.[] | select(. == "restoreCluster" or . == "point" or . == "window" or . == "projection" or . == "checks")] | sort')" == \
+  '["checks","point","projection","restoreCluster","window"]' ]]; then
+  ok "the ConformanceRun CRD has the install run's status: the restore's cluster, the point, the window, the projection and the checks"
+else bad "the ConformanceRun CRD lacks an install run's status (run hack/sync-operator.sh)"; fi
+# An install run (ADR 0100) makes its drill's Job, ConfigMap and Secrets in the
+# release namespace and reads the drill's log, the Installation and the
+# CloudAccounts: the operator's ClusterRole, synced from its markers, grants it.
+operator_may() { # operator_may <API group> <resource> <verb>...: an explicit rule grants each
+  local verbs v
+  verbs="$(yq "select(.kind == \"ClusterRole\" and .metadata.name == \"infrared-operator\") | .rules[]
+    | select(.apiGroups[] == \"$1\") | select(.resources[] == \"$2\") | .verbs[]" "$out/defaults.yaml")"
+  shift 2
+  for v in "$@"; do grep -qxF -- "$v" <<<"$verbs" || return 1; done
+}
+if operator_may batch jobs create get list watch delete && operator_may '' configmaps create get list update patch delete &&
+   operator_may '' secrets create get list update patch delete && operator_may '' pods/log get &&
+   operator_may infrared.darkshift.io installations get && operator_may infrared.darkshift.io cloudaccounts get list watch &&
+   operator_may infrared.darkshift.io clusters create get delete; then
+  ok "the operator may run an install run's drill: Jobs, ConfigMaps, Secrets, pods' logs, the Installation, CloudAccounts and Clusters"
+else bad "the operator's ClusterRole lacks what an install run needs (run hack/sync-operator.sh)"; fi
+refuse "install conformance without the drill's image fails" \
+  "conformance.installs.enabled needs conformance.drill.image, the platform's own ir image" --set conformance.installs.enabled=true
+refuse "install conformance without the drill's tools image fails" \
+  "conformance.installs.enabled needs conformance.drill.toolsImage, the image the drill copies kubectl and helm from" \
+  --set conformance.installs.enabled=true --set "conformance.drill.image=$drill_image" --set conformance.drill.toolsImage=
+refuse "conformance.installs.enabled as a string fails" "at '/conformance/installs/enabled'" --set-string conformance.installs.enabled=true
+refuse "a drill image not pinned by digest fails" "at '/conformance/drill/image'" \
+  --set conformance.drill.image=us-central1-docker.pkg.dev/darkshift-preprod/infrared/infrared-cli:v0.2.0-rc.14
+refuse "a tools image not pinned by digest fails" "at '/conformance/drill/toolsImage'" --set conformance.drill.toolsImage=alpine/k8s:1.37.0
+refuse "a key of conformance the operator does not read fails" "at '/conformance/installs'" --set conformance.installs.schedule=24h
+refuse "installation.privateEdge as a string fails" "at '/installation/privateEdge'" --set-string installation.privateEdge=true
+refuse "the private edge on the default edge, Traefik, fails" "installation.privateEdge needs installation.edge gateway" \
+  --set installation.privateEdge=true
+refuse "the private edge on traefik, named, fails" "installation.privateEdge needs installation.edge gateway" \
+  --set installation.edge=traefik --set installation.privateEdge=true
+refuse "the private edge beside a tunnel fails" "installation.privateEdge takes no installation.tunnel" \
+  "${private_edge[@]}" --set installation.tunnel.id="$tunnel_id"
+refuse "the private edge with custom hostnames fails" "installation.privateEdge takes no installation.previews.customHostnames" \
+  "${private_edge[@]}" --set installation.previews.customHostnames=true
+: >"$out/private-edge-refusals.log"
+refuse "the private edge with the platform's Cloudflare token fails" "installation.privateEdge takes no platformTokens.cloudflareApiToken" \
+  "${private_edge[@]}" --set-file "platformTokens.cloudflareApiToken=$out/ci-cloudflare-token"
+cat "$out/refuse.log" >>"$out/private-edge-refusals.log"
+refuse "the private edge with the domain's Cloudflare token fails" "installation.privateEdge takes no platformTokens.cloudflareDomainApiToken" \
+  "${private_edge[@]}" --set-file "platformTokens.cloudflareDomainApiToken=$out/ci-cloudflare-domain-token"
+cat "$out/refuse.log" >>"$out/private-edge-refusals.log"
+refuse "the private edge with a tunnel's credentials fails" "installation.privateEdge takes no platformTokens.cloudflareTunnelCredentials" \
+  "${private_edge[@]}" "${tunnel_credentials[@]}"
+cat "$out/refuse.log" >>"$out/private-edge-refusals.log"
+refuse "the private edge on an install's values that carry the Cloudflare token fails" \
+  "installation.privateEdge takes no platformTokens.cloudflareApiToken" "${install[@]}" --set installation.privateEdge=true
+cat "$out/refuse.log" >>"$out/private-edge-refusals.log"
+if [ -s "$out/private-edge-refusals.log" ] &&
+   ! grep -q 'ci-cloudflare-token\|ci-cloudflare-domain-token\|ci-tunnel-secret\|ci-account' "$out/private-edge-refusals.log"; then
+  ok "a refused Cloudflare credential is never printed"
+else bad "a refused Cloudflare credential is printed, or nothing was refused"; fi
+
 step "kubeconform"
-for f in defaults digests adopted other ecr extensions extensions-shared extensions-own ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic metrics-door metrics-clients metrics-enforced metrics-clients-write metrics-clients-actors node-exporter-auth; do
+for f in defaults digests adopted other ecr extensions extensions-shared extensions-own ghcr install ghcr-adopted stores-adopted backup-key gitea gitea-adopted backups backups-nogitea backups-adopted backups-gcs restore restore-point restore-gcs code-index code-index-install registry-token registry-token-adopted aws aws-irsa aws-adopted cloud-gcp cloud-irsa cloud-ec2 cloud-web registry-creds sign-in sign-in-install identity gitea-oidc gitea-oidc-no-sign-in-url gitea-localred flags network-policies network-policies-gitea registry-pulls tenancy tenancy-bare runtime-class caps caps-minutes agent-reach support-chat support-chat-key storage-layout media-both media-object-store actors actors-hosts actors-elastic metrics-door metrics-clients metrics-enforced metrics-clients-write metrics-clients-actors node-exporter-auth install-conformance private-edge private-edge-adopted; do
   if kubeconform -strict -ignore-missing-schemas -summary "$out/$f.yaml"; then ok "kubeconform $f"
   else bad "kubeconform $f"; fi
 done

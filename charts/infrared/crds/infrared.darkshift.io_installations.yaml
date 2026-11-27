@@ -492,6 +492,20 @@ spec:
                 - domain
                 - signInURL
                 type: object
+              privateEdge:
+                description: |-
+                  PrivateEdge keeps a Gateway edge inside the cluster alone, with no
+                  Cloudflare Tunnel, no public name and no DNS record, and so no
+                  Cloudflare credential (infrared-docs-internal ADR 0100 D2): an install
+                  nothing outside its cluster may reach, such as install conformance's
+                  throwaway one. The gitops template renders the edge as behind a tunnel
+                  without cloudflared: Envoy binds no node's ports, the edge's
+                  certificates come from the certificate authority inside the cluster,
+                  and external-dns and Cloudflare's origin issuer are left out. It wins
+                  over spec.tunnel and spec.previews.customHostnames, which the template
+                  is then not given. Only a Gateway edge reads it; off, nothing changes.
+                  The operator sets it from INFRARED_PRIVATE_EDGE while it is off.
+                type: boolean
               signIn:
                 description: |-
                   SignIn holds the sign-in settings platform admins change in Infrared,

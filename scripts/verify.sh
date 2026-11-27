@@ -219,6 +219,10 @@ helm template infrared "$chart" -n infrared --set runner.actors.enabled=true --s
 helm template infrared "$chart" -n infrared --set operator.externalZones=true >"$out/external-zones.yaml"
 # A poor environment preview becomes a card drawn from the Product's assets (operator #74).
 helm template infrared "$chart" -n infrared --set operator.previewFallback=true >"$out/preview-fallback.yaml"
+# What a Change's plan leaves for later is filed and started (operator.followUps, catalog v0.55.0).
+helm template infrared "$chart" -n infrared --set operator.followUps=true >"$out/follow-ups.yaml"
+# A plan and a build read the org's other Products (operator.readOrgRepos, catalog v0.56.0).
+helm template infrared "$chart" -n infrared --set operator.readOrgRepos=true >"$out/read-org-repos.yaml"
 # A summary's closing scene follows its deployment (summaryvideo.liveScene, ADR 0084 D7).
 helm template infrared "$chart" -n infrared --set summaryvideo.liveScene=true >"$out/live-scene.yaml"
 helm template infrared "$chart" -n infrared --set summaryvideo.liveScene=true,summaryvideo.enabled=false >"$out/live-scene-no-videos.yaml"
@@ -266,7 +270,7 @@ mirror_lint='registry.example.com/golangci/golangci-lint:v2.15.0-alpine@sha256:0
 helm template infrared "$chart" -n infrared --set "runner.goToolchainImage=$mirror_go,runner.golangciLintImage=$mirror_lint" \
   >"$out/runner-tools.yaml"
 helm template infrared "$chart" -n infrared --set runner.e2eImage= >"$out/no-e2e-image.yaml"
-ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, extensions-shared, extensions-own, extensions-own-leftover, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, mcp-tools-listed, gitea-steps-user, gitea-steps-user-nogitea, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
+ok "rendered defaults, digests, adopted, mcp-existing, mcp-shared-public, other-release, ecr, extensions, extensions-shared, extensions-own, extensions-own-leftover, ghcr, install, ghcr-adopted, stores-adopted, backup-key, gitea, gitea-adopted, backups, backups-nogitea, backups-adopted, backups-gcs, restore, restore-point, restore-gcs, test-actors, test-actors-adopted, test-actors-named, single-node, single-node-adopted, single-node-no-stores, move-issues, security-evidence, security-evidence-off, bedrock, step-mcp-credentials, mcp-tools-listed, gitea-steps-user, gitea-steps-user-nogitea, actors, actors-hosts, actors-elastic, external-zones, preview-fallback, follow-ups, read-org-repos, live-scene, live-scene-no-videos, storage-layout, storage-layout-no-stores, storage-layout-window, storage-layout-window-off, media-both, media-object-store, declined-outcomes, support-desk, metrics-storage, code-index, code-index-install, code-index-main, code-index-adopted, code-index-adopted-old, code-index-adopted-record, registry-token, registry-token-adopted, aws, aws-irsa, aws-adopted, runner-tools, no-e2e-image, telemetry, no-plane, callers"
 
 # envs <render>: every literal env entry of a render as NAME=value, one per line,
 # into <render>.env, for assertions on the operator's inputs.
@@ -275,7 +279,7 @@ envs() {
     "$out/$1.yaml" >"$out/$1.env"
 }
 for f in defaults digests ecr ghcr install ghcr-adopted stores-adopted gitea gitea-adopted backups backups-adopted backups-gcs restore restore-point restore-gcs \
-    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock step-mcp-credentials mcp-tools-listed gitea-steps-user gitea-steps-user-nogitea actors actors-hosts actors-elastic external-zones preview-fallback live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
+    test-actors test-actors-adopted test-actors-named single-node single-node-adopted single-node-no-stores move-issues security-evidence security-evidence-off bedrock step-mcp-credentials mcp-tools-listed gitea-steps-user gitea-steps-user-nogitea actors actors-hosts actors-elastic external-zones preview-fallback follow-ups read-org-repos live-scene live-scene-no-videos declined-outcomes support-desk support-research support-fixes metrics-storage \
     storage-layout storage-layout-no-stores storage-layout-window storage-layout-window-off media-both media-object-store \
     code-index code-index-install code-index-adopted registry-token registry-token-adopted aws aws-irsa aws-adopted runner-tools telemetry no-plane callers mcp-shared-public; do envs "$f"; done
 # secret <render> <Secret> <key>: that key of that Secret, decoded.
@@ -615,6 +619,13 @@ check defaults.env "no external zones by default" '^INFRARED_EXTERNAL_ZONES=' 0
 has external-zones.env "a platform Product may have an external zone" 'INFRARED_EXTERNAL_ZONES="true"'
 check defaults.env "every screenshot kept as taken by default" '^INFRARED_PREVIEW_FALLBACK=' 0
 has preview-fallback.env "a poor preview becomes a card" 'INFRARED_PREVIEW_FALLBACK="true"'
+check defaults.env "a plan's follow-ups are not filed by default" '^INFRARED_FOLLOW_UPS=' 0
+check install.env "a plan's follow-ups are not filed unless followUps is set" '^INFRARED_FOLLOW_UPS=' 0
+has follow-ups.env "a plan's follow-ups are filed and started" 'INFRARED_FOLLOW_UPS="true"'
+check defaults.env "a step reads its own Product alone by default" '^INFRARED_READ_ORG_REPOS=' 0
+check install.env "a step reads its own Product alone unless readOrgRepos is set" '^INFRARED_READ_ORG_REPOS=' 0
+check follow-ups.env "filing follow-ups does not let a step read other Products" '^INFRARED_READ_ORG_REPOS=' 0
+has read-org-repos.env "a plan and a build read the org's other Products" 'INFRARED_READ_ORG_REPOS="true"'
 check defaults.env "a summary keeps the closing scene it was made with by default" '^INFRARED_SUMMARY_VIDEO_LIVE_SCENE=' 0
 has live-scene.env "a summary's closing scene follows its deployment" 'INFRARED_SUMMARY_VIDEO_LIVE_SCENE="true"'
 check live-scene-no-videos.env "no closing scene without summary videos" '^INFRARED_SUMMARY_VIDEO_LIVE_SCENE=' 0
@@ -1657,6 +1668,8 @@ refuse "a bucket name in capitals fails" "at '/backup/bucket'" \
   --set backup.bucket=CI-Backup,backup.endpoint=https://backup.example.com,backup.region=us-east-1
 refuse "stores.enabled as a string fails" "at '/stores/enabled'" --set-string stores.enabled=true
 refuse "stores.singleNode as a string fails" "at '/stores/singleNode'" --set-string stores.singleNode=true
+refuse "operator.followUps as a string fails" "at '/operator/followUps'" --set-string operator.followUps=true
+refuse "operator.readOrgRepos as a string fails" "at '/operator/readOrgRepos'" --set-string operator.readOrgRepos=true
 refuse "stores.orgLayout.enabled as a string fails" "at '/stores/orgLayout/enabled'" --set-string stores.orgLayout.enabled=true
 refuse "a window that is not a time in RFC 3339 fails" "at '/stores/orgLayout/window'" --set stores.orgLayout.window=tonight
 refuse "a window without its offset fails" "at '/stores/orgLayout/window'" --set stores.orgLayout.window=2026-11-20T03:00:00

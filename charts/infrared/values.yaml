@@ -1173,6 +1173,25 @@ operator:
   # logo and name, marked generated with the reason. Off keeps every screenshot as it was taken.
   # Until the operator reads rollout flags (ADR 0061 decision 9).
   previewFallback: false
+  # -- File what a Change's plan leaves for later (INFRARED_FOLLOW_UPS, operator; catalog v0.55.0):
+  # once the Change's triage is approved, each follow-up its planning step returned
+  # (status.steps[].followUps) is opened as an issue on the Change's repo, in order, labelled
+  # infrared:follow-up and recorded on the triage step as evidence; when the Change merges, the
+  # first one still open gets needs-hydration, one at a time (on Gitea, which sends Infrared no
+  # events, the operator starts that run itself). Filing never stops the Change. A step reports
+  # follow-ups only on a runner image that carries them. Off, the follow-ups stay on the step and
+  # nothing is filed or started. Until the operator reads rollout flags (ADR 0061 decision 9).
+  followUps: false
+  # -- Let a plan and a build read the org's other Products (INFRARED_READ_ORG_REPOS, operator;
+  # catalog v0.56.0): a step that plans or builds a Change as a Job is told the org's other
+  # Products' repos (at most 12, alphabetically) and the names, never the values, of their zones'
+  # variables and secrets, and gets a read-only credential for each apart from its own token: on
+  # GitHub an installation token with contents: read for exactly those repos, on Gitea a
+  # read:repository token of the org's steps user, revoked with the step. A Product it cannot read
+  # is named with the reason. A run that carries an outsider's words, a support desk's run and a
+  # review, report or resolve step get none. Reading needs a runner image that carries it. Off, a
+  # step reads its own Product alone. Until the operator reads rollout flags (ADR 0061 decision 9).
+  readOrgRepos: false
   # -- End a request the org's policy forbids as Declined (INFRARED_DECLINED_OUTCOMES, operator;
   # infrared-docs-internal ADR 0076, item 8): a step whose agent answers DECLINE (hydration, the
   # policy and security reviewers) ends itself and the run Failed, with a finish time and the

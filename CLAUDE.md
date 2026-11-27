@@ -162,6 +162,20 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `infrared-restore`'s container `restore`, `920MiB`, 90 percent of its 1Gi
   limit, set in the template because the operator's image reads no
   `MEMORY_LIMIT`: a change to the limit changes it too.
+- Catalog v0.55.0, a plan's follow-ups: env `INFRARED_FOLLOW_UPS`
+  (`operator.followUps`) on the operator, rendered only when set. The chart
+  renders nothing else for it: the operator files the issues and starts them,
+  and `status.steps[].followUps` comes with the CRDs from `make sync-operator`.
+  It does nothing until the pinned runner image reports follow-ups. With it
+  on, a request asked in the simple view whose plan leaves follow-ups waits at
+  triage, and the planning step carries `status.steps[].followUpsFiled`
+  (`api/v0.154.0`).
+- Catalog v0.56.0, reading the org's other Products: env
+  `INFRARED_READ_ORG_REPOS` (`operator.readOrgRepos`) on the operator, rendered
+  only when set. The chart renders nothing else for it: the operator mints each
+  step's read-only credentials and puts them in the step's own Secret, and no
+  ClusterRole rule changed. It does nothing until the pinned runner image reads
+  `INFRARED_READ_TOKENS`.
 - Every new value goes in `values.yaml`, `values.schema.json` and the README
   table. Every behaviour worth keeping gets an assertion in `scripts/verify.sh`.
 - Flags (infrared-docs-internal ADR 0058 and 0061) are declared in infrared-api,

@@ -1132,7 +1132,9 @@ spec:
               includedRuns:
                 description: |-
                   IncludedRuns is what a self-service org spent of the install's included
-                  runs (infrared-docs-internal ADR 0059).
+                  runs (infrared-docs-internal ADR 0059) before the allowance became its
+                  owner's (workspace TODO 806): the operator no longer adds to it, and
+                  counts it once in the owner's User status.includedRuns.
                 properties:
                   jobs:
                     description: |-

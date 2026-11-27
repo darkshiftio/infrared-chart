@@ -295,6 +295,7 @@ rules:
   - sessions/status
   - socials/status
   - teams/status
+  - users/status
   verbs:
   - get
   - patch

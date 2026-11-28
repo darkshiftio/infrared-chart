@@ -397,23 +397,37 @@ conformance:
     # -- Start install suites' runs (INFRARED_CONFORMANCE_INSTALLS, operator,
     # rendered only when true, with both drill images). Off: an install suite
     # schedules nothing and says why in its status, and a run of one started
-    # by hand is Refused, nothing built. It needs conformance.drill.image and
-    # conformance.drill.toolsImage: the render fails without either. Until the
-    # operator reads rollout flags (ADR 0061 decision 9); the API's rollout
+    # by hand is Refused, nothing built. It needs cli.image's tag or digest,
+    # and conformance.drill.toolsImage: the render fails without them. Until
+    # the operator reads rollout flags (ADR 0061 decision 9); the API's rollout
     # flag installConformance shows the runs.
     enabled: false
   drill:
-    # -- The drill's image (INFRARED_CONFORMANCE_DRILL_IMAGE, operator, with
-    # installs.enabled): the platform's own ir image, whose entrypoint is ir,
-    # which each install run's drill Job on this cluster runs as `ir drill`,
-    # pinned by digest. Empty here: the platform release pins it, the image of
-    # the release under test.
-    image: ""
     # -- The image the drill's init container copies kubectl and helm from
     # (INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE, operator, with installs.enabled):
     # alpine/k8s 1.37.0, by digest, registryToken.image's, which
-    # scripts/verify.sh holds equal: change them together.
+    # scripts/verify.sh holds equal: change them together. The drill itself
+    # runs cli.image.
     toolsImage: "docker.io/alpine/k8s:1.37.0@sha256:b421c2e9419edb98db39b6ab641669f4db7bb2acf354f22450c6b7e7176d1ff4"
+
+# The platform's own ir (darkshiftio/infrared-cli): its image, a build of
+# cmd/ir whose entrypoint is ir, which install conformance's drill runs. With
+# conformance.installs.enabled it is INFRARED_CONFORMANCE_DRILL_IMAGE on the
+# operator, rendered as the components' images are,
+# <image.registry>/<repository>:<tag>, then @<digest> when one is set, and each
+# install run's drill Job on this cluster runs it as `ir drill`; nothing else
+# renders it. No tag and no digest here: the platform release pins both
+# (infrared-core.cli.image.tag and .digest in the umbrella chart's values), the
+# image of the release under test (infrared-docs-internal ADR 0100, item 1.9).
+cli:
+  image:
+    # -- Repository under image.registry.
+    repository: infrared-cli
+    # -- Tag, the platform release's version; empty beside a digest means the
+    # chart appVersion.
+    tag: ""
+    # -- Digest (sha256:...); when set the image renders as repo:tag@digest.
+    digest: ""
 
 components:
   # -- The gitops template's components the install leaves out, by name, e.g.

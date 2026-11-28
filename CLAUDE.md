@@ -178,11 +178,15 @@ The Helm chart for Infrared (`charts/infrared`), published to
   `INFRARED_READ_TOKENS`.
 - infrared-docs-internal ADR 0100, install conformance and the private edge:
   env `INFRARED_CONFORMANCE_INSTALLS` (`conformance.installs.enabled`),
-  `INFRARED_CONFORMANCE_DRILL_IMAGE` (`conformance.drill.image`, which the
-  platform release pins) and `INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE`
+  `INFRARED_CONFORMANCE_DRILL_IMAGE` (`cli.image`, the platform's own `ir`
+  image, shaped and rendered as the components' are, `infrared-cli` under
+  `image.registry`, whose tag and digest the platform release pins as
+  `infrared-core.cli.image.tag` and `.digest`; nothing else renders it) and
+  `INFRARED_CONFORMANCE_DRILL_TOOLS_IMAGE`
   (`conformance.drill.toolsImage`, `registryToken.image`'s alpine/k8s, held
   equal) on the operator, all three only when enabled, and the render fails
-  enabled without either image; `INFRARED_PRIVATE_EDGE`
+  enabled without `cli.image`'s tag or digest, or without the tools image;
+  `INFRARED_PRIVATE_EDGE`
   (`installation.privateEdge`) on the operator, rendered only when true, which
   needs `installation.edge: gateway` and fails beside `installation.tunnel`,
   `installation.previews.customHostnames` or a Cloudflare credential in
